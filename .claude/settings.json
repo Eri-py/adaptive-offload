@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/senior_seminar_context.py"
+          }
+        ]
+      }
+    ]
+  }
+}
