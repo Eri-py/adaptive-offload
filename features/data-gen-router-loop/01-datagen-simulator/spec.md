@@ -1,11 +1,11 @@
-# Data-Gen Harness
+# Data-Gen Simulator
 
 ## Overview
 
-Build the simulation harness that produces the labeled dataset the router
+Build the simulator that produces the labeled dataset the router
 (feature 02) will train on. For a fixed, diverse set of frames swept across a
 continuous space of simulated network/device conditions (sampled via a
-space-filling design, not a hand-picked grid), the harness runs both the
+space-filling design, not a hand-picked grid), the simulator runs both the
 local and offload inference paths (stubbed for now — no real models yet),
 computes a scene-complexity proxy, and logs one row per (frame, condition)
 pair to Postgres, including a computed win/loss label for the path that would
@@ -21,9 +21,16 @@ have been the better choice.
   it would let a future real-model accuracy comparison test on images the
   model has already memorized. `val2017` is the correspondingly held-out
   split, which is what makes it valid for accuracy evaluation here.
-- The harness does not require downloading the full COCO val2017 image set —
-  only the annotation data needed to select and stratify the sample, plus the
-  individual images actually selected.
+- The simulator downloads and scores the full COCO val2017 image set (5,000
+  images) once, computing the edge-density scene-complexity proxy for every
+  image, so the stratified sample is drawn from the complete, true
+  complexity distribution rather than a partial one built from a cheaper
+  proxy. Downloaded image files are cached locally to avoid re-fetching them
+  from COCO, and each image's computed scene-complexity value is persisted
+  to its own dedicated Postgres table (dataset, file name, and the computed
+  value) — independent of any particular run — so it's computed once ever
+  per frame and reused by every future run's frame selection, regardless of
+  seed, preset, or frame count.
 - The number of frames sampled, the condition-scenario presets available
   (each defining the per-axis ranges/distributions for network bandwidth,
   network round-trip latency, network packet-loss rate, and device load),
@@ -34,7 +41,7 @@ have been the better choice.
   everyday sweep), `network-stress` (skewed toward poor bandwidth/high
   latency/high loss), `device-stress` (skewed toward high device load), and
   `degraded-network-idle-device` (poor network paired with light device
-  load, isolating the network axis). Each harness invocation selects one
+  load, isolating the network axis). Each simulator invocation selects one
   preset by name. Defaults: 500 frames (well within val2017's 5,000-image
   pool) crossed with 50 space-filling condition vectors per run (25,000
   total rows per run) — dense enough coverage of the continuous condition
@@ -51,10 +58,10 @@ have been the better choice.
   against every one of that run's sampled condition vectors — the crossed
   design that keeps frame content and condition severity independent is
   preserved; only the condition axis itself becomes continuous.
-- Each harness invocation is a distinct run, identified by a run id. Before
-  generating any rows, the harness persists that run's fully-resolved config
+- Each simulator invocation is a distinct run, identified by a run id. Before
+  generating any rows, the simulator persists that run's fully-resolved config
   (selected preset name, per-axis ranges, frame count, condition-vector
-  count, seed, and λ) to a `harness_runs` record in Postgres, so any later
+  count, seed, and λ) to a `simulation_runs` record in Postgres, so any later
   row can be traced back to exactly what configuration produced it, and
   different runs (e.g. a `baseline` run and a `network-stress` run) never
   get confused with each other in the shared results table.
@@ -70,8 +77,6 @@ have been the better choice.
   base rate perturbed by the frame's scene-complexity proxy and that path's
   relevant condition values, plus noise. All values are deterministic given
   the configured random seed.
-- A scene-complexity proxy (edge density) is computed once per frame and
-  reused across that frame's condition-vector rows.
 - Each (frame, condition) pair gets a computed win/loss label: local vs.
   offload utility is scored via `accuracy − λ·latency_penalty` using the
   config's default λ, and the higher-scoring path is the label.
@@ -80,10 +85,12 @@ have been the better choice.
   `.claude/coding-guidelines.md`) and includes: the run id it belongs to,
   frame id, condition params (network bandwidth, network round-trip
   latency, network packet-loss rate, device load), local latency, local
-  accuracy, offload latency, offload accuracy, scene-complexity proxy
-  value, computed win/loss label, and a timestamp.
-- The harness runs as a standalone script, not notebook-only logic.
-- Running the harness twice with the same preset, config, and seed produces
+  accuracy, offload latency, offload accuracy, computed win/loss label, and
+  a timestamp. Scene complexity is not duplicated onto this row — it lives
+  only in the dedicated scene-complexity table and is looked up by frame id
+  when needed (e.g. by feature 02's training query).
+- The simulator runs as a standalone script, not notebook-only logic.
+- Running the simulator twice with the same preset, config, and seed produces
   the same frame sample and the same result rows (reproducibility), each
   recorded under its own run id.
 
@@ -115,30 +122,34 @@ have been the better choice.
 
 ## Acceptance Criteria
 
-- Given the harness config specifies a frame count, a selected preset, and
+- Given the simulator config specifies a frame count, a selected preset, and
   condition-sampling parameters (per-axis ranges and the number of
-  condition vectors to sample), when the harness runs to completion, then
+  condition vectors to sample), when the simulator runs to completion, then
   Postgres contains exactly one row, tagged with that run's id, per
   (sampled frame × sampled condition vector), with every field required
   above populated.
-- Given a harness run has completed, when its `harness_runs` record is
+- Given a simulator run has completed, when its `simulation_runs` record is
   inspected, then it contains the exact preset name, per-axis ranges, frame
   count, condition-vector count, seed, and λ used for that run.
-- Given two harness runs use different presets, when their rows are
+- Given two simulator runs use different presets, when their rows are
   compared, then each row's run id correctly attributes it to the preset
   that produced it, and rows from the two runs are never conflated.
-- Given the harness is run twice with an unchanged preset, config, and
+- Given the simulator is run twice with an unchanged preset, config, and
   seed, when the resulting rows are compared by frame and condition vector
   (ignoring run id, which is unique per invocation), then the sampled
   frames, sampled condition vectors, and all logged values are identical
   between the two runs.
 - Given the frame count, the selected preset, a preset's per-axis ranges,
   condition-vector sample count, λ, or seed values are changed in the
-  config module only (no code changes), when the harness is rerun, then its
+  config module only (no code changes), when the simulator is rerun, then its
   behavior reflects the new values under a new run id.
-- Given a sampled frame set, when scene-complexity proxy values are computed
-  across it, then the values span a meaningfully wide range rather than
-  clustering at one extreme (evidence the stratified sampling is working).
+- Given the scene-complexity table has been populated for the full val2017
+  pool, when its values are inspected, then they span a meaningfully wide
+  range rather than clustering at one extreme (evidence the pool has real
+  complexity diversity for the stratified sample to draw from).
+- Given a frame that was already scored by an earlier run, when a later run
+  (any preset, seed, or frame count) samples that same frame again, then its
+  scene-complexity table row is reused rather than recomputed.
 - Given the sampled condition vectors, when their per-axis values (network
   bandwidth, network latency, packet loss, device load) are inspected, then
   they span each axis's configured range rather than clustering at a few
@@ -147,16 +158,17 @@ have been the better choice.
   values, when the win/loss label is computed, then it matches applying the
   configured utility function (`accuracy − λ·latency_penalty`) to both paths
   and picking the higher-scoring one.
-- Given the harness has not been run, when the codebase is inspected, then a
+- Given the simulator has not been run, when the codebase is inspected, then a
   migration exists (but is not applied) defining the Postgres tables this
-  harness writes to (the per-row results table and the `harness_runs`
-  table).
+  simulator writes to (the per-row results table, the `simulation_runs`
+  table, and the scene-complexity table).
 
 ## Open Questions
 
 None — all resolved during spec review (stub-first inference, val2017-only
 stratified sampling, continuous space-filling condition sampling in place of
 a discrete tier grid, named condition-scenario presets, per-run identity and
-config snapshotting via `harness_runs`, in-process condition simulation,
-config-driven tunables, edge-density complexity proxy, utility-function
+config snapshotting via `simulation_runs`, a dedicated scene-complexity
+table decoupled from the per-run results table, in-process condition
+simulation, config-driven tunables, edge-density complexity proxy, utility-function
 win/loss labeling).
