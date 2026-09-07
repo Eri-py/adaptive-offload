@@ -100,18 +100,14 @@ Skip this step entirely for backend-only / non-UI features.
 - Do not prescribe the technical approach
 - Every requirement must have at least one acceptance criterion
 
-## Step 7 — Commit and optionally open a PR
+## Step 7 — Commit and proceed to implementation
 
 After creating the spec file(s) (and any UI mockup):
 
 1. Ask the user what branch-naming convention this repo uses (check recent branch names or the project's instruction file if unsure). Propose a branch name that follows it, seeded from the feature folder name (e.g. `feature/csv-export-spec`, or the project's own prefix in place of `feature/`). For nested sub-specs, use the parent folder name. Confirm with the user before creating.
 2. Create the branch from the project's base branch (ask if unsure — don't assume `main`): `git checkout -b <branch> <base>`.
 3. Stage and commit the spec file(s) and any mockup: `git add features/<feature-folder>/ ui-mocks/<feature-name>.html` (omit the mockup path if none was created) then `git commit -m "Add feature spec for <feature name>"`.
-4. Ask the user whether they want to open a PR for review. If yes:
-   - Push the branch: `git push -u origin <branch>`.
-   - Open a PR with `gh pr create`. Title: `"Feature spec: <feature name>"`. Body should summarise the feature in 2–3 bullets and invite reviewers to check scope, acceptance criteria, and out-of-scope decisions. Do not include a test plan section. Do not include any issue-closing references (e.g. `Closes #123`, `Fixes #123`) — this PR ships only the spec, not the implementation, so the underlying issue must remain open.
-   - Return the PR URL.
-5. If the user declines a PR, leave the branch as-is and let them know they can open one later with `/submitForPullRequest`.
+4. Do not stop here to ask about opening a PR for the spec by itself — proceed directly into `/generateImplementationPlan` for this spec, on the same branch. A standalone PR for the spec commit is not part of the default flow, but the user can still request one at any time (this step or later) via `/submitForPullRequest`.
 
 ## If the feature is too large
 
