@@ -5,10 +5,10 @@
 - Notes: ruff/mypy clean, 1 test passed (in-memory SQLite round-trip across all three models). Import root is `common.*`, not `server.common.*` — see learnings.md.
 
 ## Task 2 — Alembic migration
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 18:51:45
+- Completed: 2026-09-07 18:58:18
+- Notes: `alembic upgrade head --sql` verified offline (no DB connection), DDL matches all three tables + FK. ruff/mypy clean, existing test still passes.
 
 ## Task 3 — `training/datagen` package + config module
 - Status: not started
