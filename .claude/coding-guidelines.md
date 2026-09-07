@@ -28,7 +28,7 @@ security hardening, or exhaustive production robustness.
     domain folders (e.g. `tests/services/detection/`).
 - `training/` — all research/training code in one place, with subfolders by
   concern:
-  - `training/datagen/` — simulation/data-gen harness: frame set, condition
+  - `training/datagen/` — the data-gen simulator: frame set, condition
     sweep, per-(frame, config) logging, dataset export.
   - `training/router/` — decision-layer code: feature extraction,
     direct-classifier and utility-regression models, training/eval scripts,
@@ -43,14 +43,14 @@ files separate even if a shared internal package later makes sense.
 ## Database
 
 - One existing Postgres instance backs everything — server-side
-  request/routing logs *and* the data-gen harness's per-(frame, config)
+  request/routing logs *and* the data-gen simulator's per-(frame, config)
   sweep results. No SQLite, no separate CSV/Parquet store. There is no
   `docker-compose.yml` for this — the instance and database already exist
   outside the repo.
 - `server/common/` owns the SQLAlchemy engine/session setup and the shared
   table models. Both `server/api/services/` and `training/` import from
   there rather than opening their own connections or redefining tables.
-- The data-gen harness (`training/datagen/`) writes each (frame, config) row
+- The data-gen simulator (`training/datagen/`) writes each (frame, config) row
   straight to its Postgres table as it's produced.
 - Training code (`training/router/`) builds its working DataFrame with a SQL
   query against that table (`pd.read_sql(query, engine)`), not by reading

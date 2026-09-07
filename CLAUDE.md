@@ -8,7 +8,7 @@ the full research design; this repo is the implementation.
 ## Infrastructure — never start or stop it yourself
 
 - Never start, stop, or restart the Postgres instance, the FastAPI server,
-  the data-gen harness, or any other long-running process on your own
+  the data-gen simulator, or any other long-running process on your own
   initiative — always ask the user to do it.
 - Never run database migrations or create/drop a database yourself; the user
   runs the migration script and manages the database themselves.

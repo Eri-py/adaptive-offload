@@ -61,7 +61,7 @@ work.
   solution (see `coding-guidelines.md` for the full `server/api/*` breakdown
   — `controller/` not `routers/`, `contracts/` not `schemas/`).
 - **Training/research code:** one `training/` folder, subfoldered into
-  `datagen/` (simulation/condition-sweep harness) and `router/`
+  `datagen/` (condition-sweep simulator) and `router/`
   (decision-layer models), not split into separate top-level folders.
 - **Database:** a single Postgres instance **the user already runs
   themselves** — no docker-compose, no SQLite, no CSV/Parquet. Backs both
