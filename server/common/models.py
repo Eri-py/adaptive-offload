@@ -39,6 +39,7 @@ class SimulationRun(Base):
     run_id: Mapped[str] = mapped_column(
         String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    dataset: Mapped[str] = mapped_column(String, nullable=False)
     preset_name: Mapped[str] = mapped_column(String, nullable=False)
     frame_count: Mapped[int] = mapped_column(Integer, nullable=False)
     condition_vector_count: Mapped[int] = mapped_column(Integer, nullable=False)

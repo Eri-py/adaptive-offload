@@ -98,6 +98,7 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
     with Session(postgres_engine) as session:
         run = session.get(SimulationRun, run_id)
         assert run is not None
+        assert run.dataset == config.DATASET_NAME
         assert run.preset_name == PRESET_NAME
         assert run.frame_count == FRAME_COUNT
         assert run.condition_vector_count == CONDITION_VECTOR_COUNT

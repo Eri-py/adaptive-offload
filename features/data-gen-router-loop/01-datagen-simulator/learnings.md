@@ -699,3 +699,43 @@
   1 new); `ruff check .` and `mypy .` both clean, no new overrides needed.
   Confirmed via a one-off script against `POSTGRES_ADMIN_URL` that no
   `test_%` database survived after this fix's test run.
+
+## Review finding S1 (fix) — `dataset` never persisted on `simulation_runs`
+
+- **Pure additive column, no autogenerate regeneration needed.** Unlike
+  Task 2's original migration authoring, this fix just hand-added one
+  `sa.Column("dataset", sa.String(), nullable=False)` line to the existing
+  `op.create_table("simulation_runs", ...)` call (positioned right after
+  `run_id`, matching `models.py`'s column order) rather than regenerating the
+  whole migration from scratch — simpler for a single-column addition to an
+  unapplied migration, and still verified against drift (see below).
+- **Verified the edited migration matches `models.py` exactly using `alembic
+  check`, not just eyeballing the diff.** Temporarily pointed
+  `alembic.ini`'s `sqlalchemy.url` at a disposable sqlite file in the
+  scratchpad dir (same swap-and-restore pattern as Task 2's `learnings.md`
+  entry), ran `alembic upgrade head` to apply the edited migration to that
+  throwaway file, then `alembic check` — which reported "No new upgrade
+  operations detected," i.e. autogenerate sees zero drift between the
+  migration's resulting schema and current `Base.metadata`. This is a
+  stronger check than `--sql` rendering alone (which only proves the
+  migration is syntactically valid Postgres DDL, not that it matches the
+  models). Restored `alembic.ini` immediately after and deleted the
+  scratchpad sqlite file.
+- **`RunConfig.dataset` and `SimulationRun.dataset` are populated from
+  `config.DATASET_NAME` at the one call site (`run_simulation.py`'s
+  `RunConfig(...)` construction)** — no other file needed to change to
+  thread the value through, since `create_run` already just forwards every
+  `RunConfig` field onto the `SimulationRun` constructor.
+- **Every existing test that constructs a `RunConfig` or a bare
+  `SimulationRun` needed a `dataset=` argument added** (`server/tests/common
+  /test_models.py`, `training/tests/datagen/test_persistence.py`), plus one
+  new assertion on `run.dataset`/`fetched_run.dataset` in each of those two
+  files and in `test_run_simulation.py` (which builds its `RunConfig`
+  indirectly through `run_simulation()`, so only needed the new assertion,
+  not a constructor change). No test file needed a structural change beyond
+  that — this finding is a pure schema/plumbing addition, not new logic.
+- Full suite: `server` 1 passed (unchanged count, single model round-trip
+  test), `training` 41 passed (unchanged count from the prior fix — no new
+  test functions added, only new fields/assertions on existing ones); both
+  packages' `ruff check .` and `mypy .` clean. Confirmed via the admin-URL
+  `pg_database` query that no stray `test_%` database survived.

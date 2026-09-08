@@ -61,6 +61,7 @@ def test_create_run_and_store_results_round_trips_with_fk_linkage(
     postgres_engine: Engine,
 ) -> None:
     config = RunConfig(
+        dataset=DATASET,
         preset_name="baseline",
         frame_count=500,
         condition_vector_count=50,
@@ -105,6 +106,7 @@ def test_create_run_and_store_results_round_trips_with_fk_linkage(
     with Session(postgres_engine) as session:
         fetched_run = session.get(SimulationRun, run_id)
         assert fetched_run is not None
+        assert fetched_run.dataset == DATASET
         assert fetched_run.preset_name == "baseline"
         assert fetched_run.frame_count == 500
         assert fetched_run.condition_vector_count == 50

@@ -37,6 +37,7 @@ def upgrade() -> None:
     op.create_table(
         "simulation_runs",
         sa.Column("run_id", sa.String(), nullable=False),
+        sa.Column("dataset", sa.String(), nullable=False),
         sa.Column("preset_name", sa.String(), nullable=False),
         sa.Column("frame_count", sa.Integer(), nullable=False),
         sa.Column("condition_vector_count", sa.Integer(), nullable=False),

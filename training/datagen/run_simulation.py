@@ -121,6 +121,7 @@ def run_simulation(
         "device_load_pct": list(preset["device_load_pct"]),
     }
     run_config = RunConfig(
+        dataset=config.DATASET_NAME,
         preset_name=preset_name,
         frame_count=len(sampled_frames),
         condition_vector_count=len(condition_vectors),

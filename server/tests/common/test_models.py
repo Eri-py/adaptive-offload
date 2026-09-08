@@ -16,6 +16,7 @@ def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
+            dataset="coco_val2017",
             preset_name="baseline",
             frame_count=500,
             condition_vector_count=50,
@@ -54,6 +55,7 @@ def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         fetched_run = session.get(SimulationRun, "run-1")
         assert fetched_run is not None
+        assert fetched_run.dataset == "coco_val2017"
         assert fetched_run.preset_name == "baseline"
         assert fetched_run.frame_count == 500
         assert fetched_run.condition_vector_count == 50

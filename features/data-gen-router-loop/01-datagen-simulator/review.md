@@ -158,7 +158,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
 - **Fix:** Add a `dataset` column to `simulation_runs` (populated from
   `config.DATASET_NAME`) and to the migration — one column, and the join
   becomes unambiguous. Cheaper now than after rows exist.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: add dataset column to simulation_runs"
 
 #### S2 — The full-pool complexity pass persists nothing until it finishes
 

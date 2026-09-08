@@ -25,6 +25,7 @@ class RunConfig:
     and lambda be persisted before any result rows are written.
     """
 
+    dataset: str
     preset_name: str
     frame_count: int
     condition_vector_count: int
@@ -89,6 +90,7 @@ def create_run(engine: Engine, config: RunConfig) -> str:
     """Insert one `SimulationRun` row from a resolved config snapshot, return its run id."""
     with Session(engine) as session:
         run = SimulationRun(
+            dataset=config.dataset,
             preset_name=config.preset_name,
             frame_count=config.frame_count,
             condition_vector_count=config.condition_vector_count,
