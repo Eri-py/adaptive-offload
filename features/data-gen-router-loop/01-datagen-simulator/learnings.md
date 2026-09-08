@@ -384,3 +384,40 @@
   didn't need any pytest API so stayed with plain functions). Full suite
   (`pytest -q` from `training/`) is 21 passed (15 pre-existing + 6 new),
   confirming no regressions in Task 6's Postgres-backed persistence tests.
+
+## Task 8 — Condition-vector sampling
+
+- **`scipy.stats.qmc.LatinHypercube(d=4, seed=seed).random(n=count)`** draws
+  the raw `[0, 1)^4` samples; `qmc.scale(unit_samples, lower_bounds,
+  upper_bounds)` (both plain per-axis lists, in the same axis order as the
+  columns) does the min/max rescale in one call instead of a hand-rolled
+  `lower + value * (upper - lower)` loop — scipy already ships the exact
+  "scale a QMC unit-cube sample into per-dimension bounds" helper this task
+  needed, so no manual broadcasting/reshaping code was required.
+- **`ConditionPresetRanges` subscripted with a loop variable (`preset[axis]`)
+  trips mypy's `literal-required` check**, same as Task 3's
+  `test_config.py` finding — this module (not just its test) subscripts the
+  TypedDict with the `_AXES` tuple's loop variable to pull `(min, max)` per
+  axis, so both `conditions.py` itself and `test_conditions.py` carry a
+  `# type: ignore[literal-required]` on that line. Confirms Task 3's note
+  applies to non-test code too, not just tests.
+- **Coverage-tolerance choice for the "spans close to the full range" test:
+  10% of each axis's range width**, justified by LHS's own stratification
+  guarantee rather than picked arbitrarily — with `count=50` samples, LHS
+  partitions each axis into 50 equal-width strata and draws exactly one
+  sample per stratum, so the extreme strata are each `1/50 = 2%` of the
+  range wide by construction. A 10% tolerance is a 5x margin above that
+  guaranteed 2%, generous enough to never flake, while still tight enough to
+  fail loudly if the scaling logic were broken (e.g. an axis left
+  unscaled in `[0, 1)`, or scaled against the wrong axis's bounds after a
+  reordering mistake in `_AXES`).
+- Verified the sanity/bounds test (`test_every_axis_value_falls_within_
+  configured_bounds`) against all four presets in `config.PRESETS`, not just
+  `baseline` — cheap to loop over every preset since the function takes the
+  preset dict directly, and it catches a scaling bug that happened to only
+  manifest on a narrow-range preset (e.g. `device-stress`'s `(60.0, 100.0)`
+  device-load range) that a `baseline`-only test could miss.
+- Full suite (`pytest -q` from `training/`) is 26 passed (21 pre-existing +
+  5 new); `ruff check .` and `mypy .` both clean with no new overrides
+  needed beyond the existing `scipy.*` `ignore_missing_imports` entry from
+  Task 3.

@@ -47,10 +47,10 @@
 - Notes: Quantile bucketing via sort+array_split, seeded even-share sampling with divmod remainder distribution. ruff/mypy clean, 21/21 tests passed (6 new, no regressions).
 
 ## Task 8 — Condition-vector sampling
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:27:00
+- Completed: 2026-09-07 19:28:43
+- Notes: scipy LHS + qmc.scale into per-axis preset ranges. ruff/mypy clean, 26/26 tests passed (5 new, no regressions).
 
 ## Task 9 — Stub inference model
 - Status: not started
