@@ -347,3 +347,40 @@
 - Verified via a one-off script against the admin URL that no `test_%`
   database survived after this task's full test run (4 new tests plus the
   pre-existing 11), matching Task 1b's verified-teardown pattern.
+
+## Task 7 — Stratified frame sampling
+
+- **`numpy.array_split` on a plain Python list of strings needs an explicit
+  `dtype=object` array first**, not `np.array(list_of_str)` — without it
+  numpy infers a fixed-width unicode dtype (`'<U...'`) sized to the longest
+  input string, which is harmless here (values round-trip fine through
+  `str(...)` on the way out) but is a common surprise; wrapping with
+  `dtype=object` keeps the array holding actual Python `str` objects instead
+  of fixed-width numpy string cells.
+- **Bucketing is done by sorting `(file_name, score)` pairs and splitting the
+  file-name list, not by calling `numpy.quantile` on the scores.**
+  `numpy.array_split` on the score-sorted pool already produces exactly the
+  "`bucket_count` equal-frequency buckets" the task asks for (each bucket
+  gets `len(pool) // bucket_count` items, with any remainder going to the
+  front buckets) without needing to compute quantile cutpoints and then
+  re-filter items into ranges — simpler and avoids edge cases where multiple
+  items share an identical score straddling a computed cutpoint.
+- **Remainder distribution (`target_count` not divisible by `bucket_count`)
+  uses `divmod(target_count, bucket_count)` and gives one extra to each of
+  the first `remainder` buckets** (lowest-complexity buckets first, since
+  buckets are built off the ascending-sorted pool) — an arbitrary but
+  deterministic tie-break, consistent with the determinism requirement.
+- **The "bucket smaller than its target share" defensive case is exercised
+  by a real test** (`test_handles_bucket_with_fewer_items_than_target_share`,
+  a 10-item pool with `target_count=500`) — `min(share, len(bucket))` before
+  calling `rng.choice(..., replace=False)` avoids numpy's `ValueError:
+  Cannot take a larger sample than population when replace=False`, and the
+  function just returns fewer than `target_count` items rather than padding
+  or raising, matching the task's "don't crash" requirement without
+  inventing a redistribution scheme the spec never asked for.
+- No new import-path or mypy/ruff wrinkles beyond what Tasks 3–6 already
+  resolved (`mypy_path`, Python 3.12 setting, plain `def test_...()` style
+  still works but `import pytest` would too per Task 5's fix — this file
+  didn't need any pytest API so stayed with plain functions). Full suite
+  (`pytest -q` from `training/`) is 21 passed (15 pre-existing + 6 new),
+  confirming no regressions in Task 6's Postgres-backed persistence tests.

@@ -41,10 +41,10 @@
 - Notes: Real ephemeral-Postgres fixture reused in training/tests/conftest.py. Added mypy_path="../server" to training/pyproject.toml (needed for static resolution of the editable common.* install; verified server/'s own checks still pass). ruff/mypy clean, 15/15 tests passed, no stray test DB.
 
 ## Task 7 — Stratified frame sampling
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:24:39
+- Completed: 2026-09-07 19:26:46
+- Notes: Quantile bucketing via sort+array_split, seeded even-share sampling with divmod remainder distribution. ruff/mypy clean, 21/21 tests passed (6 new, no regressions).
 
 ## Task 8 — Condition-vector sampling
 - Status: not started
