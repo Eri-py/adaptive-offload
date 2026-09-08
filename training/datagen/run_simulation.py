@@ -27,6 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from common.db import get_engine
+from dotenv import load_dotenv
 from sqlalchemy import Engine
 
 from datagen import coco, config
@@ -212,6 +213,13 @@ def run_simulation(
 
 
 def main() -> None:
+    # CLI-only convenience: load DATABASE_URL from training/.env if it isn't
+    # already in the environment (never overrides an explicit `export`).
+    # `run_simulation` itself stays free of this side effect — only the CLI
+    # entry point needs it, not the core function or a plain import of this
+    # module.
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
     parser = argparse.ArgumentParser(description="Run the data-gen simulator for one preset.")
     parser.add_argument(
         "--preset",
