@@ -4,6 +4,12 @@
 - Completed: 2026-09-07 18:51:31
 - Notes: ruff/mypy clean, 1 test passed (in-memory SQLite round-trip across all three models). Import root is `common.*`, not `server.common.*` — see learnings.md.
 
+## Task 1b — Redo Task 1's test against real Postgres (corrective, not in original plan)
+- Status: completed
+- Started: 2026-09-07 19:00:28
+- Completed: 2026-09-07 19:04:34
+- Notes: New `common/testing.py` ephemeral-DB context manager + `server/tests/conftest.py` fixture, reused by Task 6 later. Caught a real FK-ordering bug SQLite had silently let pass (no FK enforcement) — validates the switch to real Postgres. ruff/mypy clean, 1 test passed, no stray test DB left behind.
+
 ## Task 2 — Alembic migration
 - Status: completed
 - Started: 2026-09-07 18:51:45

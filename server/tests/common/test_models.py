@@ -1,28 +1,19 @@
-"""Round-trip test for the three shared ORM models against an in-memory SQLite engine.
+"""Round-trip test for the three shared ORM models against real Postgres.
 
-SQLite stands in for Postgres here per `.claude/coding-guidelines.md`/`CLAUDE.md`
-so this test never needs a live database connection.
+Runs against a fresh, disposable database per test (see `tests/conftest.py`'s
+`postgres_engine` fixture) rather than SQLite — SQLite's dialect differs
+enough on native `ENUM`, JSON columns, and FK enforcement to not be
+trustworthy here.
 """
 
-from collections.abc import Iterator
-
-import pytest
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from common.models import Base, Label, SceneComplexity, SimulationResult, SimulationRun
+from common.models import Label, SceneComplexity, SimulationResult, SimulationRun
 
 
-@pytest.fixture
-def engine() -> Iterator[Engine]:
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
-
-
-def test_round_trips_all_three_tables(engine: Engine) -> None:
-    with Session(engine) as session:
+def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
+    with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
             preset_name="baseline",
@@ -51,10 +42,16 @@ def test_round_trips_all_three_tables(engine: Engine) -> None:
             scene_complexity=0.37,
         )
 
-        session.add_all([run, result, complexity])
+        # No ORM `relationship()` links these two mappers, so the unit of work
+        # won't infer insert order from the `run_id` FK on its own — flush the
+        # parent row first. Postgres enforces this FK; SQLite (the old fixture)
+        # silently didn't, which is exactly the dialect gap this switch closes.
+        session.add(run)
+        session.flush()
+        session.add_all([result, complexity])
         session.commit()
 
-    with Session(engine) as session:
+    with Session(postgres_engine) as session:
         fetched_run = session.get(SimulationRun, "run-1")
         assert fetched_run is not None
         assert fetched_run.preset_name == "baseline"

@@ -71,3 +71,55 @@
   `Running upgrade` against a live connection) is the tell that no database
   connection was opened; worth checking for that line as a sanity check
   whenever verifying an offline-mode run.
+
+## Task 1b — Redo Task 1's test against real Postgres (corrective)
+
+- **Reusable ephemeral-DB helper lives in `server/common/testing.py`,
+  independent of pytest.** `ephemeral_postgres_database(admin_url: str) ->
+  Iterator[Engine]` is a plain `@contextmanager`, not a fixture — it doesn't
+  import `pytest` at all. `server/tests/conftest.py` wraps it in a
+  function-scoped `postgres_engine` fixture; `training/tests/conftest.py`
+  (Task 6, later, once it depends on `server/common` via an editable install)
+  should do the exact same wrap — `from common.testing import
+  ephemeral_postgres_database`, read its own admin URL, `with
+  ephemeral_postgres_database(admin_url) as engine: yield engine`. No new
+  dependency duplication needed beyond `python-dotenv` in each package's own
+  dev deps.
+- **`CREATE DATABASE`/`DROP DATABASE` require an autocommit connection** —
+  `create_engine(admin_url, isolation_level="AUTOCOMMIT")`. Without it,
+  Postgres rejects both statements because they can't run inside a
+  transaction block.
+- **The admin engine must connect to a maintenance DB (`postgres`), never the
+  ephemeral DB itself**, and the ephemeral DB's own engine must be
+  `.dispose()`d *before* the `DROP DATABASE` runs — otherwise Postgres
+  refuses to drop a database with open connections. Structured as nested
+  `try`/`finally`: inner `finally` disposes the test engine and drops the DB;
+  outer `finally` disposes the admin engine. Verified teardown actually fires
+  on a failing test too (added a throwaway `assert False` test using the
+  fixture, ran it, confirmed via `pg_database` that no `test_*` row survived)
+  — this is the scenario a bare `yield` fixture without `try`/`finally` would
+  get wrong.
+- **`server/.env`'s `POSTGRES_ADMIN_URL` is a bare `postgresql://` URL**, which
+  makes SQLAlchemy default to the `psycopg2` dialect/driver — not installed,
+  since `server/pyproject.toml` depends on `psycopg[binary]` (v3). Added a
+  small `_with_psycopg_driver()` normalizer in `testing.py` that rewrites
+  `postgresql://` → `postgresql+psycopg://` before `create_engine`, rather
+  than requiring `.env` to spell out the driver. Anyone adding a
+  `training/.env` admin URL later will likely hit the same thing.
+- **This is the real payoff of leaving SQLite:** the original SQLite-backed
+  test passed with `session.add_all([run, result, complexity])` even though
+  `SimulationResult` has an FK to `SimulationRun` and nothing declares an ORM
+  `relationship()` between the two mapped classes — SQLite doesn't enforce FK
+  constraints by default (no `PRAGMA foreign_keys=ON`), so the insert order
+  never mattered. Postgres enforces the FK immediately and the same
+  `add_all` call raised `IntegrityError: ForeignKeyViolation` because the
+  unit of work has no relationship info to infer that `simulation_runs` must
+  insert before `simulation_results`. Fix (in the test, not the models):
+  `session.add(run); session.flush()` before adding `result`/`complexity`.
+  Any future test that inserts rows across FK'd tables without a declared
+  `relationship()` needs to either flush the parent first or add one in
+  dependency order — `add_all` alone won't reorder for you.
+- Confirmed no stray `test_*` database survives a normal passing run, a
+  failing run, and back-to-back repeated runs — checked via a one-off script
+  connecting with the admin URL and querying `pg_database WHERE datname LIKE
+  'test_%'`.
