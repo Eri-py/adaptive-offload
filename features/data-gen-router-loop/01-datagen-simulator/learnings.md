@@ -421,3 +421,50 @@
   5 new); `ruff check .` and `mypy .` both clean with no new overrides
   needed beyond the existing `scipy.*` `ignore_missing_imports` entry from
   Task 3.
+
+## Task 9 — Stub inference model
+
+- **Added two new small config constants** (flagged, not in Task 9's own
+  `Files` list, same justification pattern as prior tasks' small necessary
+  config additions): `LOCAL_ACCURACY_DEVICE_LOAD_PENALTY_COEFFICIENT = 0.001`
+  (per device-load pct point) and
+  `OFFLOAD_ACCURACY_PACKET_LOSS_PENALTY_COEFFICIENT = 0.005` (per
+  packet-loss pct point) in `training/datagen/config.py`. Story: a
+  heavily-loaded device is modeled as falling back to a lighter/faster
+  on-device model under load (hence a device-load accuracy penalty on the
+  *local* path specifically, distinct from the shared
+  `SCENE_COMPLEXITY_ACCURACY_PENALTY_COEFFICIENT`), and a lossy link is
+  modeled as losing detail to dropped/retransmitted frames (hence a
+  packet-loss accuracy penalty on the *offload* path specifically). At the
+  extremes of the `baseline`/`device-stress` presets (device_load=100) and
+  `network-stress` preset (packet_loss=20), these contribute a max ~0.1 and
+  ~0.1 accuracy-point penalty respectively — comparable in magnitude to the
+  existing scene-complexity penalty's typical contribution, not dominant.
+- **One shared `numpy.random.default_rng(seed)` per call, with 4 fixed-order
+  `rng.normal(...)` draws** (local-latency noise, offload-latency noise,
+  local-accuracy noise, offload-accuracy noise, in that order) is sufficient
+  for both the determinism and vary-by-seed requirements — no need for 4
+  independently-seeded RNGs or a hash of `(condition, scene_complexity,
+  seed)` into a derived seed. `stub_inference` is a per-(frame, condition)
+  pure function; Task 10 (or whatever composes it into rows) is responsible
+  for feeding a distinct `seed` per row if per-row-varying noise is wanted —
+  out of scope for this task, whose only contract is the 3-input signature
+  given in the task/spec.
+- **Monotonicity tests average over 200 seeds per condition rather than
+  comparing a single fixed-seed pair**, because the noise stds
+  (`LOCAL_LATENCY_NOISE_STD_MS=5.0`, `OFFLOAD_LATENCY_NOISE_STD_MS=8.0`,
+  `*_ACCURACY_NOISE_STD=0.03`) are large enough relative to some of the
+  deterministic per-step deltas (e.g. one device-load pct point only moves
+  local latency by 1.2ms, well within noise) that a single arbitrary seed
+  could occasionally flip the comparison. Averaging over many seeds drives
+  the noise term's contribution to the mean toward ~0 (it's zero-mean
+  Gaussian) while preserving the deterministic delta, making the assertion
+  reliable without weakening it to a non-strict inequality.
+- Confirmed accuracy stays within `[0, 1]` via `numpy.clip` even under
+  inputs beyond any preset's configured range (packet_loss_pct=100, an
+  input `sample_condition_vectors` would never actually produce given the
+  current presets' max of 20.0) and extreme scene_complexity values (0.0,
+  1.0, 10.0) — the clip is a hard safety net independent of whatever range
+  the real proxy/presets produce.
+- Full suite (`pytest -q` from `training/`) is 32 passed (26 pre-existing +
+  6 new); `ruff check .` and `mypy .` both clean, no new overrides needed.

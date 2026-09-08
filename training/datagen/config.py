@@ -55,6 +55,13 @@ OFFLOAD_ACCURACY_NOISE_STD = 0.03
 # Both paths' accuracy drops as the frame's scene-complexity proxy rises.
 SCENE_COMPLEXITY_ACCURACY_PENALTY_COEFFICIENT = 0.15
 
+# Small additional per-path accuracy penalties (Task 9): a heavily-loaded
+# device is modeled as falling back to a lighter/faster on-device model, and
+# a lossy link is modeled as losing detail to dropped/retransmitted frames —
+# both illustrative, same as every other stub-model coefficient above.
+LOCAL_ACCURACY_DEVICE_LOAD_PENALTY_COEFFICIENT = 0.001  # per device-load pct point
+OFFLOAD_ACCURACY_PACKET_LOSS_PENALTY_COEFFICIENT = 0.005  # per packet-loss pct point
+
 
 class ConditionPresetRanges(TypedDict):
     """Per-axis (min, max) sampling ranges for one condition-scenario preset."""

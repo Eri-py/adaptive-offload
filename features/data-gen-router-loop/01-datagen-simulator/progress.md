@@ -53,10 +53,10 @@
 - Notes: scipy LHS + qmc.scale into per-axis preset ranges. ruff/mypy clean, 26/26 tests passed (5 new, no regressions).
 
 ## Task 9 — Stub inference model
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:28:57
+- Completed: 2026-09-07 19:31:51
+- Notes: Added two small flagged config constants (device-load/packet-loss accuracy penalties). Single seeded RNG, fixed draw order, accuracy clipped to [0,1]. ruff/mypy clean, 32/32 tests passed (6 new, no regressions).
 
 ## Task 10 — Win/loss labeling
 - Status: not started
