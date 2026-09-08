@@ -468,3 +468,43 @@
   the real proxy/presets produce.
 - Full suite (`pytest -q` from `training/`) is 32 passed (26 pre-existing +
   6 new); `ruff check .` and `mypy .` both clean, no new overrides needed.
+
+## Task 10 — Win/loss labeling
+
+- **Returns `common.models.Label` (the enum), not a bare `"local"`/
+  `"offload"` string**, despite the task text's literal wording — this is
+  what `persistence.ResultRow.label` and `SimulationResult.label` actually
+  expect (Task 6), and it's what the orchestrator's own task brief called
+  out as the correct choice. No disagreement found; went with it directly.
+- **Tie-break rule: an exact utility tie resolves to `Label.LOCAL`.**
+  Arbitrary but deterministic, consistent with Task 7's remainder-
+  distribution tie-break precedent in this feature. Rationale documented in
+  the function's docstring: local has no network dependency, so it's the
+  "safer" default when the two paths are truly indistinguishable on the
+  utility measure.
+- **Hand-computed test values need a float-tolerance helper (`_isclose`,
+  1e-9), not bare `==`, even for numbers that look like they should be
+  exact.** `0.70 - 1.0 * (50.0 / 1000.0)` evaluates to
+  `0.6499999999999999`, not `0.65`, in IEEE-754 double precision — caught by
+  running the test, not by inspection. Some hand-picked combinations (e.g.
+  `500.0 / 1000.0 = 0.5` exactly) do round-trip exactly and don't strictly
+  need the helper, but using it uniformly avoids having to reason about
+  which specific literals happen to be exact binary fractions.
+- **Picked `lambda_value=1.0` for the clear-win test cases instead of
+  `config.DEFAULT_LAMBDA` (0.005).** At the default lambda, latency is
+  divided by 1000 and then scaled by 0.005, so even a 2000ms latency gap
+  only moves utility by ~0.01 — swamped by any accuracy difference of a few
+  points, making it hard to hand-construct a case that's obviously a "local
+  should clearly win on latency" scenario without also making accuracy
+  degenerate. A larger lambda (1.0) in the test makes latency and accuracy
+  contribute comparable magnitudes to utility, which is what makes the
+  clear-win/clear-loss cases legible; `compute_label` itself still takes
+  lambda as a plain parameter, so this is purely a test-construction choice,
+  not a change to the function's behavior or the config default. A separate
+  test explicitly re-runs the same latency/accuracy inputs at two different
+  lambda values (0.001 vs 2.0) and asserts the label flips, to confirm
+  lambda is actually threaded through the computation rather than ignored.
+- No new mypy/ruff wrinkles — this module only imports `common.models.Label`
+  and does arithmetic, no new stub/override needed beyond what Tasks 1–9
+  already resolved. Full suite (`pytest -q` from `training/`) is 37 passed
+  (32 pre-existing + 5 new).

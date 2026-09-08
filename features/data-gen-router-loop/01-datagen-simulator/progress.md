@@ -59,10 +59,10 @@
 - Notes: Added two small flagged config constants (device-load/packet-loss accuracy penalties). Single seeded RNG, fixed draw order, accuracy clipped to [0,1]. ruff/mypy clean, 32/32 tests passed (6 new, no regressions).
 
 ## Task 10 — Win/loss labeling
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:32:06
+- Completed: 2026-09-07 19:34:25
+- Notes: Returns common.models.Label enum, not a string. Exact-tie breaks to LOCAL (documented). ruff/mypy clean, 37/37 tests passed (5 new, no regressions).
 
 ## Task 11 — Orchestration script + end-to-end integration test
 - Status: not started
