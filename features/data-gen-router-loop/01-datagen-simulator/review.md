@@ -172,7 +172,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
 - **Fix:** Flush to Postgres in batches (e.g. every 200 images) inside the
   loop. `store_complexity_scores` already skips existing file names, so a
   resumed run picks up exactly where it left off.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: flush complexity scores in batches during scoring pass"
 
 #### S3 — Downloaded images are written non-atomically and a truncated file is cached forever
 

@@ -739,3 +739,54 @@
   test functions added, only new fields/assertions on existing ones); both
   packages' `ruff check .` and `mypy .` clean. Confirmed via the admin-URL
   `pg_database` query that no stray `test_%` database survived.
+
+## Review finding S2 (fix) — flush complexity scores in batches, not once at the end
+
+- **Batch-size constant kept local to `run_simulation.py`, not added to
+  `config.py`.** Judgment call per the finding's own instruction to pick
+  whichever fits: everything in `config.py` is a research-relevant tunable
+  that changes the simulation's actual output (frame count, presets, seed,
+  λ, stub-model coefficients); the flush cadence changes none of that — it's
+  purely a crash-resilience/robustness knob (how much work a Ctrl-C or a
+  network blip can discard), identical in spirit to a retry count or a
+  connection timeout. `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE = 200` lives as a
+  module-level constant in `run_simulation.py` with a comment explaining
+  both the value and why it isn't in `config.py`.
+- **Restructured the loop to build `all_complexity` incrementally
+  (`all_complexity = dict(known_complexity)`, then
+  `all_complexity[record.file_name] = score` per new image) instead of
+  keeping a separate `new_scores` accumulator merged in after the loop** —
+  avoids maintaining two dicts with overlapping contents (one for "flush in
+  batches", one for "the full merged view used by `stratified_sample`
+  later"); a second small `pending_batch` dict is cleared after each flush
+  and is the only thing actually passed to `store_complexity_scores`.
+- **No changes needed to `persistence.py`.** `store_complexity_scores`
+  already re-queries `known_file_names` from Postgres on every call (Task
+  6), so calling it N times with successive small batches is exactly as
+  safe as calling it once with the full batch — each call's own dedup
+  check sees everything committed by the previous call. This is what makes
+  the fix a pure `run_simulation.py`-side change.
+- **Verified the test actually exercises multiple flushes, not just a
+  correct end state**, by spying on `store_complexity_scores` (imported
+  into `run_simulation.py`, so monkeypatched via
+  `run_simulation_module.store_complexity_scores` — accessing that
+  attribute from the test file trips mypy `strict`'s
+  `no_implicit_reexport` check, needing a scoped
+  `# type: ignore[attr-defined]` on the one line that reads it; the
+  `monkeypatch.setattr(..., "store_complexity_scores", ...)` call itself
+  doesn't trip it since the attribute name there is a string, not a static
+  attribute access) with a wrapper that calls through to the real
+  implementation and then records `len(scores)` and the table's row count
+  immediately after. With `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE` monkeypatched
+  to 6 against the existing 20-image fake pool
+  (`test_run_simulation.py::_write_fake_pool`), asserted the call sizes are
+  `[6, 6, 6, 2]` (4 calls, not 1) and the table's row count right after each
+  call is `[6, 12, 18, 20]` — directly proving partial progress reaches
+  Postgres mid-loop, which a test that only checks the final row count
+  (already covered by the two pre-existing tests) would not distinguish
+  from the old batch-of-1-at-the-end behavior.
+- Full suite (`pytest -v` from `training/`) is 42 passed (41 pre-existing +
+  1 new); `ruff check .` and `mypy .` both clean, no new overrides needed
+  beyond the one scoped `# type: ignore[attr-defined]` described above.
+  Confirmed via a one-off script against `POSTGRES_ADMIN_URL` that no
+  `test_%` database survived after this fix's test run.

@@ -14,11 +14,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 from common.models import SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from datagen import config
+from datagen import run_simulation as run_simulation_module
 from datagen.coco import ImageRecord
 from datagen.run_simulation import run_simulation
 
@@ -194,3 +196,60 @@ def test_run_simulation_is_reproducible_and_reuses_known_complexity(
         assert first_row.offload_latency_ms == second_row.offload_latency_ms
         assert first_row.offload_accuracy == second_row.offload_accuracy
         assert first_row.label == second_row.label
+
+
+def test_complexity_scoring_flushes_to_postgres_in_batches(
+    postgres_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """New complexity scores land in Postgres progressively during the scoring
+    loop, not only once after every image in the pool has been scored (review
+    finding S2) — a small batch size makes intermediate flushes observable
+    within a single test run against the `POOL_SIZE`-image fake pool.
+    """
+    batch_size = 6
+    monkeypatch.setattr(run_simulation_module, "COMPLEXITY_SCORE_FLUSH_BATCH_SIZE", batch_size)
+
+    image_records = _write_fake_pool(tmp_path)
+    # `store_complexity_scores` is imported (not defined) in run_simulation.py,
+    # so mypy's `no_implicit_reexport` (part of `strict`) treats accessing it
+    # as an attribute of that module from here as unexported.
+    real_store_complexity_scores = (
+        run_simulation_module.store_complexity_scores  # type: ignore[attr-defined]
+    )
+    call_sizes: list[int] = []
+    row_counts_after_call: list[int] = []
+
+    def spy_store_complexity_scores(
+        engine: Engine, dataset: str, scores: dict[str, float]
+    ) -> None:
+        real_store_complexity_scores(engine, dataset, scores)
+        call_sizes.append(len(scores))
+        with Session(engine) as session:
+            row_counts_after_call.append(
+                session.query(SceneComplexity).filter_by(dataset=dataset).count()
+            )
+
+    monkeypatch.setattr(
+        run_simulation_module, "store_complexity_scores", spy_store_complexity_scores
+    )
+
+    run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+
+    # POOL_SIZE=20 at batch_size=6 flushes as 6, 6, 6, 2 — more than one call,
+    # proving the loop flushes incrementally rather than accumulating
+    # everything and calling `store_complexity_scores` exactly once at the end.
+    assert call_sizes == [6, 6, 6, 2]
+    # Each flush's resulting row count is visible in Postgres immediately
+    # (not just after the whole loop finishes), confirming partial progress
+    # is durable mid-run.
+    assert row_counts_after_call == [6, 12, 18, 20]

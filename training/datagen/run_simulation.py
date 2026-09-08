@@ -44,6 +44,17 @@ from datagen.persistence import (
 from datagen.sampling import stratified_sample
 from datagen.stub_inference import stub_inference
 
+# How many newly-scored images to accumulate before flushing to Postgres in
+# the complexity-scoring loop below. This is a crash-resilience/robustness
+# knob, not a research-relevant tunable (it never changes what gets computed
+# or persisted, only how often) — kept local here rather than in
+# `config.py`, whose tunables all affect the simulation's actual behavior/
+# output. 200 keeps a worst-case loss (a crash right before a flush) to a
+# small fraction of the ~5,000-image val2017 pool while still batching most
+# of the network/DB round-trip savings a straight per-image commit would
+# give up.
+COMPLEXITY_SCORE_FLUSH_BATCH_SIZE = 200
+
 
 def run_simulation(
     engine: Engine,
@@ -93,16 +104,25 @@ def run_simulation(
 
     known_complexity = get_known_complexity(engine, config.DATASET_NAME)
 
-    new_scores: dict[str, float] = {}
+    # Flushed in batches (not once at the end) so a network error, corrupt
+    # file, or interrupted run loses at most one batch's worth of scoring
+    # work instead of the whole pool — `store_complexity_scores` re-checks
+    # already-persisted file names on every call, so a resumed run picks up
+    # exactly where it left off rather than double-inserting.
+    all_complexity = dict(known_complexity)
+    pending_batch: dict[str, float] = {}
     for record in resolved_image_records:
         if record.file_name in known_complexity:
             continue
         image_path = resolved_resolve_image(record.file_name)
-        new_scores[record.file_name] = scene_complexity(image_path)
-    if new_scores:
-        store_complexity_scores(engine, config.DATASET_NAME, new_scores)
-
-    all_complexity = {**known_complexity, **new_scores}
+        score = scene_complexity(image_path)
+        all_complexity[record.file_name] = score
+        pending_batch[record.file_name] = score
+        if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
+            store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
+            pending_batch = {}
+    if pending_batch:
+        store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
 
     sampled_frames = stratified_sample(
         all_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
