@@ -43,6 +43,12 @@ strict = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
 exclude = ["build/"]
+# `common` (from `server/common`, installed via `pip install -e ../server`) is
+# only resolvable at runtime through that install's editable-install import
+# hook, not through mypy's static filesystem-based module search. Point mypy
+# directly at `server/` (which is `common`'s own import root, per Task 1) so
+# `from common... import ...` type-checks instead of failing as unresolved.
+mypy_path = "../server"
 
 [[tool.mypy.overrides]]
 module = "cv2.*"

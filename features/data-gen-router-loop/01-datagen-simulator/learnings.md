@@ -280,3 +280,70 @@
   clustering at one extreme — no hardcoded-expectation test was written
   against these, since real-photo complexity values will vary run to run
   if the sample images ever change.
+
+## Task 6 — Persistence layer (all three tables)
+
+- **`training/tests/conftest.py` is a near-verbatim copy of
+  `server/tests/conftest.py`**, per Task 1b's note — same `postgres_engine`
+  fixture, same `load_dotenv(Path(__file__).resolve().parent.parent /
+  ".env")` pattern (resolving to `training/.env`, which already had
+  `POSTGRES_ADMIN_URL` from Task 1b/bootstrap), same function-scoped
+  create/drop-per-test shape. No new pattern needed, just the same helper
+  wrapped a second time as documented.
+- **New, load-bearing gap this task exposed: mypy cannot resolve
+  `common.*` from `training/` at all, even though the runtime import works
+  fine.** Tasks 1–5 never imported `common` from a `training/` file, so this
+  never surfaced before. The root cause: `server`'s editable install
+  (`pip install -e ../server`) registers a `MetaPathFinder`
+  (`__editable___server_0_1_0_finder.py`) that maps `common` →
+  `/…/server/common` *at import time* via `sys.meta_path` — this makes
+  `from common.models import Base` work perfectly at runtime, but mypy does
+  purely static, filesystem-based module resolution and never executes that
+  import hook, so it reports `Cannot find implementation or library stub for
+  module named "common.models"` ([import-not-found]) on every file that
+  imports `common`. Fix: added one `mypy_path = "../server"` line under
+  `training/pyproject.toml`'s existing `[tool.mypy]` block (verified first
+  with a throwaway `MYPYPATH=../server mypy .` before touching the file) —
+  `server/` is `common`'s own import root (Task 1's finding), so pointing
+  mypy directly at it via `mypy_path` lets it find `server/common/*.py` as a
+  regular package (it has `__init__.py`) without needing
+  `explicit_package_bases` or any namespace-package config. This is a
+  build-tooling config addition, not a functional change, but it's a file
+  outside Task 6's own `Files` list (`training/datagen/persistence.py`,
+  `training/tests/datagen/test_persistence.py`) — flagged explicitly in this
+  task's report rather than silently expanded. Confirmed the change is
+  additive-only: `cd server && ruff check . && mypy .` and `pytest -q`
+  still pass clean afterward, and it only affects `training/`'s own mypy
+  invocation.
+- **`create_run`/`store_results` accept a small `RunConfig`/`ResultRow`
+  dataclass pair (defined in `persistence.py` itself) rather than a bare
+  `dict[str, Any]`**, to keep mypy `--strict` meaningful at the call site
+  (a typo'd or missing config field is a type error, not a silent `KeyError`
+  at insert time) — mirrors the existing `ConditionPresetRanges` TypedDict
+  pattern in `config.py` (typed shape over a raw dict) but as a dataclass
+  since these values are constructed programmatically per-invocation/per-row
+  rather than declared as static literals.
+- **De-duplication in `store_complexity_scores` is done with one extra
+  `SELECT file_name WHERE dataset = :dataset` before the insert, not an
+  `INSERT ... ON CONFLICT DO NOTHING`** — simpler, portable across the
+  ephemeral-Postgres test engine and whatever engine `common.db.get_engine()`
+  builds for a real run, and the composite-PK upsert syntax isn't needed
+  when a plain read-then-filter is cheap enough at this data volume (COCO
+  val2017 is 5,000 images per dataset, scored once ever).
+- **Every function opens and closes its own `Session` internally
+  (`with Session(engine) as session: ...`)** rather than accepting a
+  pre-opened session — matches the task's "each function takes an engine"
+  requirement literally and keeps each function's transaction boundary
+  self-contained (one function call = one commit), which matters once a
+  future simulator script calls `create_run` once and `store_results` many
+  times in a batch loop without needing to manage session lifetime itself.
+- Confirmed the FK-insert-ordering gotcha from Task 1b applies identically
+  here even though it's hidden behind the `persistence` functions:
+  `create_run` commits (and returns) the `run_id` before `store_results` is
+  ever called, so the two functions' natural call order already guarantees
+  parent-before-child — no explicit `session.flush()` needed in
+  `persistence.py` itself (unlike the raw `test_models.py` example, which
+  inserts both in one session/transaction).
+- Verified via a one-off script against the admin URL that no `test_%`
+  database survived after this task's full test run (4 new tests plus the
+  pre-existing 11), matching Task 1b's verified-teardown pattern.
