@@ -256,6 +256,49 @@ def test_complexity_scoring_flushes_to_postgres_in_batches(
     assert row_counts_after_call == [6, 12, 18, 20]
 
 
+def test_complexity_scoring_logs_progress_every_batch(
+    postgres_engine: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Review finding N5: the scoring loop must log a progress line every
+    flush batch, not stay silent for the whole first-run pass over the
+    image pool (previously the only output was the final `Created run <id>`
+    print at the very end -- indistinguishable from a hung process).
+    """
+    batch_size = 6
+    monkeypatch.setattr(run_simulation_module, "COMPLEXITY_SCORE_FLUSH_BATCH_SIZE", batch_size)
+
+    image_records = _write_fake_pool(tmp_path)
+
+    with caplog.at_level(logging.INFO, logger="datagen.run_simulation"):
+        run_simulation(
+            postgres_engine,
+            PRESET_NAME,
+            image_records=image_records,
+            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            frame_count=FRAME_COUNT,
+            condition_vector_count=CONDITION_VECTOR_COUNT,
+            bucket_count=BUCKET_COUNT,
+            seed=SEED,
+            lambda_value=LAMBDA_VALUE,
+        )
+
+    progress_messages = [
+        record.getMessage() for record in caplog.records if record.levelno == logging.INFO
+    ]
+    # POOL_SIZE=20 at batch_size=6 flushes as 6, 6, 6, 2 (same cadence as the
+    # S2 flush-batching test above), so progress is reported 4 times, each
+    # against the fixed POOL_SIZE denominator (nothing was previously known).
+    assert progress_messages == [
+        f"Scored 6/{POOL_SIZE} images.",
+        f"Scored 12/{POOL_SIZE} images.",
+        f"Scored 18/{POOL_SIZE} images.",
+        f"Scored 20/{POOL_SIZE} images.",
+    ]
+
+
 def _expected_condition_ranges(preset_name: str) -> dict[str, list[float]]:
     preset = config.PRESETS[preset_name]
     return {

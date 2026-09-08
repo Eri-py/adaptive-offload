@@ -259,7 +259,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   run, growing with each run. Postgres does not index FK columns automatically.
 - **Fix:** Add `index=True` to the mapped column and an `op.create_index` in
   the migration — it's unapplied, so it can still be edited in place.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — at 25,000 rows per run a sequential scan is milliseconds, and the prototype bar doesn't call for index tuning ahead of a measured problem. Revisit if run counts grow.
 
 #### N5 — No progress output during the first-run 5,000-image scoring pass
 
@@ -268,7 +268,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   images in a silent loop before printing anything; the only output is
   `Created run <id>` at the very end. Hard to tell a slow run from a hung one.
 - **Fix:** Print a line every N images with the count scored so far.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N5: print progress during the first-run scoring pass"
 
 ## Tests
 

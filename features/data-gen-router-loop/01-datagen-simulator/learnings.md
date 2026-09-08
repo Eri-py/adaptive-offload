@@ -997,3 +997,42 @@
   is stored to write a correct `WHERE label = 'LOCAL'`), so the schema and
   migration are left as-is — no `values_callable` change, no code touched
   for this finding.
+
+## Review finding N5 (fix) — no progress output during the first-run scoring pass
+
+- **Progress cadence reuses `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE` (S2's flush
+  batch size, 200) rather than introducing a second, independent interval
+  constant.** The finding's own suggested fix ("print a line every N
+  images") and S2's existing flush cadence are answering the same underlying
+  question — "how much work should pass silently before something
+  observable happens" — so logging right alongside each
+  `store_complexity_scores` call (both the full-batch flushes inside the
+  loop and the final partial-batch flush after it) means every progress line
+  corresponds to a real, already-durable checkpoint in Postgres, not an
+  arbitrary counter divorced from the persistence cadence. No new constant
+  needed.
+- **Denominator is `total_to_score` (`len(resolved_image_records) -
+  len(known_complexity)`), not the full pool size.** A resumed run (most
+  images already scored in a prior invocation) should report progress
+  against the remaining work, not silently show e.g. "scored 200/5000" when
+  4800 of those were actually free skips via the `known_complexity`
+  short-circuit — that would understate how close the run actually is to
+  done. `logger.info("Scored %d/%d images.", scored_count, total_to_score)`
+  reuses the module-level `logger` N1 already added (`logging.getLogger(
+  __name__)`), consistent with this feature's one-logger-per-module
+  convention — no bare `print`, no second logging mechanism.
+- **Test (`test_complexity_scoring_logs_progress_every_batch`) is a close
+  sibling of S2's own `test_complexity_scoring_flushes_to_postgres_in_batches`**
+  — same `batch_size = 6` monkeypatch on `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE`
+  against the same `POOL_SIZE = 20` fake pool (so flushes land at 6, 6, 6, 2
+  exactly as S2's test already established), but asserts on `caplog`'s INFO
+  records instead of spying on `store_complexity_scores`. Since every pool
+  image is new in this test (nothing pre-seeded in `known_complexity`), the
+  denominator is the fixed `POOL_SIZE` for all four lines, letting the
+  assertion be an exact list of the four expected message strings rather
+  than a looser "at least N messages" check.
+- Full suite (`pytest -v` from `training/`) is 48 passed (47 pre-existing + 1
+  new); `ruff check .` and `mypy .` both clean, no new overrides needed. This
+  fix only touches `training/datagen/run_simulation.py` and
+  `training/tests/datagen/test_run_simulation.py` — no other files needed
+  changes.

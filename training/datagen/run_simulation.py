@@ -114,6 +114,12 @@ def run_simulation(
     # exactly where it left off rather than double-inserting.
     all_complexity = dict(known_complexity)
     pending_batch: dict[str, float] = {}
+    # Total images this invocation actually needs to score (excludes ones
+    # already persisted from a prior run) -- the denominator for the
+    # progress log below, so resumed runs report progress against the
+    # remaining work, not the full pool size.
+    total_to_score = len(resolved_image_records) - len(known_complexity)
+    scored_count = 0
     for record in resolved_image_records:
         if record.file_name in known_complexity:
             continue
@@ -121,11 +127,14 @@ def run_simulation(
         score = scene_complexity(image_path)
         all_complexity[record.file_name] = score
         pending_batch[record.file_name] = score
+        scored_count += 1
         if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
             store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
             pending_batch = {}
+            logger.info("Scored %d/%d images.", scored_count, total_to_score)
     if pending_batch:
         store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
+        logger.info("Scored %d/%d images.", scored_count, total_to_score)
 
     sampled_frames = stratified_sample(
         all_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
