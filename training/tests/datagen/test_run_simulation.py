@@ -253,3 +253,93 @@ def test_complexity_scoring_flushes_to_postgres_in_batches(
     # (not just after the whole loop finishes), confirming partial progress
     # is durable mid-run.
     assert row_counts_after_call == [6, 12, 18, 20]
+
+
+def _expected_condition_ranges(preset_name: str) -> dict[str, list[float]]:
+    preset = config.PRESETS[preset_name]
+    return {
+        "bandwidth_mbps": list(preset["bandwidth_mbps"]),
+        "network_latency_ms": list(preset["network_latency_ms"]),
+        "packet_loss_pct": list(preset["packet_loss_pct"]),
+        "device_load_pct": list(preset["device_load_pct"]),
+    }
+
+
+def test_run_simulation_never_conflates_two_different_preset_runs(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Two runs on different presets against the same engine (spec acceptance
+    criterion: "rows from the two runs are never conflated") must each carry
+    their own `run_id`, their own row count with no cross-run leakage, and
+    their own preset's `condition_ranges` on their `SimulationRun` record —
+    not the other run's.
+    """
+    image_records = _write_fake_pool(tmp_path)
+    baseline_preset = "baseline"
+    stress_preset = "network-stress"
+
+    baseline_run_id = run_simulation(
+        postgres_engine,
+        baseline_preset,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+    # A different condition_vector_count so the two runs' expected row counts
+    # differ too -- a leaked/duplicated row would then also show up as a
+    # wrong row count, not just a wrong run_id.
+    stress_condition_vector_count = CONDITION_VECTOR_COUNT + 2
+    stress_run_id = run_simulation(
+        postgres_engine,
+        stress_preset,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        frame_count=FRAME_COUNT,
+        condition_vector_count=stress_condition_vector_count,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+
+    assert baseline_run_id != stress_run_id
+
+    with Session(postgres_engine) as session:
+        baseline_run = session.get(SimulationRun, baseline_run_id)
+        stress_run = session.get(SimulationRun, stress_run_id)
+        assert baseline_run is not None
+        assert stress_run is not None
+        assert baseline_run.preset_name == baseline_preset
+        assert stress_run.preset_name == stress_preset
+        # Each run's persisted condition_ranges matches its own preset, not
+        # the other one -- the crux of what this test guards against.
+        assert baseline_run.condition_ranges == _expected_condition_ranges(baseline_preset)
+        assert stress_run.condition_ranges == _expected_condition_ranges(stress_preset)
+        assert baseline_run.condition_ranges != stress_run.condition_ranges
+
+    baseline_results = _fetch_results(postgres_engine, baseline_run_id)
+    stress_results = _fetch_results(postgres_engine, stress_run_id)
+
+    expected_baseline_count = FRAME_COUNT * CONDITION_VECTOR_COUNT
+    expected_stress_count = FRAME_COUNT * stress_condition_vector_count
+    # No leakage in either direction: each run's row count matches exactly
+    # what its own configuration should produce, no more and no less.
+    assert len(baseline_results) == expected_baseline_count
+    assert len(stress_results) == expected_stress_count
+
+    # No row from either run carries the other run's run_id, and no row is
+    # double-counted across both queries.
+    baseline_ids = {row.id for row in baseline_results}
+    stress_ids = {row.id for row in stress_results}
+    assert baseline_ids.isdisjoint(stress_ids)
+    for row in baseline_results:
+        assert row.run_id == baseline_run_id
+    for row in stress_results:
+        assert row.run_id == stress_run_id
+
+    with Session(postgres_engine) as session:
+        total_results = session.query(SimulationResult).count()
+    assert total_results == expected_baseline_count + expected_stress_count

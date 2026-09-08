@@ -859,3 +859,45 @@
   analytically instead of implying real delay, matching the (correct,
   already-reviewed-as-such) code. No test or code change needed — this
   finding is purely a spec/implementation drift, not a runtime defect.
+
+## Review finding S5 (fix) — no test covers the two-different-presets attribution criterion
+
+- **Made the two runs' expected row counts differ, not just their
+  `condition_ranges`**, by bumping `condition_vector_count` by +2 on the
+  second (`network-stress`) run relative to the first (`baseline`) run. This
+  turns "no leakage between runs" into something a row-count mismatch alone
+  would also catch (not just a `run_id`-per-row check) — if rows from one run
+  ever leaked into the other's query result, the leaked-into run's count
+  would no longer match its own `frame_count * condition_vector_count`, which
+  the pre-existing two-runs-same-preset reproducibility test (same counts
+  both times) could never expose.
+- **Verified the two presets actually produce distinguishable
+  `condition_ranges`** by reading `config.PRESETS` directly:
+  `baseline` and `network-stress` differ on all of `bandwidth_mbps`,
+  `network_latency_ms`, and `packet_loss_pct` (only `device_load_pct` is
+  identical, `(0.0, 100.0)` on both) — so
+  `baseline_run.condition_ranges != stress_run.condition_ranges` is a
+  meaningful assertion, not one that would pass even if `condition_ranges`
+  were accidentally hardcoded or copied from the wrong run.
+- **Reused `_expected_condition_ranges`-shaped construction from Task 11's
+  own test** (same four-key dict-of-lists built from
+  `config.PRESETS[name]`, per Task 11's `literal-required`-avoidance note)
+  by factoring it into a small module-level helper
+  (`_expected_condition_ranges(preset_name)`) that both the pre-existing
+  Task-11 test and the new test now call, rather than duplicating the
+  four-line dict literal a second time inside the new test.
+- **Checked non-conflation three ways, not just one**: (1) each run's own
+  `SimulationResult` rows all carry that run's `run_id` (never the other
+  run's), (2) the two runs' row-id sets are disjoint (`isdisjoint`) so no
+  single row is double-counted across both `_fetch_results` queries, and (3)
+  an unfiltered `SimulationResult` count across the whole table equals the
+  sum of both runs' expected counts exactly — ruling out extra untracked
+  rows that neither per-run query would surface (e.g. a bug that inserts an
+  extra row under a bogus `run_id` that matches neither `run_id` in the
+  test).
+- Full suite (`pytest -v` from `training/`) is 45 passed (44 pre-existing + 1
+  new); `ruff check .` and `mypy .` both clean, no new overrides needed.
+  Confirmed via the same one-off admin-URL `pg_database` query used by prior
+  fixes that no `test_%` database survived after this fix's test run. This
+  fix only touches `training/tests/datagen/test_run_simulation.py` — no
+  other files needed changes.

@@ -213,7 +213,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   same engine and asserts each run's rows carry the right `run_id`, that
   neither run's row count leaks into the other, and that each run record's
   `condition_ranges` matches its own preset.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S5: add two-different-presets attribution test"
 
 ## Nitpicks
 
