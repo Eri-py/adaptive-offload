@@ -846,3 +846,16 @@
   beyond the one scoped `# type: ignore[attr-defined]` described above.
   Confirmed via a one-off script against `POSTGRES_ADMIN_URL` that no
   `test_%` database survived after this fix's test run.
+
+## Review finding S4 (fix) — spec text amended, no code change
+
+- The spec said conditions were simulated via "artificial delay applied
+  based on each condition vector's ... value," which reads as literal
+  sleeping. The implementation (`stub_inference.py`, since Task 9) always
+  modeled latency analytically — a closed-form function of the condition
+  values — and never slept, since actually sleeping through 25,000 rows per
+  run would add hours of wall clock for zero effect on the resulting data.
+  Amended the spec's requirement bullet to say latency is modeled
+  analytically instead of implying real delay, matching the (correct,
+  already-reviewed-as-such) code. No test or code change needed — this
+  finding is purely a spec/implementation drift, not a runtime defect.

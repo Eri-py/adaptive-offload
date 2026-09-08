@@ -200,7 +200,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   nothing records.
 - **Fix:** Amend the spec requirement to say latency is modeled analytically
   rather than by real delay, and note why in `learnings.md`. No code change.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: amend spec, latency modeled analytically not via real delay"
 
 #### S5 — No test covers the two-different-presets attribution criterion
 
