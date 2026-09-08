@@ -29,10 +29,10 @@
 - Notes: Real annotations file confirmed parsing to exactly 5,000 entries; cached-file resolution confirmed instant/no-fetch. ruff/mypy clean, 6/6 tests passed (full suite). Surfaced+fixed a pre-existing mypy python_version 3.11-vs-3.12 mismatch in both server/ and training/ (separate commit).
 
 ## Task 5 — Scene-complexity proxy
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:15:35
+- Completed: 2026-09-07 19:18:56
+- Notes: Canny thresholds 100/200 (OpenCV default pair). Manual spot-check on 5 real val2017 images gave scores ~0.06-0.23 (plausible spread). ruff/mypy clean, 11/11 tests passed. Confirmed the earlier python_version fix resolved Task 4's pytest-import mypy workaround.
 
 ## Task 6 — Persistence layer (all three tables)
 - Status: not started

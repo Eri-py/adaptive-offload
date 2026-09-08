@@ -229,3 +229,54 @@
   process's current working directory — so `load_image_index()`/
   `resolve_image_path()` use correct real-data defaults regardless of where
   a future caller (e.g. Task 6's simulator script) is invoked from.
+
+## Task 5 — Scene-complexity proxy
+
+- **This venv's installed `opencv-python-headless` (v4.9+ per pyproject, but
+  actually resolved to 5.0.0) ships its own bundled `.pyi` type stubs**
+  (`cv2/__init__.pyi`, `cv2/typing/__init__.py`, etc.) — the `[[tool.mypy
+  .overrides]] module = "cv2.*" ignore_missing_imports = true` entry already
+  in `training/pyproject.toml` (Task 3) turns out to be a no-op safety net
+  for this version, not the thing making mypy pass. Typing a function
+  parameter/return as `numpy.typing.NDArray[np.uint8]` for values that flow
+  through `cv2.imread`/`cv2.cvtColor`/`cv2.Canny` fails under `mypy
+  --strict`, because those functions' real stubs return `cv2.typing
+  .MatLike` (a `Union[cv2.mat_wrapper.Mat, NumPyArrayNumeric]` type alias,
+  where `NumPyArrayNumeric` is `ndarray[Any, dtype[integer[Any] |
+  floating[Any]]]`), which mypy does not consider assignable to
+  `NDArray[np.uint8]` — this produced `[return-value]` errors *and* made a
+  paired `# type: ignore[no-any-return]` register as `[unused-ignore]`
+  (because the mismatch mypy actually flags is `return-value`, not
+  `no-any-return`), i.e. two different mypy complaints stacked on the same
+  line. Fix: type these values as `cv2.typing.MatLike` throughout
+  `complexity.py` (import via `from cv2.typing import MatLike`) instead of
+  reaching for `NDArray[np.uint8]` — no `type: ignore` needed anywhere.
+  Anything else in `training/` that pipes an array through more than one
+  cv2 call should default to `MatLike` for cv2-facing signatures rather
+  than a `numpy.typing` alias, and only convert to a stricter numpy dtype
+  at the boundary once cv2 is out of the picture.
+- Chose Canny thresholds 100/200 — OpenCV's own commonly-cited
+  "reasonable default" pair for 8-bit images from its Canny tutorial, not a
+  value tuned against this project's data. This proxy only needs relative
+  ranking (complex scenes score higher than blank ones) for the
+  stratified-sampling and stub-accuracy uses described in the spec, not a
+  calibrated absolute edge count, so an off-the-shelf default was judged
+  sufficient without a tuning pass.
+- **Task 4's `import pytest`-avoidance workaround is no longer needed** now
+  that `pyproject.toml`'s `[tool.mypy] python_version` was corrected from
+  `"3.11"` to `"3.12"` immediately before this task. Verified directly:
+  temporarily added `import pytest` to `test_complexity.py` and reran
+  `mypy .` — clean, no `_pytest`/numpy stub error at all (confirming the
+  version-string mismatch really was the root cause Task 4 suspected, not
+  something deeper). Reverted the import since this file doesn't actually
+  need any pytest API (no fixtures, no `pytest.raises`/`parametrize`), so
+  it stays on plain `def test_...()` functions either way — but any future
+  `training/tests/` file that *does* need `@pytest.fixture` or similar can
+  now `import pytest` directly without hitting Task 4's wall. Worth a
+  one-line update to Task 4's own note if anyone revisits it.
+- Manually eyeballed the proxy against 5 real `training/data/coco/val2017/`
+  images (not part of the automated suite, per the task's own guidance):
+  scores ranged ~0.06–0.23, i.e. a plausible spread rather than everything
+  clustering at one extreme — no hardcoded-expectation test was written
+  against these, since real-photo complexity values will vary run to run
+  if the sample images ever change.
