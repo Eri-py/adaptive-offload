@@ -37,8 +37,19 @@ security hardening, or exhaustive production robustness.
 Each top-level area (`app/`, `server/`, `training/`) owns its own dependency
 manifest and lint/type config — don't share one config across them pretending
 they're the same kind of code. `server/` and `training/` are both Python but
-serve different purposes (serving vs. research), so keep their dependency
-files separate even if a shared internal package later makes sense.
+serve different purposes (serving vs. research), so keep their `pyproject.toml`
+files (and each one's own `[tool.ruff]`/`[tool.mypy]` config) separate even
+though a shared internal package makes sense (`training/` installs `server/common`
+editable). `server/` and `training/` do, however, share a single Python
+virtualenv at the repo root (`.venv/`) rather than one venv each — their actual
+dependency sets don't clash (Postgres/web tooling vs. numerical/CV tooling,
+overlapping only on `ruff`/`mypy`/`pytest`), and managing two separate venvs
+for a single-developer prototype was pure friction with no isolation benefit
+actually being used. Editable-install both packages into that one venv
+(`pip install -e server[dev] -e training[dev]` from the repo root); run each
+package's lint/type/test commands from its own directory as before
+(`cd server && ruff check . && mypy . && pytest`, same for `training/`) — only
+the venv location changed, not which config applies where.
 
 ## Database
 
