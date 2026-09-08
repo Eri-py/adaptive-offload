@@ -1,7 +1,9 @@
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from common.models import Base
@@ -17,6 +19,13 @@ if config.config_file_name is not None:
 
 # Target metadata for autogenerate support — matches server/common/models.py exactly.
 target_metadata = Base.metadata
+
+# Load DATABASE_URL from server/.env if it isn't already in the environment
+# (never overrides an explicit `export`) — mirrors the same pattern used by
+# the simulator CLI (training/datagen/run_simulation.py) and the test
+# fixtures, so this is the one consistent way DATABASE_URL gets resolved
+# across the whole project rather than migrations being the odd one out.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Prefer DATABASE_URL (per server/common/db.py's convention) over the ini's
 # placeholder so `env.py` targets the same instance the app connects to.
