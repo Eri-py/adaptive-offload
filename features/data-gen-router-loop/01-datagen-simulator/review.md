@@ -117,7 +117,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   Add a test asserting the latency term actually flips labels under the
   default λ, so this can't silently regress. Both are config/test changes the
   spec explicitly permits.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1: default lambda scaled twice, latency near-irrelevant to label"
 
 #### B2 — Frame sampling is non-deterministic when complexity scores tie
 

@@ -598,3 +598,52 @@
   `training/datagen/run_simulation.py` and
   `training/tests/datagen/test_run_simulation.py` — no other files needed
   changes.
+
+## Review finding B1 (fix) — `DEFAULT_LAMBDA` scaled twice
+
+- **Root cause confirmed exactly as the finding described:** `config.py`'s
+  comment for `DEFAULT_LAMBDA = 0.005` documented applying λ directly to a
+  millisecond-valued latency, but `labeling._utility` divides by 1000 first
+  (`accuracy - lambda_value * (latency_ms / 1000)`), so the effective per-ms
+  weight was `0.005 / 1000 = 5e-6` — a 2000ms latency gap only moved utility
+  by 0.01, swamped by any realistic accuracy gap (~0.07-0.1 between the
+  local/offload stub paths' base accuracies). Task 10's own learnings entry
+  had already flagged this exact tension in passing ("even a 2000ms latency
+  gap only moves utility by ~0.01") when explaining why its hand-picked test
+  cases used `lambda_value=1.0` instead of the config default — worth
+  cross-referencing next time a "the test uses a different value than the
+  default, is that suspicious?" question comes up; sometimes it's flagging a
+  real default-value bug rather than just a test-legibility choice.
+- **Fix: `DEFAULT_LAMBDA = 0.3`, comment corrected to describe the per-second
+  convention** (`labeling.py`'s formula is unchanged, matches the spec, and
+  was not touched). At 0.3, a 300ms latency gap moves utility by 0.09,
+  comparable to the ~0.07-0.1 realistic accuracy gap between the two stub
+  paths — neither term structurally dominates anymore.
+- **Regression test constructs two cases sharing the same accuracy inputs
+  (`LOCAL_BASE_ACCURACY=0.78` vs `OFFLOAD_BASE_ACCURACY=0.85`, a realistic
+  0.07 gap) and varying only the latency gap**, using `config.DEFAULT_LAMBDA`
+  directly (not a hand-picked test-only λ, per the finding's explicit ask):
+  a large gap (100ms vs 460ms) flips the label to `LOCAL` despite offload's
+  higher accuracy; a small gap (100ms vs 150ms) leaves the label at
+  `OFFLOAD` on the same accuracy inputs. This isolates the latency term's
+  effect and would have caught the original bug (at the old λ=0.005, the
+  large-gap case's latency term only moves utility by ~0.0018, nowhere near
+  enough to overcome the 0.07 accuracy gap, so the test would have failed
+  with `Label.OFFLOAD` instead of the asserted `Label.LOCAL`).
+- **Sanity-checked the label distribution's responsiveness the same way the
+  reviewer did** (4,000 condition vectors per preset, `stub_inference` +
+  `compute_label` under the new default λ, no persistence/DB involved — a
+  throwaway script, not a committed test): `baseline` moved from ~96%
+  OFFLOAD to 71.8%/28.1% OFFLOAD/LOCAL; `network-stress` moved from
+  presumably-near-uniform to 33.6%/66.4%; `device-stress` to 92.1%/7.9%;
+  `degraded-network-idle-device` to 6.8%/93.2%. Also confirmed the split
+  responds to condition *severity* within a preset, not just overall rate:
+  on `network-stress`, restricting to bandwidth < 1 Mbps gives a 25.2%
+  OFFLOAD rate vs. 38.1% for bandwidth > 4 Mbps (same preset, same 4,000
+  samples) — the label now tracks the network condition instead of being a
+  near-constant majority-class regardless of severity.
+- No other files needed changes — `labeling.py`'s formula, the other config
+  constants, and the rest of the test suite (`test_stub_inference.py`,
+  `test_run_simulation.py`, both flagged by the finding as
+  label/utility-adjacent) were unaffected and still pass; full suite is 40
+  passed (39 pre-existing + 1 new) after this fix.

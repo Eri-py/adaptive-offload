@@ -21,10 +21,12 @@ STRATIFICATION_BUCKET_COUNT = 5
 # Seed for both frame stratified-sampling and condition-vector sampling.
 SEED = 42
 
-# Default utility-function weight: score = accuracy - DEFAULT_LAMBDA * latency.
-# Latency is in milliseconds and accuracy is a 0-1 rate, so this is scaled
-# down to keep the latency term comparable in magnitude to the accuracy term.
-DEFAULT_LAMBDA = 0.005
+# Default utility-function weight: score = accuracy - DEFAULT_LAMBDA * (latency_ms / 1000),
+# i.e. per second of latency (see labeling.py's `_utility`). At 0.3, a 300ms
+# latency gap moves utility by 0.09 — comparable in magnitude to a realistic
+# accuracy gap between the local/offload stub paths (~0.07-0.1) — so neither
+# term structurally dominates the label.
+DEFAULT_LAMBDA = 0.3
 
 DATASET_NAME = "coco_val2017"
 
