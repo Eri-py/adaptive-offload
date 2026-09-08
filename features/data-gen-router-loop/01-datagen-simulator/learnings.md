@@ -740,6 +740,62 @@
   packages' `ruff check .` and `mypy .` clean. Confirmed via the admin-URL
   `pg_database` query that no stray `test_%` database survived.
 
+## Review finding S3 (fix) — non-atomic image write can cache a truncated file forever
+
+- **Fix is a 3-line change in `resolve_image_path`:** write the fetched bytes
+  to `local_path.with_suffix(local_path.suffix + ".part")` first, then
+  `part_path.replace(local_path)`. `Path.replace()` is an atomic rename on
+  POSIX (single `rename(2)` syscall) — either the whole `.part` file lands at
+  `local_path` or nothing does; there's no window where a half-written file
+  sits at the path `resolve_image_path`'s own `local_path.exists()` cache
+  check treats as a hit. No change needed to that cache-check line itself —
+  the fix only changes how the file gets there.
+- **Reproduced the bug before trusting the fix, per this feature's own
+  established pattern (B1/B2's learnings entries did the same):**
+  `git stash push -- datagen/coco.py` to temporarily restore the old
+  `local_path.write_bytes(image_bytes)` code, reran the new failure-mode test
+  (`test_resolve_image_path_interrupted_write_does_not_cache_truncated_file`)
+  against it, confirmed it failed with `AssertionError: assert not True` on
+  `final_path.exists()` — i.e. the old code did leave a file at the final
+  path even though the write was "interrupted." Then `git stash pop` to
+  restore the fix and confirmed the same test passes. This is the direct
+  proof the finding asked for: without the fix, an interrupted write reaches
+  the final path; with it, it doesn't.
+- **Simulating "interrupted" required patching `Path.replace`, not
+  `Path.write_bytes` or the injected `fetch` callable.** The realistic
+  failure mode this finding describes (process killed mid-`write_bytes`, or
+  a dropped connection mid-download) can't be cleanly injected through this
+  module's existing `FetchFn` seam, since `fetch` already returns before any
+  file I/O happens — by the time bytes reach `resolve_image_path`, the
+  "network" part is done. The fix's own atomic-write step gives a new,
+  precise injection point instead: `mock.patch.object(Path, "replace",
+  ...)` raising only when called on the specific `.part` path under test
+  (falling through to the real `Path.replace` for any other call, e.g. ones
+  made by pytest's own `tmp_path` machinery) simulates "the write completed
+  but the rename never happened" — which is exactly the boundary the fix is
+  meant to make safe, and is deterministic (no reliance on timing or actual
+  process interruption).
+- **The `_crash_before_replace` wrapper only intercepts calls where `self ==
+  part_path`**, not a blanket monkeypatch of `Path.replace` entirely — a
+  blanket patch would risk breaking unrelated `Path.replace` calls elsewhere
+  in the same test (there are none here, but the narrow guard costs nothing
+  and matches this feature's general preference for the smallest fake that
+  makes the point, e.g. Task 11's scoped `resolve_image` closure).
+- Added a companion "happy path still works and leaves no `.part` litter"
+  regression test
+  (`test_resolve_image_path_download_leaves_no_leftover_part_file`) rather
+  than relying solely on the pre-existing
+  `test_resolve_image_path_downloads_and_caches_missing_file` test (Task 4)
+  to cover the successful case — the new test explicitly asserts the `.part`
+  sibling doesn't linger after a clean run, which the pre-existing test never
+  checked and the fix newly makes relevant.
+- Full suite (`pytest -v` from `training/`) is 44 passed (42 pre-existing + 2
+  new); `ruff check .` and `mypy .` both clean, no new overrides needed. This
+  fix only touches `training/datagen/coco.py` and
+  `training/tests/datagen/test_coco.py` — no other files needed changes (no
+  Postgres/DB involvement in this module at all, so no ephemeral-database
+  verification step applies here, unlike most other fixes in this feature).
+
 ## Review finding S2 (fix) — flush complexity scores in batches, not once at the end
 
 - **Batch-size constant kept local to `run_simulation.py`, not added to

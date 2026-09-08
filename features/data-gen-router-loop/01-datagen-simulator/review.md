@@ -186,7 +186,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   where this happens.
 - **Fix:** Write to `local_path.with_suffix(local_path.suffix + ".part")` and
   `Path.replace()` into place once the write completes.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: write downloaded images atomically"
 
 #### S4 — No artificial delay is applied, though the spec says conditions are simulated by delay
 

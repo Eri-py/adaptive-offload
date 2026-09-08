@@ -78,5 +78,13 @@ def resolve_image_path(
 
     images_dir.mkdir(parents=True, exist_ok=True)
     image_bytes = fetch(f"{base_url}/{file_name}")
-    local_path.write_bytes(image_bytes)
+    # Write to a sibling `.part` path first and atomically rename into place
+    # only once the write has fully completed. Writing `local_path` directly
+    # would leave a truncated file cached forever if the process is
+    # interrupted mid-write (e.g. on a slow/unreliable connection) — a later
+    # call would treat that truncated file as a valid cache hit (the
+    # `local_path.exists()` check above) and never re-fetch it.
+    part_path = local_path.with_suffix(local_path.suffix + ".part")
+    part_path.write_bytes(image_bytes)
+    part_path.replace(local_path)
     return local_path
