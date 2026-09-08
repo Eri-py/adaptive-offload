@@ -238,7 +238,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   problem by naming the literal keys explicitly, and comments why.
 - **Fix:** Build `lower_bounds`/`upper_bounds` from the four literal keys, as
   `run_simulation.py` does, and drop both ignores.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: drop avoidable type: ignore comments in conditions.py"
 
 #### N3 — The label column stores enum names, not the `local`/`offload` values
 

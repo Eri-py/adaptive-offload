@@ -902,6 +902,34 @@
   fix only touches `training/tests/datagen/test_run_simulation.py` — no
   other files needed changes.
 
+## Review finding N2 (fix) — avoidable `type: ignore[literal-required]` in the condition sampler
+
+- **Same root cause and same fix pattern as Task 11's `condition_ranges`
+  finding, applied one module earlier.** `conditions.py`'s
+  `lower_bounds`/`upper_bounds` were built by iterating `_AXES` (a tuple of
+  plain `str`s) and subscripting the `ConditionPresetRanges` TypedDict with
+  the loop variable — mypy's `literal-required` check doesn't accept a
+  non-literal key even though every element of `_AXES` really is one of the
+  TypedDict's four declared keys, so Task 8 had carried two
+  `# type: ignore[literal-required]` comments (one per bounds list) as a
+  stopgap. Fix: name the four literal keys explicitly, twice (once for
+  `lower_bounds[i]`, once for `upper_bounds[i]`), exactly mirroring
+  `run_simulation.py:145-153`'s `condition_ranges` construction and its
+  explaining comment — no `type: ignore` needed anywhere.
+- **`_AXES` itself is untouched and still load-bearing** — it's still used for
+  `qmc.LatinHypercube(d=len(_AXES), seed=seed)` and the module docstring's
+  axis-order description, so it wasn't a dead constant to remove even though
+  the bounds-construction loop that used to iterate it is gone.
+- **Pure refactor, confirmed two ways:** `ruff check .` and `mypy .` both
+  clean with the two ignores removed (no new suppression needed elsewhere),
+  and the full suite (`pytest -v` from `training/`) is still 47 passed with
+  zero test changes — `test_conditions.py` (which independently carries the
+  same `literal-required` ignore pattern per Task 8's own note, on the test
+  side) was intentionally left untouched since this finding's scope named
+  only `conditions.py`, not its test file.
+- This fix only touches `training/datagen/conditions.py` — no other files
+  needed changes.
+
 ## Review finding N1 (fix) — short sample recorded as run's frame count with no warning
 
 - **No existing module in this feature had set up `logging` yet** (checked

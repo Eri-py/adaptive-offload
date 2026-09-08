@@ -36,8 +36,21 @@ def sample_condition_vectors(
     sampler = qmc.LatinHypercube(d=len(_AXES), seed=seed)
     unit_samples = sampler.random(n=count)
 
-    lower_bounds = [preset[axis][0] for axis in _AXES]  # type: ignore[literal-required]
-    upper_bounds = [preset[axis][1] for axis in _AXES]  # type: ignore[literal-required]
+    # `preset[axis]` with a loop variable trips mypy's `literal-required`
+    # check (TypedDict subscripts need a literal key), so build the bounds
+    # from the known literal keys directly rather than iterating `_AXES`.
+    lower_bounds = [
+        preset["bandwidth_mbps"][0],
+        preset["network_latency_ms"][0],
+        preset["packet_loss_pct"][0],
+        preset["device_load_pct"][0],
+    ]
+    upper_bounds = [
+        preset["bandwidth_mbps"][1],
+        preset["network_latency_ms"][1],
+        preset["packet_loss_pct"][1],
+        preset["device_load_pct"][1],
+    ]
     scaled = qmc.scale(unit_samples, lower_bounds, upper_bounds)
 
     return [(float(row[0]), float(row[1]), float(row[2]), float(row[3])) for row in scaled]
