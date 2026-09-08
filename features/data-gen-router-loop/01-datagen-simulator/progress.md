@@ -17,10 +17,10 @@
 - Notes: `alembic upgrade head --sql` verified offline (no DB connection), DDL matches all three tables + FK. ruff/mypy clean, existing test still passes.
 
 ## Task 3 — `training/datagen` package + config module
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:05:03
+- Completed: 2026-09-07 19:10:40
+- Notes: `common.*` import from training/'s venv verified working (editable install of ../server). ruff/mypy clean, 2 tests passed. Added test_config.py (not in original Files list, but required by the task's own success criteria).
 
 ## Task 4 — COCO acquisition and local image caching
 - Status: not started

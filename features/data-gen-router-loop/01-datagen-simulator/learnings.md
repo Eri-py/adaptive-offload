@@ -123,3 +123,56 @@
   failing run, and back-to-back repeated runs — checked via a one-off script
   connecting with the admin URL and querying `pg_database WHERE datname LIKE
   'test_%'`.
+
+## Task 3 — `training/datagen` package + config module
+
+- **`from common.db import get_engine` and `from common.models import ...`
+  resolve cleanly from `training/`'s own venv** once `pip install -e
+  ../server` runs before `pip install -e ".[dev]"` in that venv — actually
+  verified with a one-off `.venv/bin/python -c "from common.db import
+  get_engine; from common.models import Base; from common.testing import
+  ephemeral_postgres_database"` inside `training/`, not just inferred from
+  the dependency line. This is the load-bearing detail Task 6 onward
+  depends on, and it works with the plain two-step `pip install` sequence —
+  no path hacks, no `conftest.py` sys.path tweaks needed.
+- **Plain PEP 508 `dependencies` in `training/pyproject.toml` has no
+  portable way to express "install `../server` too."** A relative
+  `file://` URL isn't standard, and `${PROJECT_ROOT}` substitution in
+  dependency strings is a `uv`-specific `tool.uv.sources` feature, not
+  something plain `pip install -e .` understands — using it would silently
+  fail to resolve under plain pip. Went with the spec's documented
+  alternative instead: `server` is *not* listed in
+  `training/pyproject.toml`'s `dependencies` at all; a comment above the
+  `dependencies` list in `training/pyproject.toml` spells out the two-step
+  install (`pip install -e ../server` then `pip install -e ".[dev]"`).
+  Mirrors how `server/`'s own venv was set up (plain `python -m venv` +
+  `pip install -e ".[dev]"`, no lockfile), so both packages' install
+  stories stay consistent.
+- **`training/`, `training/datagen/`, `training/router/`, and
+  `training/data/` already existed as empty directories** from the initial
+  scaffolding commit (untracked, not yet in git) — `training/data/` is
+  already covered by a `training/data/` entry in the root `.gitignore`
+  (dataset cache, per Task 4/5's future downloads), and the existing
+  generic `.venv/`, `__pycache__/`, `*.egg-info/`, `.mypy_cache/`,
+  `.pytest_cache/`, `.ruff_cache/` patterns already cover `training/`'s new
+  venv/caches too — no `.gitignore` edit was needed for this task.
+- **`config.PRESETS`'s value type is a `TypedDict`
+  (`ConditionPresetRanges`)**, not a plain `dict[str, tuple[float,
+  float]]`, so every preset is statically checked to define exactly the
+  four required axis keys. The one wrinkle: iterating over axis names as
+  plain `str` and subscripting the TypedDict with that variable
+  (`ranges[axis]`) trips mypy's `literal-required` check (TypedDict
+  subscripts normally need a literal key) — the test that does this
+  (`test_config.py`) has a targeted `# type: ignore[literal-required]` on
+  that one line rather than loosening the TypedDict itself.
+- **The Task 3 plan entry's `Files` list doesn't name a `test_config.py`**
+  (only the `tests/__init__.py` package markers), but the task's own
+  success criteria explicitly requires "a test importing `config`" —
+  added `training/tests/datagen/test_config.py` to satisfy that criterion
+  directly, since it's clearly implied by the success criteria rather than
+  scope creep.
+- Illustrative stub-model coefficients (base latency/accuracy, noise
+  std-devs, device-load/bandwidth/packet-loss coefficients) are unmeasured
+  placeholders per the spec's stub-first stance — Task 9's stub-inference
+  formula is what actually gives them meaning; revisit their magnitudes
+  then if the resulting latency/accuracy numbers don't look plausible.
