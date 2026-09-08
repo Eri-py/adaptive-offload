@@ -71,7 +71,7 @@
 - Notes: Real invocation is `python -m datagen.run_simulation --preset <name>` (training/ import root, not training.datagen.*) — verified via --help. Core function fully dependency-injected (image_records, resolve_image, all tunables) for testability. Reproducibility and scene_complexity-reuse both verified (row-for-row match except run_id; 0 resolve_image calls on second run). ruff/mypy clean, 39/39 tests passed, no stray test DB.
 
 ## Task 12 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:42:19
+- Completed: 2026-09-07 19:43:58
+- Notes: server/ 1/1 passed, training/ 39/39 passed, 0 skipped, both ruff/mypy clean, no stray test DB. Independently re-verified by orchestrator. All 12 tasks (+ Task 1b corrective) complete.
