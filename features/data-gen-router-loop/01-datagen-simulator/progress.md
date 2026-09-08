@@ -23,10 +23,10 @@
 - Notes: `common.*` import from training/'s venv verified working (editable install of ../server). ruff/mypy clean, 2 tests passed. Added test_config.py (not in original Files list, but required by the task's own success criteria).
 
 ## Task 4 — COCO acquisition and local image caching
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:10:59
+- Completed: 2026-09-07 19:15:21
+- Notes: Real annotations file confirmed parsing to exactly 5,000 entries; cached-file resolution confirmed instant/no-fetch. ruff/mypy clean, 6/6 tests passed (full suite). Surfaced+fixed a pre-existing mypy python_version 3.11-vs-3.12 mismatch in both server/ and training/ (separate commit).
 
 ## Task 5 — Scene-complexity proxy
 - Status: not started

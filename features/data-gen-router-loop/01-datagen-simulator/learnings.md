@@ -176,3 +176,56 @@
   placeholders per the spec's stub-first stance — Task 9's stub-inference
   formula is what actually gives them meaning; revisit their magnitudes
   then if the resulting latency/accuracy numbers don't look plausible.
+
+## Task 4 — COCO acquisition and local image caching
+
+- **`import pytest` in a test file makes mypy pull in `_pytest`'s numpy
+  integration, which trips a pre-existing environment mismatch.**
+  `training/pyproject.toml` sets `[tool.mypy] python_version = "3.11"`, but
+  `training/.venv` runs Python 3.12, and the installed numpy's bundled
+  `__init__.pyi` uses a `type` statement (3.12-only syntax). Any file mypy
+  analyzes that imports `pytest` follows into `_pytest._io.saferepr`, which
+  imports `numpy` for its array-repr support, and mypy chokes on that stub
+  under the 3.11 setting (`error: Type statement is only supported in Python
+  3.12 and greater`) — even though the file that triggered it (my
+  `test_coco.py`) has nothing to do with numpy. `training/tests/datagen/
+  test_config.py` (Task 3) never imports `pytest` directly (it only uses
+  plain `def test_...()` functions, relying on pytest's collection, not its
+  API), which is why this didn't surface earlier. Fix used here: avoid
+  `import pytest` in `test_coco.py` too — replaced the one custom
+  `@pytest.fixture` with a plain helper function (`_write_fake_annotations
+  (tmp_path) -> Path`) called directly from each test; `tmp_path` itself is
+  injected by pytest without needing an import. This is a workaround, not a
+  real fix — `pyproject.toml`'s mypy `python_version` (or the venv's
+  interpreter version) is out of this task's `Files` list, so didn't touch
+  it. Any future test file in `training/` that needs `@pytest.fixture`,
+  `pytest.raises`, `pytest.mark.parametrize`, etc. will hit the same wall
+  and needs either the same plain-function workaround or (better, but out
+  of scope here) reconciling `python_version` with the venv's actual
+  Python. Confirmed via `git stash -u` that `mypy .` was clean on the 5
+  pre-existing files before this task's files were added, and that adding
+  `test_coco.py` with a plain `import pytest` (no fixture even) alone was
+  enough to reproduce the failure — it's the import, not fixture usage,
+  that triggers it.
+- **`json.load()`'s return type is `Any`, and that's fine to let flow into a
+  `NamedTuple` constructor under `mypy --strict`.** Originally over-typed
+  the loaded `images` list as `list[dict[str, object]]`, which then made
+  `entry["id"]` resolve to `object` and broke `int(entry["id"])` (`object`
+  isn't one of `int()`'s overloads). Fixed by typing the whole `json.load()`
+  result as `dict[str, list[Any]]` and passing `entry["id"]`/
+  `entry["file_name"]` (both `Any`) straight into `ImageRecord(image_id=...,
+  file_name=...)` — mypy's `warn_return_any` (part of `--strict`) only
+  fires when a function's return expression itself is `Any`-typed, not when
+  `Any` values are used to construct a statically-typed object one level in.
+- **Verified against the real dataset (read-only, no network) that
+  `training/data/coco/annotations/instances_val2017.json`'s `images` array
+  has exactly 5,000 entries**, and that `resolve_image_path()` on a real
+  file name resolves instantly via the pre-downloaded-file branch (no
+  `fetch` call) — confirms the "common case" path works against real data,
+  not just the fake fixtures in `test_coco.py`.
+- `COCO_DIR`/`ANNOTATIONS_PATH`/`IMAGES_DIR` are computed from `Path(__file__
+  ).resolve().parent.parent`, i.e. relative to `coco.py`'s own location
+  (`training/datagen/coco.py` → `training/data/coco/`), not relative to the
+  process's current working directory — so `load_image_index()`/
+  `resolve_image_path()` use correct real-data defaults regardless of where
+  a future caller (e.g. Task 6's simulator script) is invoked from.
