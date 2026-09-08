@@ -647,3 +647,55 @@
   `test_run_simulation.py`, both flagged by the finding as
   label/utility-adjacent) were unaffected and still pass; full suite is 40
   passed (39 pre-existing + 1 new) after this fix.
+
+## Review finding B2 (fix) — non-deterministic sort on tied complexity scores
+
+- **Root cause confirmed exactly as the finding described:**
+  `sorted(scores.items(), key=lambda item: item[1])` in
+  `sampling.stratified_sample` sorts on score only; Python's sort is stable,
+  so tied frames keep whatever order they arrived in via `scores`' dict
+  iteration, and that order isn't guaranteed to match between two runs (an
+  annotation-file-order mapping the first time a dataset is scored vs. an
+  unordered Postgres `SELECT` on `get_known_complexity` every run after).
+  Task 11's own learnings had already flagged this exact risk in passing
+  (in the note about the fake-pool generator avoiding ties on purpose) —
+  worth remembering that a "we deliberately avoided X in the test fixture"
+  note is sometimes flagging a latent bug in the code under test, not just a
+  test-design choice.
+- **Fix: sort key is `(item[1], item[0])`** — total order over
+  `(score, file_name)`, so ties break on file name (a stable, order-
+  independent value) instead of falling through to insertion order.
+  `get_known_complexity` also gained `.order_by(SceneComplexity.file_name)`
+  as a second line of defence — not load-bearing for this specific bug once
+  the sort key is total (any insertion order now produces the same sorted
+  result), but it keeps the function's own output deterministic for any
+  other future caller that might rely on dict order without going through
+  `stratified_sample`'s tie-breaking.
+- **Reproduced the bug directly before fixing it**, per the task's own
+  verification requirement: temporarily reverted the sort-key change,
+  re-ran the new regression test
+  (`test_tied_scores_produce_identical_sample_regardless_of_insertion_order`
+  in `test_sampling.py`), confirmed it failed with a diff at index 26
+  (`'frame_0100.jpg' != 'frame_0101.jpg'`) — the same two-frames-swap
+  symptom the finding described (`img_042.jpg` vs `img_041.jpg`) — then
+  restored the fix and confirmed the test (and the full suite) passes.
+- **Test construction: reuse `_synthetic_scores()`'s existing 200-item pool
+  and add one deliberately-tied entry** (`frame_0101.jpg` given the same
+  score as `frame_0100.jpg`) rather than building a whole new fixture —
+  keeps the test close to the existing suite's style and guarantees the tied
+  pair is real (not one that numpy's `array_split` bucket boundaries route
+  away from any `rng.choice` draw), verified by confirming the unfixed code
+  actually produces a different sample when insertion order is reversed
+  before writing the assertion the "right" way.
+- No `test_persistence.py` addition was made for the `get_known_complexity`
+  ordering guarantee — the existing round-trip tests already compare against
+  a `dict` (which is order-insensitive for equality), so an ordering-specific
+  assertion would need to inspect raw row order via a lower-level query
+  rather than the function's own `dict`-returning contract; judged not worth
+  the added complexity for a defence-in-depth fix that isn't itself
+  load-bearing for the reproducibility bug once `sampling.py`'s sort key is
+  total.
+- Full suite (`pytest -v` from `training/`) is 41 passed (40 pre-existing +
+  1 new); `ruff check .` and `mypy .` both clean, no new overrides needed.
+  Confirmed via a one-off script against `POSTGRES_ADMIN_URL` that no
+  `test_%` database survived after this fix's test run.

@@ -141,7 +141,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   `.order_by(SceneComplexity.file_name)` to `get_known_complexity` as a second
   line of defence, and add a sampling test with a deliberately tied pair fed
   in two different insertion orders.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B2: frame sampling non-deterministic on tied complexity scores"
 
 ## Suggestions
 

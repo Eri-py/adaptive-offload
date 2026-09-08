@@ -50,10 +50,20 @@ class ResultRow:
 
 
 def get_known_complexity(engine: Engine, dataset: str) -> dict[str, float]:
-    """Read all cached `scene_complexity` rows for `dataset` as {file_name: score}."""
+    """Read all cached `scene_complexity` rows for `dataset` as {file_name: score}.
+
+    Ordered by `file_name` — a second line of defence against Postgres's
+    unordered `SELECT` row order feeding non-deterministic dict-insertion
+    order into `sampling.stratified_sample`'s tie-breaking (the sort there is
+    already a total order over `(score, file_name)`, so this ordering isn't
+    load-bearing for that specific bug, but keeping this function's own
+    output deterministic avoids depending on that elsewhere).
+    """
     with Session(engine) as session:
         rows = session.execute(
-            select(SceneComplexity).where(SceneComplexity.dataset == dataset)
+            select(SceneComplexity)
+            .where(SceneComplexity.dataset == dataset)
+            .order_by(SceneComplexity.file_name)
         ).scalars()
         return {row.file_name: row.scene_complexity for row in rows}
 

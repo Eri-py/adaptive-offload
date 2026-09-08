@@ -23,13 +23,18 @@ def stratified_sample(
 ) -> list[str]:
     """Select `target_count` file names from `scores` via quantile bucketing.
 
-    Sorts `(file_name, score)` pairs by score and splits them into
+    Sorts `(file_name, score)` pairs by `(score, file_name)` — file name is a
+    tiebreaker, not a second sort criterion the caller asked for, but it makes
+    the sort a total order so tied scores don't fall back to Python's stable
+    sort preserving `scores`' dict-insertion order, which differs between runs
+    (e.g. one run builds the mapping from an annotation file, another from a
+    database `SELECT` with no guaranteed row order) — and splits them into
     `bucket_count` equal-frequency buckets (`numpy.array_split` on the
     sorted pool), then draws an even share of `target_count` from each
     bucket — any remainder from uneven division is distributed one-per-
     bucket across the first buckets — using a `numpy.random.default_rng
     (seed)` generator, so the same mapping and seed always yield the same
-    selection.
+    selection regardless of insertion order.
 
     If a bucket has fewer items than its target share, every item in that
     bucket is taken instead of raising; the returned list may then be
@@ -37,7 +42,8 @@ def stratified_sample(
     relative to the target, not for the real ~5,000-image COCO pool).
     """
     sorted_file_names = [
-        file_name for file_name, _ in sorted(scores.items(), key=lambda item: item[1])
+        file_name
+        for file_name, _ in sorted(scores.items(), key=lambda item: (item[1], item[0]))
     ]
     buckets = np.array_split(np.array(sorted_file_names, dtype=object), bucket_count)
 

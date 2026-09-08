@@ -65,3 +65,25 @@ def test_handles_bucket_with_fewer_items_than_target_share() -> None:
     sample = stratified_sample(scores, target_count=500, bucket_count=5, seed=42)
     assert len(sample) == 10
     assert set(sample) == set(scores)
+
+
+def test_tied_scores_produce_identical_sample_regardless_of_insertion_order() -> None:
+    # Regression test for review finding B2: sorting on score alone leaves
+    # tied frames in Python's stable-sort dict-insertion order, which differs
+    # between runs (e.g. an annotation-file order vs. an unordered database
+    # `SELECT`). Two of `scores`' entries ("frame_0100.jpg" and
+    # "frame_0101.jpg") deliberately share the same score; feeding the same
+    # mapping in two different insertion orders must still produce the same
+    # sample once the sort key breaks ties on file name.
+    base_scores = _synthetic_scores()
+    tied_score = base_scores["frame_0100.jpg"]
+    ascending = dict(base_scores)
+    ascending["frame_0101.jpg"] = tied_score
+
+    descending = dict(reversed(list(ascending.items())))
+    assert list(ascending.items()) != list(descending.items())
+
+    first = stratified_sample(ascending, target_count=50, bucket_count=5, seed=42)
+    second = stratified_sample(descending, target_count=50, bucket_count=5, seed=42)
+
+    assert first == second
