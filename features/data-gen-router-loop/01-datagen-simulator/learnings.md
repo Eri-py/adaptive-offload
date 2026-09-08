@@ -982,3 +982,18 @@
   `training/tests/datagen/test_run_simulation.py` — no other files needed
   changes, and `sampling.py` was left untouched per the finding's explicit
   scope (its short-sample behavior is documented and correct as-is).
+
+## Review finding N3 (fix) — `label` column stores enum names, not values; documented, not changed
+
+- **For feature 02 (or anyone else querying `simulation_results.label`
+  directly): the stored values are `'LOCAL'` / `'OFFLOAD'` (the `Label`
+  enum's member names), not `'local'` / `'offload'` (the enum's `.value`
+  strings).** SQLAlchemy's `Enum(Label)` in `server/common/models.py`
+  persists member names by default — this was already noted as intentional
+  in Task 2's learnings (`sa.Enum(Label)` renders as
+  `sa.Enum('LOCAL', 'OFFLOAD', name='label')` in the migration) and confirmed
+  again here. The reviewer's recommended decision on N3 judged the
+  documentation alone sufficient (feature 02 only needs to know which form
+  is stored to write a correct `WHERE label = 'LOCAL'`), so the schema and
+  migration are left as-is — no `values_callable` change, no code touched
+  for this finding.

@@ -250,7 +250,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
 - **Fix:** Either pass `values_callable=lambda e: [m.value for m in e]` to
   `Enum(...)` (and match it in the migration), or leave as-is and note the
   stored form in `learnings.md` for feature 02.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: document that label column stores enum names" (schema left as-is per the reviewer's own recommendation — documentation is sufficient)
 
 #### N4 — No index on `simulation_results.run_id`
 
