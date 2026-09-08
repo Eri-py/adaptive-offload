@@ -65,10 +65,10 @@
 - Notes: Returns common.models.Label enum, not a string. Exact-tie breaks to LOCAL (documented). ruff/mypy clean, 37/37 tests passed (5 new, no regressions).
 
 ## Task 11 — Orchestration script + end-to-end integration test
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-07 19:35:20
+- Completed: 2026-09-07 19:41:57
+- Notes: Real invocation is `python -m datagen.run_simulation --preset <name>` (training/ import root, not training.datagen.*) — verified via --help. Core function fully dependency-injected (image_records, resolve_image, all tunables) for testability. Reproducibility and scene_complexity-reuse both verified (row-for-row match except run_id; 0 resolve_image calls on second run). ruff/mypy clean, 39/39 tests passed, no stray test DB.
 
 ## Task 12 — Regression test run
 - Status: not started

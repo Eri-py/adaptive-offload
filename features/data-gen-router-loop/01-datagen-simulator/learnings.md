@@ -508,3 +508,93 @@
   and does arithmetic, no new stub/override needed beyond what Tasks 1–9
   already resolved. Full suite (`pytest -q` from `training/`) is 37 passed
   (32 pre-existing + 5 new).
+
+## Task 11 — Orchestration script + end-to-end integration test
+
+- **The real invocation is `python -m datagen.run_simulation --preset
+  <name>`, not `python -m training.datagen.run_simulation ...`** as the plan
+  text literally says. `training/` has no `training/__init__.py` (same as
+  `server/` for `common`, per Task 1's finding) — `training/pyproject.toml`'s
+  `[tool.setuptools.packages.find] include = ["datagen*", "router*"]` makes
+  `datagen` itself the top-level importable package once installed, and every
+  module in this feature already imports its siblings as `from datagen.config
+  import ...` (never `from training.datagen...`). Documented the correct
+  invocation in `run_simulation.py`'s own module docstring and flagging it
+  here since the task text's example was stale on this point too, same as
+  the SQLite→Postgres correction already called out in the task brief.
+- **`stub_inference`'s own contract (Task 9) only guarantees determinism for
+  a *fixed* seed** — Task 9 explicitly left "feed a distinct seed per row"
+  as this task's responsibility. Reusing one run-level seed for every
+  (frame, condition) row would have made every row draw bit-identical noise,
+  which is wrong (each row needs independent-looking noise) while still
+  needing to be reproducible run-to-run. Fix: `row_seed = resolved_seed +
+  frame_index * len(condition_vectors) + condition_index`, using the
+  enumerate-index position in the (already-deterministic, seed-derived)
+  sampled-frames/condition-vectors lists — cheap, collision-free within one
+  run (`frame_count * condition_vector_count` distinct offsets), and
+  reproducible across two runs of the same seed/preset/pool since both the
+  sampling and the offsets are pure functions of the same inputs.
+- **`ConditionPresetRanges.items()` types values as `object` under mypy**,
+  not `tuple[float, float]` — same root cause as Task 3/8's
+  `literal-required` TypedDict finding (mypy doesn't assume TypedDict values
+  are homogeneous even when every field in this particular TypedDict happens
+  to share a type), but this time it broke `list(bounds)` with `No overload
+  variant of "list" matches argument type "object"` rather than a
+  `literal-required` warning. The `# type: ignore[literal-required]`
+  precedent doesn't apply here since the error is `call-overload`, not
+  `literal-required`. Fix: build `condition_ranges` (the `RunConfig.
+  condition_ranges` snapshot) from the 4 known literal keys directly
+  (`preset["bandwidth_mbps"]`, etc.) instead of iterating `.items()` — no
+  `type: ignore` needed anywhere. Same fix applied in the test file, which
+  independently needed to reconstruct the expected `condition_ranges` dict
+  for its `SimulationRun` assertion.
+- **`RunConfig.frame_count`/`condition_vector_count` are persisted as the
+  *actual* sampled lengths (`len(sampled_frames)`/`len(condition_vectors)`),
+  not the requested target counts** — normally identical (the real
+  ~5,000-image COCO pool and default `FRAME_COUNT=500`/
+  `CONDITION_VECTOR_COUNT=50` never hit Task 7's "bucket smaller than its
+  target share" edge case), but persisting the actual counts makes the
+  `simulation_runs` record always truthfully match the number of
+  `simulation_results` rows actually written for it, even in that edge case,
+  which is what the spec's "traceable back to exactly what configuration
+  produced it" requirement is really asking for.
+- **The core function's dependency-injection seams are exactly**
+  `image_records: list[ImageRecord] | None` and `resolve_image:
+  Callable[[str], Path] | None`, both defaulting to `None` and resolved
+  *inside* the function body (`coco.load_image_index()` /
+  `coco.resolve_image_path`) rather than as literal parameter defaults —
+  this avoids reading the real (possibly-absent, in a fresh checkout without
+  the pre-downloaded dataset) annotations file at import time or whenever a
+  test imports `run_simulation` for any other reason. `frame_count`/
+  `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` follow the
+  same `| None = None`-then-resolve-to-`config.*` pattern, letting the test
+  run a fast 10-frame x 5-condition-vector (50-row) pipeline against a
+  20-image fake pool instead of the real 500 x 50 defaults.
+- **Test's fake pool uses `cv2.imwrite` on numpy arrays blending a flat
+  gray background with random noise at an index-controlled density (`i /
+  (POOL_SIZE - 1)` for `i in range(20)`)** rather than pure random noise for
+  every image — this spreads the 20 images' edge-density complexity scores
+  out deliberately (rather than leaving them to cluster near whatever score
+  pure noise happens to produce), which both matters for exercising
+  `stratified_sample`'s bucketing meaningfully and all but eliminates the
+  already-small risk of two images tying on complexity score (a tie could
+  flip `stratified_sample`'s stable-sort bucket assignment between the two
+  test-pipeline runs if the tied images' relative dict-iteration order ever
+  differed, e.g. because the second run's scores come back from a DB
+  `SELECT` with no guaranteed row order — not actually observed, but worth
+  noting for anyone who simplifies the fake-pool generator to pure noise
+  later).
+- **Added a lightweight resolve-call counter (`call_count["n"] += 1` inside
+  the injected `resolve_image` closure) instead of skipping instrumentation
+  entirely** — cheap to add and it directly proves the "second run does not
+  recompute" criterion at the resolve/complexity-computation level (0 calls
+  on the second run), not just indirectly via an unchanged `scene_complexity`
+  row count, which alone wouldn't distinguish "recomputed but deduped at
+  insert time" from "never recomputed at all."
+- Full suite (`pytest -q` from `training/`) is 39 passed (37 pre-existing + 2
+  new); `ruff check .` and `mypy .` both clean. Confirmed via a one-off
+  script against `POSTGRES_ADMIN_URL` that no `test_%` database survives
+  after this task's test run. This task's two tests only touch
+  `training/datagen/run_simulation.py` and
+  `training/tests/datagen/test_run_simulation.py` — no other files needed
+  changes.
