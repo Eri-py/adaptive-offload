@@ -9,6 +9,7 @@ testing convention (see `learnings.md`'s Task 1b/6 notes).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -343,3 +344,64 @@ def test_run_simulation_never_conflates_two_different_preset_runs(
     with Session(postgres_engine) as session:
         total_results = session.query(SimulationResult).count()
     assert total_results == expected_baseline_count + expected_stress_count
+
+
+def test_run_simulation_warns_when_sample_comes_back_short(
+    postgres_engine: Engine, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """When the pool is too small (relative to frame_count/bucket_count) for
+    `stratified_sample` to fill every bucket's share, it silently returns
+    fewer frames than requested (documented at `sampling.py:39-42`) -- review
+    finding N1: `run_simulation` must log a warning noting both numbers
+    rather than quietly persisting the short count as if it were correct.
+    """
+    image_records = _write_fake_pool(tmp_path)
+    # POOL_SIZE=20 split into BUCKET_COUNT=5 buckets gives 4 items per
+    # bucket; requesting far more than 5x that per bucket (i.e. more than
+    # POOL_SIZE total) guarantees every bucket comes up short.
+    requested_frame_count = POOL_SIZE * 5
+
+    with caplog.at_level(logging.WARNING, logger="datagen.run_simulation"):
+        run_simulation(
+            postgres_engine,
+            PRESET_NAME,
+            image_records=image_records,
+            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            frame_count=requested_frame_count,
+            condition_vector_count=CONDITION_VECTOR_COUNT,
+            bucket_count=BUCKET_COUNT,
+            seed=SEED,
+            lambda_value=LAMBDA_VALUE,
+        )
+
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert str(POOL_SIZE) in message
+    assert str(requested_frame_count) in message
+
+
+def test_run_simulation_does_not_warn_when_sample_meets_target(
+    postgres_engine: Engine, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The normal/happy-path case (pool large enough to fill every bucket's
+    share, per this module's own default test config) must not log the
+    short-sample warning -- the negative counterpart to the test above.
+    """
+    image_records = _write_fake_pool(tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="datagen.run_simulation"):
+        run_simulation(
+            postgres_engine,
+            PRESET_NAME,
+            image_records=image_records,
+            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            frame_count=FRAME_COUNT,
+            condition_vector_count=CONDITION_VECTOR_COUNT,
+            bucket_count=BUCKET_COUNT,
+            seed=SEED,
+            lambda_value=LAMBDA_VALUE,
+        )
+
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert warnings == []

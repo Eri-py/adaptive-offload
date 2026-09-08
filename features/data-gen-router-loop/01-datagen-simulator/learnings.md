@@ -901,3 +901,56 @@
   fixes that no `test_%` database survived after this fix's test run. This
   fix only touches `training/tests/datagen/test_run_simulation.py` — no
   other files needed changes.
+
+## Review finding N1 (fix) — short sample recorded as run's frame count with no warning
+
+- **No existing module in this feature had set up `logging` yet** (checked
+  with a repo-wide grep before adding anything) — `run_simulation.py` gets a
+  plain module-level `logger = logging.getLogger(__name__)` right after its
+  `datagen.*` imports, following the standard library convention directly
+  since there was no in-feature precedent to match instead.
+- **Warning fires right after `stratified_sample` returns, comparing
+  `len(sampled_frames)` against `resolved_frame_count`** (the resolved
+  target, not the raw `frame_count` parameter which may be `None`) — this is
+  the same value `RunConfig(frame_count=len(sampled_frames), ...)` a few
+  lines later persists, so the warning and the persisted (possibly-short)
+  count are checked against the same target.
+- **Test trigger for the short-sample path reuses the existing 20-image fake
+  pool (`_write_fake_pool`, `POOL_SIZE=20`) rather than building a new
+  fixture** — requesting `frame_count=POOL_SIZE * 5` (100) against the
+  existing `BUCKET_COUNT=5` guarantees every bucket's share (20 each) far
+  exceeds what a 4-item bucket can supply, so the sample comes back at
+  exactly `POOL_SIZE` (20) regardless of the exact oversubscription factor,
+  no need to hand-compute the exact resulting count for the assertion beyond
+  asserting the two numbers appear in the logged message.
+- **Asserted on `caplog.records` filtered to `levelno == logging.WARNING`
+  inside a `caplog.at_level(logging.WARNING, logger="datagen.run_simulation")`
+  block**, rather than `caplog.text` substring matching — scoping to the
+  specific logger name avoids the assertion silently passing due to some
+  unrelated library's warning if one is ever introduced later, and checking
+  `record.getMessage()` (the `%`-formatted result) rather than the raw
+  format string confirms the two numbers are actually interpolated into the
+  message, not just present as `%d` placeholders.
+- **Happy-path negative test reuses the pre-existing default test config
+  exactly** (`FRAME_COUNT=10`, `CONDITION_VECTOR_COUNT=5`, `BUCKET_COUNT=5`,
+  same 20-image pool) — this is the same shape Task 11's own
+  `test_run_simulation_creates_expected_rows_with_full_linkage` already
+  exercises without ever hitting the short-sample branch, so asserting zero
+  WARNING-level records here directly confirms the fix doesn't fire a false
+  positive on the ordinary case, not just that it fires on the contrived one.
+- **Could not run this fix's usual "confirm no stray `test_%` database
+  survived" verification step** (used in every prior Postgres-touching fix
+  in this feature) — the one-off admin-URL check script was blocked by the
+  auto-mode Bash classifier this time (reason: "Blocked by classifier"), not
+  a real failure. Not treated as blocking since `pytest -v`'s own
+  `postgres_engine` fixture teardown (Task 1b's verified `try`/`finally`
+  create/drop-per-test pattern) is unchanged by this fix and every test in
+  the run passed normally — flagging here in case a future fix in this
+  feature hits the same classifier block and needs a different verification
+  approach (e.g. asking the user to run the check).
+- Full suite (`pytest -v` from `training/`) is 47 passed (45 pre-existing + 2
+  new); `ruff check .` and `mypy .` both clean, no new overrides needed. This
+  fix only touches `training/datagen/run_simulation.py` and
+  `training/tests/datagen/test_run_simulation.py` — no other files needed
+  changes, and `sampling.py` was left untouched per the finding's explicit
+  scope (its short-sample behavior is documented and correct as-is).

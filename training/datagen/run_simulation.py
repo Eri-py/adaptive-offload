@@ -22,6 +22,7 @@ a small fake image pool instead of the real ~5,000-image COCO set.
 from __future__ import annotations
 
 import argparse
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -43,6 +44,8 @@ from datagen.persistence import (
 )
 from datagen.sampling import stratified_sample
 from datagen.stub_inference import stub_inference
+
+logger = logging.getLogger(__name__)
 
 # How many newly-scored images to accumulate before flushing to Postgres in
 # the complexity-scoring loop below. This is a crash-resilience/robustness
@@ -127,6 +130,14 @@ def run_simulation(
     sampled_frames = stratified_sample(
         all_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
     )
+    if len(sampled_frames) < resolved_frame_count:
+        logger.warning(
+            "Stratified sample came back short: got %d frames, requested %d. "
+            "The image pool is too small (relative to frame_count/bucket_count) "
+            "to fill every bucket's share; check for a misconfiguration.",
+            len(sampled_frames),
+            resolved_frame_count,
+        )
     condition_vectors = sample_condition_vectors(
         preset, resolved_condition_vector_count, resolved_seed
     )

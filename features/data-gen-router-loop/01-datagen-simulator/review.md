@@ -228,7 +228,7 @@ Nothing touches `server/api/`, the app, or feature 02's territory, as planned.
   misconfiguration invisible.
 - **Fix:** Log a warning when `len(sampled_frames) < resolved_frame_count`,
   noting both numbers.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: warn when sampled frame count falls short of target"
 
 #### N2 — Avoidable `type: ignore[literal-required]` in the condition sampler
 
