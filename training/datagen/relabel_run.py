@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import NamedTuple
 
 from common.db import get_engine
 from common.models import Label
@@ -28,14 +29,36 @@ from datagen import labeling
 from datagen.persistence import get_run_results
 
 
-def relabel_run(engine: Engine, run_id: str, lambda_value: float) -> list[tuple[str, Label, Label]]:
+class RelabeledRow(NamedTuple):
+    """One row's stored vs. recomputed label, plus the condition vector that produced it.
+
+    Carrying the four condition values (not just `frame_id`) is what makes
+    the report useful at real scale: a run has `condition_vector_count` rows
+    per `frame_id` with nothing else distinguishing them, so without these a
+    reader who sees a flip can't tell *which* condition flipped — which is
+    the whole point of a λ sweep (per the spec's routing-boundary-shift
+    question).
+    """
+
+    frame_id: str
+    network_bandwidth_mbps: float
+    network_latency_ms: float
+    network_packet_loss_pct: float
+    device_load_pct: float
+    stored_label: Label
+    recomputed_label: Label
+
+
+def relabel_run(engine: Engine, run_id: str, lambda_value: float) -> list[RelabeledRow]:
     """Recompute each of `run_id`'s stored results' labels under `lambda_value`.
 
-    Returns `(frame_id, stored_label, recomputed_label)` triples, ordered by
-    `frame_id` (per `get_run_results`). Raises `ValueError` if `run_id` has
-    no persisted results — either it doesn't exist or its run produced zero
-    rows, and either way there's nothing to relabel; reporting an empty list
-    silently would read as "zero rows flipped" rather than "no such run."
+    Returns one `RelabeledRow` per persisted result, ordered by
+    `(frame_id, id)` (per `get_run_results`) — a stable order across calls,
+    including among the `condition_vector_count` rows that share a
+    `frame_id`. Raises `ValueError` if `run_id` has no persisted results —
+    either it doesn't exist or its run produced zero rows, and either way
+    there's nothing to relabel; reporting an empty list silently would read
+    as "zero rows flipped" rather than "no such run."
     """
     results = get_run_results(engine, run_id)
     if not results:
@@ -44,10 +67,14 @@ def relabel_run(engine: Engine, run_id: str, lambda_value: float) -> list[tuple[
             "actually produced result rows."
         )
     return [
-        (
-            row.frame_id,
-            row.label,
-            labeling.compute_label(
+        RelabeledRow(
+            frame_id=row.frame_id,
+            network_bandwidth_mbps=row.network_bandwidth_mbps,
+            network_latency_ms=row.network_latency_ms,
+            network_packet_loss_pct=row.network_packet_loss_pct,
+            device_load_pct=row.device_load_pct,
+            stored_label=row.label,
+            recomputed_label=labeling.compute_label(
                 row.local_latency_ms,
                 row.local_accuracy,
                 row.offload_latency_ms,
@@ -82,11 +109,18 @@ def main() -> None:
     relabeled = relabel_run(engine, args.run_id, args.lambda_value)
 
     flip_count = 0
-    for frame_id, stored_label, recomputed_label in relabeled:
-        flipped = stored_label != recomputed_label
+    for row in relabeled:
+        flipped = row.stored_label != row.recomputed_label
         flip_count += flipped
         marker = " (flipped)" if flipped else ""
-        print(f"{frame_id}\t{stored_label.value}\t{recomputed_label.value}{marker}")
+        print(
+            f"{row.frame_id}\t"
+            f"bw={row.network_bandwidth_mbps}\t"
+            f"lat={row.network_latency_ms}\t"
+            f"loss={row.network_packet_loss_pct}\t"
+            f"load={row.device_load_pct}\t"
+            f"{row.stored_label.value}\t{row.recomputed_label.value}{marker}"
+        )
 
     print(f"\n{flip_count}/{len(relabeled)} rows flipped.")
 

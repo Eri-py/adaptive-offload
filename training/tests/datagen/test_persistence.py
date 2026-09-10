@@ -188,6 +188,49 @@ def test_get_run_results_round_trips_all_fields(postgres_engine: Engine) -> None
     assert fetched == sorted(rows, key=lambda row: row.frame_id)
 
 
+def test_get_run_results_orders_stably_within_a_shared_frame_id(postgres_engine: Engine) -> None:
+    # A real run has condition_vector_count rows per frame_id, all sharing
+    # the same frame_id and thus indistinguishable to a plain
+    # `.order_by(frame_id)` — Postgres is free to return those in any order
+    # between calls. Store several rows under one frame_id in a known order
+    # and confirm get_run_results returns them in that same order, and does
+    # so identically across repeated calls.
+    config = RunConfig(
+        dataset=DATASET,
+        preset_name="baseline",
+        frame_count=1,
+        condition_vector_count=5,
+        condition_ranges={"bandwidth_mbps": [0.5, 100.0]},
+        seed=42,
+        lambda_value=0.005,
+    )
+    run_id = create_run(postgres_engine, config)
+
+    rows = [
+        ResultRow(
+            frame_id="000000000139.jpg",
+            network_bandwidth_mbps=float(i),
+            network_latency_ms=80.0,
+            network_packet_loss_pct=1.5,
+            device_load_pct=40.0,
+            local_latency_ms=120.0,
+            local_accuracy=0.82,
+            offload_latency_ms=200.0,
+            offload_accuracy=0.91,
+            label=Label.OFFLOAD,
+        )
+        for i in range(5)
+    ]
+    store_results(postgres_engine, run_id, rows)
+
+    first_call = get_run_results(postgres_engine, run_id)
+    second_call = get_run_results(postgres_engine, run_id)
+
+    # Insertion order is preserved (id ascending), and repeated calls agree.
+    assert first_call == rows
+    assert second_call == rows
+
+
 def test_get_run_results_is_empty_for_run_with_no_results(postgres_engine: Engine) -> None:
     config = RunConfig(
         dataset=DATASET,

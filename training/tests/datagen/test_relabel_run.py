@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from datagen import labeling
 from datagen.persistence import ResultRow, RunConfig, create_run, get_run_results, store_results
-from datagen.relabel_run import relabel_run
+from datagen.relabel_run import RelabeledRow, relabel_run
 
 DATASET = "coco_val2017"
 STORED_LAMBDA = 0.1
@@ -87,14 +87,22 @@ def test_relabel_run_reports_flips_correctly(postgres_engine: Engine) -> None:
     assert stored["steady_row.jpg"] == Label.LOCAL
 
     relabeled = relabel_run(postgres_engine, run_id, NEW_LAMBDA)
+    assert all(isinstance(row, RelabeledRow) for row in relabeled)
 
-    by_frame_id = {
-        frame_id: (stored_label, recomputed) for frame_id, stored_label, recomputed in relabeled
-    }
-    assert by_frame_id["flip_row.jpg"] == (Label.OFFLOAD, Label.LOCAL)
-    assert by_frame_id["steady_row.jpg"] == (Label.LOCAL, Label.LOCAL)
+    by_frame_id = {row.frame_id: row for row in relabeled}
+    flip_row = by_frame_id["flip_row.jpg"]
+    steady_row = by_frame_id["steady_row.jpg"]
+    assert (flip_row.stored_label, flip_row.recomputed_label) == (Label.OFFLOAD, Label.LOCAL)
+    assert (steady_row.stored_label, steady_row.recomputed_label) == (Label.LOCAL, Label.LOCAL)
 
-    flip_count = sum(1 for _, stored_label, recomputed in relabeled if stored_label != recomputed)
+    # The condition values ride along unchanged from the stored row, so a
+    # reader can tell which condition vector a flip belongs to.
+    assert flip_row.network_bandwidth_mbps == 10.0
+    assert flip_row.network_latency_ms == 20.0
+    assert flip_row.network_packet_loss_pct == 0.0
+    assert flip_row.device_load_pct == 10.0
+
+    flip_count = sum(1 for row in relabeled if row.stored_label != row.recomputed_label)
     assert flip_count == 1
 
 

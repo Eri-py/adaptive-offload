@@ -157,7 +157,7 @@ None.
   `.order_by(SimulationResult.frame_id, SimulationResult.id)` (`id` exists at
   `database/common/models.py`, `SimulationResult.id`, autoincrement) — which
   also restores per-frame insertion order. Adjust the docstring to match.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, S2: fix get_run_results ordering and widen relabel_run's report"
 
 #### S2 — `relabel_run`'s report can't identify individual rows at real scale
 
@@ -173,7 +173,7 @@ None.
   alongside the labels — e.g. bandwidth/latency/packet-loss/device-load, or at
   minimum a stable per-row index. A small `NamedTuple` return type would keep
   the widened tuple readable.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, S2: fix get_run_results ordering and widen relabel_run's report"
 
 #### S3 — `run_simulation.py`'s module docstring still claims the pipeline downloads images
 
@@ -186,7 +186,7 @@ None.
 - **Fix:** Reword to "scores any COCO val2017 pool images not yet covered …
   (images must already be cached locally; run `python -m
   datagen.sync_coco_cache` first)".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: fix run_simulation.py docstring, pipeline no longer downloads"
 
 #### S4 — no pipeline-level test for the missing-image failure
 
@@ -200,7 +200,7 @@ None.
   `resolve_image=lambda name: coco.resolve_image_path(name, images_dir=tmp_path)`
   with a record whose file is absent, and asserts `FileNotFoundError`
   propagates out of `run_simulation`.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the resolver's failure is already unit-tested and run_simulation wraps the call in no try/except, so a pipeline-level test would just assert that exceptions propagate; low value for the prototype bar.
 
 ## Nitpicks
 
@@ -212,7 +212,7 @@ None.
   mypy strict.
 - **Fix:** `if flipped: flip_count += 1`, or compute the count with a `sum(...)`
   generator the way `test_relabel_run.py:97` already does.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — valid Python that passes mypy strict; changing it is pure taste.
 
 #### N2 — `preview_sample` prints no selected-vs-requested count
 
@@ -223,7 +223,7 @@ None.
   lines, leaving the user to count them.
 - **Fix:** Print a trailing `Selected {len(selected)} of {frame_count}
   requested.` line after the loop.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the preview's whole output is the selection, so a short sample is already visible in a way it isn't during a full run; the pipeline warning exists for a different reason.
 
 #### N3 — base-url test asserts only one of three fetch calls
 
@@ -233,7 +233,7 @@ None.
   first record would pass.
 - **Fix:** Assert against `fetch.call_args_list` (or add
   `assert fetch.call_count == 3` plus the other two `assert_any_call`s).
-- **Decision:** — _(pending)_
+- **Decision:** Declined — base_url forwarding is a single pass-through parameter and the existing assertion covers it; tightening buys nothing real.
 
 ## Tests
 

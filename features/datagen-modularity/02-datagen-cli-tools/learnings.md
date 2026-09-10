@@ -256,3 +256,64 @@
   (64 baseline - 6 old `test_coco.py` download tests + 10 new `test_coco.py`
   tests + 3 new `test_sync_coco_cache.py` tests). `test_run_simulation.py`'s
   7 tests are among the passing 71 and required zero changes.
+
+## Review fix — S1/S2: `get_run_results` ordering + widened relabel report
+
+- S1 (ordering): `.order_by(SimulationResult.frame_id)` alone isn't a total
+  order — a real run has `condition_vector_count` rows sharing each
+  `frame_id`, and Postgres doesn't guarantee a stable order among rows that
+  tie on the `ORDER BY` key across separate query executions. Fixed by
+  adding `SimulationResult.id` (the autoincrement surrogate key) as a
+  tiebreaker: `.order_by(SimulationResult.frame_id, SimulationResult.id)`.
+  Since `id` increases with insertion order and rows are inserted in
+  condition order (per `store_results`), this also happens to restore
+  per-frame insertion order — worth stating in the docstring since it's a
+  free, useful side effect, not just "some deterministic order." Rewrote
+  the docstring to explain *why* `frame_id` alone wasn't enough, not just
+  assert the new guarantee.
+- The existing round-trip test (`test_get_run_results_round_trips_all_fields`)
+  couldn't have caught this — its two rows have distinct `frame_id`s, so the
+  tiebreaker never gets exercised. Added a new test
+  (`test_get_run_results_orders_stably_within_a_shared_frame_id`) that
+  stores 5 rows under one shared `frame_id`, distinguished only by
+  `network_bandwidth_mbps`, and asserts two separate `get_run_results` calls
+  both return them in insertion order. This is the shape of test that
+  actually proves the guarantee — a single call returning *a* consistent
+  order wouldn't rule out "consistent within one query plan, unstable
+  across plans"; two independent calls agreeing is closer to the real
+  concern (a query planner picking a different physical scan order between
+  invocations), though still not a hard guarantee against every possible
+  plan — the `id` tiebreaker is what actually makes the order
+  deterministic, not the test.
+- S2 (report shape): widened `relabel_run`'s return type from
+  `list[tuple[str, Label, Label]]` to `list[RelabeledRow]`, a `NamedTuple`
+  with `frame_id, network_bandwidth_mbps, network_latency_ms,
+  network_packet_loss_pct, device_load_pct, stored_label,
+  recomputed_label` — condition values sit between `frame_id` and the two
+  labels since they're what identifies *which* row flipped when
+  `frame_id` alone doesn't (the whole point of the fix). Picked a
+  `NamedTuple` over a `@dataclass` to match the reviewer's suggestion and
+  because `ResultRow` (`persistence.py`) already sets the `@dataclass(frozen=True)`
+  precedent for *persisted* row shapes — a `NamedTuple` here signals this is
+  a lighter, CLI-report-only value type, not a persistence model.
+  `main()`'s print loop switched from tuple unpacking to attribute access
+  (`row.frame_id` etc.) — reads better than a 7-element unpacking line and
+  survives future field reordering.
+- Updated `test_relabel_run.py`'s flip-detection test to unpack via
+  `RelabeledRow` attributes instead of 3-tuple unpacking, added an
+  `isinstance(row, RelabeledRow)` check (cheap confirmation the widened
+  type is actually returned, not just a same-shaped tuple), and asserted
+  the condition values on the flip row round-trip from the seeded
+  `_seed_run` fixture values (`network_bandwidth_mbps=10.0`, etc.) — proving
+  the widened report actually carries real per-row condition data, not
+  just placeholder fields.
+- Both findings shared root cause context (get_run_results ordering feeds
+  directly into relabel_run's report), so fixing them together in one pass
+  was straightforward — no interaction/conflict between the two changes;
+  S1's fix is entirely inside `persistence.py`, S2's is entirely inside
+  `relabel_run.py` plus its own tests.
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 72/72
+  (71 baseline + 1 new: `test_get_run_results_orders_stably_within_a_shared_frame_id`).
+  Confirmed no stray `test_%` database survived via a direct
+  `POSTGRES_ADMIN_URL` query after the run, same spot-check pattern as
+  earlier tasks.
