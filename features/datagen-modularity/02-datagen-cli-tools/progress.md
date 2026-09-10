@@ -29,10 +29,10 @@
 - Notes: get_run_results(engine, run_id) -> list[ResultRow]; relabel_run(engine, run_id, lambda_value) -> list[tuple[str, Label, Label]]. Never calls create_run/store_results. ruff/mypy clean, 64/64 tests passed (6 new). No stray test database left behind.
 
 ## Task 6 — Split COCO acquisition: coco.py refactor + cache-population CLI
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:14:35
+- Completed: 2026-09-10 13:17:18
+- Notes: resolve_image_path is now a pure local lookup (FileNotFoundError on miss); download_missing_images(image_records, ...) -> list[str] owns the atomic-write download. sync_coco_cache.py composes both, no DB/dotenv. run_simulation.py/test_run_simulation.py needed no changes (confirmed). ruff/mypy clean, 71/71 tests passed.
 
 ## Task 7 — Regression test run
 - Status: not started

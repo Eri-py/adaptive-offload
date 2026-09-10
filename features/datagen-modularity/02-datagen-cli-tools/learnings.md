@@ -183,3 +183,76 @@
   (58 baseline + 6 new: get_run_results round-trip, empty-for-no-results,
   empty-for-nonexistent-run, relabel_run reports-flips-correctly,
   persists-nothing, raises-clear-error-for-run-with-no-results).
+
+## Task 6 — Split COCO acquisition: coco.py refactor + cache-population CLI
+
+- `resolve_image_path` lost its `fetch`/`base_url` parameters entirely — it's
+  now `resolve_image_path(file_name, *, images_dir=IMAGES_DIR) -> Path`,
+  raising `FileNotFoundError` (naming `python -m datagen.sync_coco_cache` in
+  the message) on a miss. `download_missing_images(image_records, *,
+  images_dir=IMAGES_DIR, base_url=COCO_VAL2017_BASE_URL,
+  fetch=fetch_image_bytes) -> list[str]` inherits the old function's
+  temp-file-then-rename atomic-write block verbatim (just moved and put
+  inside a loop over `image_records`, `continue`-ing past any file whose
+  `local_path.exists()` already), and returns the file names it actually
+  downloaded (a subset of the input, in input order) rather than paths —
+  `sync_coco_cache` only needs counts, and returning names keeps the
+  function honest about "which ones did I touch" without forcing every
+  caller to also want `Path` objects back.
+- Confirmed by reading (not assuming) that `run_simulation.py` line 95
+  (`resolve_image if resolve_image is not None else
+  coco.resolve_image_path`) never calls `resolve_image_path(..., fetch=...)`
+  — it only ever references the function as a default callable value, so
+  dropping `fetch` from the signature doesn't break this call site. No edit
+  needed there. Likewise confirmed `test_run_simulation.py` never imports or
+  calls `coco.resolve_image_path` directly — every test in that file injects
+  its own `_make_resolve_image(tmp_path, call_count)` closure instead — so it
+  needed no changes either. Ran the full suite specifically watching
+  `test_run_simulation.py`'s 7 tests to confirm this rather than taking the
+  grep at face value.
+- `sync_coco_cache.py` follows `score_complexity.py`/`preview_conditions.py`
+  pattern, not `preview_sample.py`/`relabel_run.py`'s: no database access,
+  so no `get_engine()` and (per that established split) no `load_dotenv`
+  call in `main()` either — this tool genuinely has zero dependency on
+  `DATABASE_URL` or any other config, same reasoning as those two DB-free
+  CLIs. First draft added a `load_dotenv` call out of habit (copying the
+  DB-touching CLIs' `main()` shape) before catching that there was nothing
+  in `training/.env` this tool actually needed — removed it and the now-
+  unused `dotenv` import.
+- Core function `sync_coco_cache(*, annotations_path=coco.ANNOTATIONS_PATH,
+  images_dir=coco.IMAGES_DIR, base_url=coco.COCO_VAL2017_BASE_URL,
+  fetch=coco.fetch_image_bytes) -> tuple[int, int]` takes all four as
+  keyword params with real-path defaults specifically so tests can override
+  every one of them (fake annotations file, fake images dir, fake fetch)
+  without needing to construct a fake `coco` module or monkeypatch — same
+  "core function takes everything as a parameter, `main()` supplies the real
+  defaults via `argparse`" split as every other CLI in this feature, except
+  here `main()` takes zero CLI arguments at all (there's nothing to
+  parametrize — it always syncs the one real COCO cache) so it's just
+  `sync_coco_cache()` with no args, printing the two counts.
+- Split `test_coco.py`'s original 5 download-behavior tests (all on
+  `resolve_image_path`) into `download_missing_images` equivalents (adding
+  one new one — downloads-only-the-missing-subset-from-a-mixed-list, since
+  the old single-file-at-a-time tests never exercised a mixed list) plus 2
+  new fail-clearly tests for `resolve_image_path` (missing file, missing
+  images_dir entirely — both raise `FileNotFoundError`). Net test count for
+  the file: 6 -> 10, all reusing the same tmp_path/injected-Mock-fetch
+  pattern as before, still never touching the real network or
+  `training/data/coco/`.
+- mypy caught one thing worth noting: `test_sync_coco_cache.py`'s
+  `_FAKE_IMAGES` is a `list[dict[str, object]]` (mixed `int`/`str` values),
+  so `images_dir / record["file_name"]` failed to type-check (`Path.__truediv__`
+  doesn't accept `object`) even though it's always a `str` at runtime — fixed
+  with an explicit `str(record["file_name"])` at the one call site that needed
+  it, rather than trying to give `_FAKE_IMAGES` a narrower type.
+- Smoke-tested `python -m datagen.sync_coco_cache` against the real,
+  already-fully-downloaded `training/data/coco/` cache (5,000 images): printed
+  `Already cached: 5000` / `Newly downloaded: 0` with no network activity,
+  confirming the real annotations file plus a fully-populated cache round-trips
+  cleanly. Also smoke-tested `resolve_image_path` against a real but
+  nonexistent file name, confirming the `FileNotFoundError` message names
+  `python -m datagen.sync_coco_cache`.
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 71/71
+  (64 baseline - 6 old `test_coco.py` download tests + 10 new `test_coco.py`
+  tests + 3 new `test_sync_coco_cache.py` tests). `test_run_simulation.py`'s
+  7 tests are among the passing 71 and required zero changes.
