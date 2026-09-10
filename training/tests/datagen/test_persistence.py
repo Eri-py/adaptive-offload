@@ -2,7 +2,7 @@
 
 Runs against a fresh, disposable database per test (`postgres_engine` fixture
 in `training/tests/conftest.py`) rather than SQLite, per the same dialect-gap
-reasoning as `server/tests/common/test_models.py`.
+reasoning as `database/tests/common/test_models.py`.
 """
 
 from common.models import Label, SimulationResult, SimulationRun
