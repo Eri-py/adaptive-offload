@@ -85,3 +85,46 @@
   nothing in `server/` reads it anymore, but no task's `Files` list actually
   included it, a gap in the plan itself. Untracked/gitignored, trivially
   recreatable whenever `server/api/` needs `DATABASE_URL` for real.
+
+## Task 3 — Repoint `training/` at `database/`
+
+- `training/pyproject.toml` had two independent `../server` references, not
+  one: the `pip install -e ../server` comment block (functional-adjacent
+  documentation) and, separately, `[tool.mypy]`'s `mypy_path = "../server"`
+  (a real static-analysis setting, not a comment) — both needed updating to
+  `../database`, and both were legitimately in scope since they're the same
+  file the task's `Files` list already named. Easy to fix only the doc
+  comment and miss `mypy_path` since it's a short single-line setting buried
+  after the `dependencies` list.
+- Only doc/comment text changed in both files — `training/pyproject.toml`'s
+  `dependencies` list and `[tool.setuptools.packages.find]` were already
+  untouched-by-`server` (training never listed `server`/`database` as a PEP
+  508 dependency, consistent with Task 1/2's note that plain pip has no
+  portable relative-path syntax for this), so no functional dependency edits
+  were needed here, only the `mypy_path` value and the two docstrings/
+  comments.
+- `pip install -e ./training[dev]` from the repo root re-registers the
+  editable install cleanly (uninstalls and reinstalls training 0.1.0) with
+  no changes needed beyond the doc-comment edit — confirms the task's
+  framing that this reinstall step is precautionary, not required by any
+  dependency-list change.
+- `mypy_path = "../database"` resolved `common.*` correctly on the first
+  `mypy .` run after the edit — no residual caching or stale-path issue from
+  the prior `../server` value (mypy re-reads `pyproject.toml` fresh each
+  invocation, no `.mypy_cache` staleness observed here).
+- Full suite: 48 passed (same as pre-Task-3), including all Postgres-backed
+  tests in `test_persistence.py` and `test_run_simulation.py`, confirming
+  `common.*` resolves correctly at both runtime (via the shared venv's
+  `database` editable install) and statically (via `mypy_path`) now that
+  `training/` points at `database/` instead of `server/` everywhere.
+- To query `pg_database` directly for stray `test_%` databases (rather than
+  just trusting the fixture's own teardown), the admin URL in
+  `training/.env` needs its driver swapped: `POSTGRES_ADMIN_URL` is a plain
+  `postgresql://` URL, but the shared venv only has `psycopg` (v3) installed,
+  not `psycopg2` — `create_engine()` on the raw URL fails with
+  `ModuleNotFoundError: No module named 'psycopg2'` since SQLAlchemy defaults
+  unprefixed `postgresql://` URLs to the psycopg2 dialect. Rewriting the
+  scheme to `postgresql+psycopg://` before calling `create_engine()` fixes
+  it. (`common.testing.ephemeral_postgres_database` presumably already does
+  this internally, since the fixture-driven tests connect fine without any
+  such rewrite.)

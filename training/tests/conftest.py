@@ -5,7 +5,7 @@ tests run against real Postgres rather than a SQLite stand-in (SQLite's
 dialect differs enough on native `ENUM`, JSON columns, and FK enforcement to
 not be trustworthy here). Covered by the scoped exception in `CLAUDE.md`'s
 Infrastructure section: fixture-driven create/drop of ephemeral, uniquely
-named test databases only. Mirrors `server/tests/conftest.py` exactly.
+named test databases only. Mirrors `database/tests/conftest.py` exactly.
 """
 
 import os
