@@ -17,10 +17,10 @@
 - Notes: preview_sample(engine, dataset, frame_count, bucket_count, seed) -> list[tuple[str, float]]. ruff/mypy clean, 55/55 tests passed (3 new). No stray test database left behind.
 
 ## Task 4 — Condition-vector preview CLI
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:09:44
+- Completed: 2026-09-10 13:10:38
+- Notes: preview_conditions(preset_name, count, seed) -> list[tuple[float, float, float, float]]. No DB/dotenv at all. ruff/mypy clean, 58/58 tests passed (3 new).
 
 ## Task 5 — get_run_results + re-labeling CLI
 - Status: not started

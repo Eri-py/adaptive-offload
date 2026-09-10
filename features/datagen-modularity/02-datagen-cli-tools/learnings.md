@@ -103,3 +103,33 @@
 - `ruff check .` and `mypy .` clean; full `training/` suite passes 55/55
   (52 baseline + 3 new: matches-stratified-sample-directly,
   creates-no-run-or-result-rows, raises-clear-error-for-unscored-dataset).
+
+## Task 4 — Condition-vector preview CLI
+
+- `preview_conditions(preset_name: str, count: int, seed: int) ->
+  list[tuple[float, float, float, float]]` is the core function — a lookup
+  into `presets.PRESETS` (raising a clear `ValueError` listing valid names
+  on a `KeyError`) composed with `conditions.sample_condition_vectors`.
+  Genuinely the simplest of the four preview/scoring CLIs so far: no
+  `Engine`, no `get_engine()`, no `.env` loading — `main()` is a pure
+  argparse-in/print-out wrapper, matching `conditions.py`'s own "no I/O, no
+  database access" docstring claim. Unlike `preview_sample.py`, there's no
+  `from dotenv import load_dotenv` or `common.db` import at all.
+- `argparse`'s own `choices=sorted(presets.PRESETS)` on `--preset` means an
+  unknown preset name typed at the CLI is rejected by argparse itself
+  (exit code 2, usage message) before `preview_conditions` is ever called —
+  the core function's own `ValueError` path only fires for a programmatic
+  caller (or a test) that bypasses `main()` and calls `preview_conditions`
+  directly with a bad name. Both paths were smoke-tested by hand: `python
+  -m datagen.preview_conditions --preset baseline --count 3 --seed 42`
+  printed three tab-separated 4-value rows; `--preset not-real` was
+  rejected by argparse with the valid-choices list, before the function
+  ran at all.
+- Test file needs no `postgres_engine` fixture and no `pytest.ini`/conftest
+  DB setup at all, unlike every other CLI test file in this feature so
+  far — confirmed by running the full suite and seeing this file's three
+  tests complete in the same pass with no ephemeral-database fixture in
+  their call stack.
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 58/58
+  (55 baseline + 3 new: matches-sample-condition-vectors-directly,
+  matches-for-every-preset, raises-clear-error-for-unknown-preset).
