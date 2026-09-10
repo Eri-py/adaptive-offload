@@ -128,3 +128,20 @@
   it. (`common.testing.ephemeral_postgres_database` presumably already does
   this internally, since the fixture-driven tests connect fine without any
   such rewrite.)
+
+## Review fixes — S1, N1, N2 (stale `server/`-era text in `database/tests/`)
+
+- Confirmed the pattern from Task 3's learning above: `POSTGRES_ADMIN_URL`
+  in `database/.env` is also a bare `postgresql://` URL, so verifying "no
+  stray `test_%` database" post-run needed the same
+  `.replace("postgresql://", "postgresql+psycopg://")` rewrite before
+  `create_engine()` — the raw URL fails with `ModuleNotFoundError: No
+  module named 'psycopg2'` in this venv, same root cause as before, just
+  recurring in a different feature directory (`database/` instead of
+  `training/`). Worth considering whether `database/.env`'s
+  `POSTGRES_ADMIN_URL` should just be written with `+psycopg` from the
+  start to stop this from tripping up every ad hoc verification script.
+- All three findings were pure text (docstring/error-message) edits with no
+  logic changes, exactly as scoped — `ruff check .` and `mypy .` stayed
+  clean with zero other changes needed, and the existing single test
+  (`test_round_trips_all_three_tables`) still passed unmodified.

@@ -111,7 +111,7 @@ None.
   `database/.env`. This is operator-facing text at the exact moment someone is
   confused, not a stale comment.
 - **Fix:** Change `server/.env` to `database/.env` in the message.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, N1, N2: fix stale server/ references in database/tests/"
 
 #### S2 — `migrations/env.py` comments still name `server/.env` and `server/common/`
 
@@ -124,7 +124,7 @@ None.
   names the wrong file.
 - **Fix:** Retarget all three to `database/common/models.py`, `database/.env`,
   and `database/common/db.py`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2, N3: fix stale server/ references in database/migrations/"
 
 #### S3 — `common/testing.py`'s docstrings still describe `server/` as the owner
 
@@ -139,7 +139,7 @@ None.
   survives verbatim inside the moved file.
 - **Fix:** Rewrite the three references so the docstrings describe `database/`
   as the home and `server/`/`training/` as symmetric consumers.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: rewrite testing.py docstrings to describe database/ as owner"
 
 #### S4 — A second `training/` test docstring pointing at `server/tests/` was missed
 
@@ -149,7 +149,7 @@ None.
   not this one — same package, same class of edit, and the file is one `git
   grep` away from the one that was fixed.
 - **Fix:** Point it at `database/tests/common/test_models.py`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: fix stale server/tests/ reference in test_persistence.py"
 
 #### S5 — Guidelines reintroduce a `server/common/` that would shadow `database`'s `common`
 
@@ -167,7 +167,7 @@ None.
 - **Fix:** Name the future server-internal location something that can't
   collide — e.g. `server/api/common/` (a subpackage of `api`, which is what
   `packages.find` already ships) or `server/shared/`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S5: rename future server/common/ to avoid collision with database's common package"
 
 ## Nitpicks
 
@@ -177,14 +177,14 @@ None.
 - **Issue:** `"""Shared pytest fixtures for `server/tests/`."""` — the fixtures
   now serve `database/tests/`.
 - **Fix:** Update to `database/tests/`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, N1, N2: fix stale server/ references in database/tests/"
 
 #### N2 — Test package marker still says `server/common`
 
 - **File:** `database/tests/common/__init__.py:1`
 - **Issue:** `"""Test package for `server/common`."""`
 - **Fix:** Update to `database/common`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, N1, N2: fix stale server/ references in database/tests/"
 
 #### N3 — Migration docstring credits `server/common/models.py`
 
@@ -193,7 +193,7 @@ None.
 - **Fix:** Update to `database/common/models.py`. Safe: the revision is
   unapplied, and a docstring edit changes neither the revision id nor the
   emitted DDL — I confirmed the offline render is unaffected by comment text.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2, N3: fix stale server/ references in database/migrations/"
 
 #### N4 — `HANDOFF.md` still says `server/common/` will own the DB layer
 
@@ -204,7 +204,7 @@ None.
   it: the file reads as a dated record of one session's decisions, not living
   documentation, and the spec only required `.claude/coding-guidelines.md` to
   be updated.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — `HANDOFF.md` is a dated session record, not living docs; the spec scoped the doc update to `.claude/coding-guidelines.md`, and rewriting history-shaped files invites drift of its own.
 
 #### N5 — `database/pyproject.toml` type-checks at 3.12 while claiming `>=3.11`
 
@@ -215,7 +215,7 @@ None.
   (the plan asked for exactly that), and `training/` has the same shape, so
   this is a pre-existing repo-wide inconsistency, not one this plan introduced.
 - **Fix:** If touched at all, align all three packages at once — not here.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — pre-existing and identical across all three packages; the plan explicitly required carrying server/'s config shape over unchanged, and fixing it in one package only would create real drift to fix a cosmetic one.
 
 #### N6 — Empty `server/api/__init__.py` gives no hint why it exists
 
@@ -226,7 +226,7 @@ None.
   error.
 - **Fix:** One-line module docstring, e.g. `"""FastAPI app package — empty
   until server/api/ is built."""`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N6: document why server/api/__init__.py exists"
 
 ## Tests
 

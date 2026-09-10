@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for `server/tests/`.
+"""Shared pytest fixtures for `database/tests/`.
 
 Provides a fresh, disposable Postgres database per test so model/query tests
 run against real Postgres rather than a SQLite stand-in (SQLite's dialect
@@ -32,7 +32,7 @@ def postgres_engine() -> Iterator[Engine]:
     admin_url = os.environ.get("POSTGRES_ADMIN_URL")
     if not admin_url:
         raise RuntimeError(
-            "POSTGRES_ADMIN_URL is not set. Add it to server/.env "
+            "POSTGRES_ADMIN_URL is not set. Add it to database/.env "
             "(a Postgres admin connection string pointed at the "
             "'postgres' maintenance database)."
         )

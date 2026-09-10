@@ -1,1 +1,1 @@
-"""Test package for `server/common`."""
+"""Test package for `database/common`."""
