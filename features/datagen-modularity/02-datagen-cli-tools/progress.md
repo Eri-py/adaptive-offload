@@ -35,7 +35,7 @@
 - Notes: resolve_image_path is now a pure local lookup (FileNotFoundError on miss); download_missing_images(image_records, ...) -> list[str] owns the atomic-write download. sync_coco_cache.py composes both, no DB/dotenv. run_simulation.py/test_run_simulation.py needed no changes (confirmed). ruff/mypy clean, 71/71 tests passed.
 
 ## Task 7 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:18:14
+- Completed: 2026-09-10 13:19:50
+- Notes: training/ 71/71, database/ 1/1, server/ 0/0 (expected), all ruff/mypy clean. No stray test DB. All five new CLIs' --help verified (sync_coco_cache has none by design, verified intentional; smoke-tested against real cache instead). All 7 tasks complete.
