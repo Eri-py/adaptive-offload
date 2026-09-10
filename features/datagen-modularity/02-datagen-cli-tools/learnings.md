@@ -317,3 +317,22 @@
   Confirmed no stray `test_%` database survived via a direct
   `POSTGRES_ADMIN_URL` query after the run, same spot-check pattern as
   earlier tasks.
+
+## Review fix — S3: stale "downloads" claim in `run_simulation.py`'s module docstring
+
+- Docstring-only fix, left over from Task 6's `coco.resolve_image_path`
+  split: the module docstring still said the pipeline "downloads/scores"
+  uncovered pool images, which stopped being true once `resolve_image_path`
+  lost its `fetch`/download fallback and started raising `FileNotFoundError`
+  instead. Reworded to "scores any COCO val2017 pool images not yet covered
+  … (images must already be cached locally; run `python -m
+  datagen.sync_coco_cache` first)" — matches the actual failure mode and
+  points at the real fix, same as `resolve_image_path`'s own error message.
+- No code touched, so no new test coverage needed — the docstring doesn't
+  execute. Ran the full `training/` suite anyway per the fix instructions;
+  72/72 passed, confirming the wording-only edit caused zero regressions.
+- Reproducible venv gotcha: neither `ruff` nor `mypy` are on `PATH` directly
+  in this environment — both live in the repo-root `.venv` (`/home/eriol/
+  projects/adaptive-offload/.venv/bin/`), not a `training/.venv`. Activate
+  with `source ../.venv/bin/activate` from `training/` (or invoke the venv's
+  binaries directly) rather than assuming a per-package venv exists.

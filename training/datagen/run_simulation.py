@@ -6,12 +6,14 @@ itself is the import root, the same way `server/` is for `common`):
 
     python -m datagen.run_simulation --preset baseline
 
-Builds the real Postgres engine from `DATABASE_URL`, downloads/scores any
-COCO val2017 pool images not yet covered by the `scene_complexity` table,
-stratified-samples frames, space-fills condition vectors for the selected
-preset, crosses every frame with every condition vector (stub inference +
-win/loss label), and persists one `simulation_runs` row plus one
-`simulation_results` row per (frame, condition) pair.
+Builds the real Postgres engine from `DATABASE_URL`, scores any COCO
+val2017 pool images not yet covered by the `scene_complexity` table
+(images must already be cached locally; run `python -m
+datagen.sync_coco_cache` first), stratified-samples frames, space-fills
+condition vectors for the selected preset, crosses every frame with every
+condition vector (stub inference + win/loss label), and persists one
+`simulation_runs` row plus one `simulation_results` row per (frame,
+condition) pair.
 
 The CLI (`main`) is a thin wrapper around `run_simulation`, the directly
 callable core function — every real dependency (`image_records`,
