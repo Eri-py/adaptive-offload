@@ -3,7 +3,7 @@
 Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention):
 
-    python -m datagen.score_complexity --folder <path>
+    python -m datagen.cli.score_complexity --folder <path>
 
 Wraps `complexity.scene_complexity()` over every image directly under a
 folder. No COCO-specific logic, no database access, no dependency on any

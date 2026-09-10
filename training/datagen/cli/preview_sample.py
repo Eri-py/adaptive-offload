@@ -3,7 +3,7 @@
 Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention):
 
-    python -m datagen.preview_sample --dataset coco_val2017 --frame-count 500 \\
+    python -m datagen.cli.preview_sample --dataset coco_val2017 --frame-count 500 \\
         --bucket-count 5 --seed 42
 
 Composes `persistence.get_known_complexity` (a read) with
@@ -62,7 +62,7 @@ def main() -> None:
     # CLI-only convenience: load DATABASE_URL from training/.env if it isn't
     # already in the environment (never overrides an explicit `export`).
     # The core function stays free of this side effect.
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
     parser = argparse.ArgumentParser(
         description="Preview which frames a stratified sample would select."

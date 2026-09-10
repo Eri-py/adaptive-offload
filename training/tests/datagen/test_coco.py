@@ -57,7 +57,7 @@ def test_resolve_image_path_raises_file_not_found_for_missing_file(tmp_path: Pat
     images_dir = tmp_path / "val2017"
     images_dir.mkdir()
 
-    with pytest.raises(FileNotFoundError, match="datagen.sync_coco_cache"):
+    with pytest.raises(FileNotFoundError, match="datagen.cli.sync_coco_cache"):
         resolve_image_path("000000000099.jpg", images_dir=images_dir)
 
 
@@ -66,7 +66,7 @@ def test_resolve_image_path_raises_file_not_found_when_images_dir_missing(
 ) -> None:
     images_dir = tmp_path / "val2017"  # never created
 
-    with pytest.raises(FileNotFoundError, match="datagen.sync_coco_cache"):
+    with pytest.raises(FileNotFoundError, match="datagen.cli.sync_coco_cache"):
         resolve_image_path("000000000099.jpg", images_dir=images_dir)
 
 

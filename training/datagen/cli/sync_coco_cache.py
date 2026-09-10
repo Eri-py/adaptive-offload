@@ -3,7 +3,7 @@
 Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention):
 
-    python -m datagen.sync_coco_cache
+    python -m datagen.cli.sync_coco_cache
 
 Composes `coco.load_image_index()` (read the annotations file for the full
 pool of images) with `coco.download_missing_images()` (fetch whichever of

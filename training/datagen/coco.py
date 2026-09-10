@@ -5,7 +5,7 @@ Reads the pre-downloaded COCO val2017 annotations file to get the pool of
 pure local lookup that fails clearly if the file isn't already cached under
 `training/data/coco/val2017/`. Populating that cache (downloading whatever's
 missing) is a separate, explicitly-run step: see `download_missing_images`
-below and `python -m datagen.sync_coco_cache`. Keeping acquisition out of
+below and `python -m datagen.cli.sync_coco_cache`. Keeping acquisition out of
 `resolve_image_path` means the main simulator pipeline and the
 complexity-scoring entry point only ever read local files and fail loudly on
 a miss, rather than silently reaching out to the network mid-run.
@@ -66,13 +66,13 @@ def resolve_image_path(file_name: str, *, images_dir: Path = IMAGES_DIR) -> Path
     Pure local lookup, no network access: `file_name` is expected to already
     exist under `images_dir` (the dataset is pre-downloaded). Raises
     `FileNotFoundError` if it isn't there — run
-    `python -m datagen.sync_coco_cache` to populate the cache first.
+    `python -m datagen.cli.sync_coco_cache` to populate the cache first.
     """
     local_path = images_dir / file_name
     if not local_path.exists():
         raise FileNotFoundError(
             f"COCO image {file_name!r} not found under {images_dir}. "
-            "Run `python -m datagen.sync_coco_cache` to download missing images."
+            "Run `python -m datagen.cli.sync_coco_cache` to download missing images."
         )
     return local_path
 

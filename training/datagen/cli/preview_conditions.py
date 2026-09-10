@@ -3,7 +3,7 @@
 Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention):
 
-    python -m datagen.preview_conditions --preset baseline --count 50 --seed 42
+    python -m datagen.cli.preview_conditions --preset baseline --count 50 --seed 42
 
 Composes `presets.PRESETS` with `conditions.sample_condition_vectors` (both
 pure, no I/O) to report which condition vectors a preset/count/seed would

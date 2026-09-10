@@ -15,8 +15,8 @@ from common.models import SimulationResult, SimulationRun
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from datagen.cli.preview_sample import preview_sample
 from datagen.persistence import store_complexity_scores
-from datagen.preview_sample import preview_sample
 from datagen.sampling import stratified_sample
 
 DATASET = "coco_val2017"

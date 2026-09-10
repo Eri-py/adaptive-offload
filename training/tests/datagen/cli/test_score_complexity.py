@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from datagen.score_complexity import score_folder
+from datagen.cli.score_complexity import score_folder
 
 
 def _blank_image(size: int = 64) -> np.ndarray:

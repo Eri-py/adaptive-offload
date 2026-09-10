@@ -1,4 +1,4 @@
-"""End-to-end integration test for `datagen.run_simulation`'s core pipeline.
+"""End-to-end integration test for `datagen.cli.run_simulation`'s core pipeline.
 
 Runs the full pipeline (Tasks 3-10) against a small fake image pool (20
 synthetic images written to `tmp_path`, via an injected `resolve_image`) and
@@ -21,9 +21,9 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from datagen import config, presets
-from datagen import run_simulation as run_simulation_module
+from datagen.cli import run_simulation as run_simulation_module
+from datagen.cli.run_simulation import run_simulation
 from datagen.coco import ImageRecord
-from datagen.run_simulation import run_simulation
 
 POOL_SIZE = 20
 FRAME_COUNT = 10
@@ -272,7 +272,7 @@ def test_complexity_scoring_logs_progress_every_batch(
 
     image_records = _write_fake_pool(tmp_path)
 
-    with caplog.at_level(logging.INFO, logger="datagen.run_simulation"):
+    with caplog.at_level(logging.INFO, logger="datagen.cli.run_simulation"):
         run_simulation(
             postgres_engine,
             PRESET_NAME,
@@ -404,7 +404,7 @@ def test_run_simulation_warns_when_sample_comes_back_short(
     # POOL_SIZE total) guarantees every bucket comes up short.
     requested_frame_count = POOL_SIZE * 5
 
-    with caplog.at_level(logging.WARNING, logger="datagen.run_simulation"):
+    with caplog.at_level(logging.WARNING, logger="datagen.cli.run_simulation"):
         run_simulation(
             postgres_engine,
             PRESET_NAME,
@@ -433,7 +433,7 @@ def test_run_simulation_does_not_warn_when_sample_meets_target(
     """
     image_records = _write_fake_pool(tmp_path)
 
-    with caplog.at_level(logging.WARNING, logger="datagen.run_simulation"):
+    with caplog.at_level(logging.WARNING, logger="datagen.cli.run_simulation"):
         run_simulation(
             postgres_engine,
             PRESET_NAME,

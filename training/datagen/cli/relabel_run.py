@@ -3,7 +3,7 @@
 Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention):
 
-    python -m datagen.relabel_run --run-id <run-id> --lambda 0.5
+    python -m datagen.cli.relabel_run --run-id <run-id> --lambda 0.5
 
 Composes `persistence.get_run_results` (a read) with `labeling.compute_label`
 (pure, no I/O) to report which label each row would have under a different
@@ -90,7 +90,7 @@ def main() -> None:
     # CLI-only convenience: load DATABASE_URL from training/.env if it isn't
     # already in the environment (never overrides an explicit `export`).
     # The core function stays free of this side effect.
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
     parser = argparse.ArgumentParser(
         description="Recompute win/loss labels for an existing run under a different lambda."

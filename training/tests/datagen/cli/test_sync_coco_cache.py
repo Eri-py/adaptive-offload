@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from unittest.mock import Mock
 
-from datagen.sync_coco_cache import sync_coco_cache
+from datagen.cli.sync_coco_cache import sync_coco_cache
 
 _FAKE_IMAGES = [
     {"id": 1, "file_name": "000000000001.jpg"},

@@ -4,12 +4,12 @@ Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention — `training/`
 itself is the import root, the same way `server/` is for `common`):
 
-    python -m datagen.run_simulation --preset baseline
+    python -m datagen.cli.run_simulation --preset baseline
 
 Builds the real Postgres engine from `DATABASE_URL`, scores any COCO
 val2017 pool images not yet covered by the `scene_complexity` table
 (images must already be cached locally; run `python -m
-datagen.sync_coco_cache` first), stratified-samples frames, space-fills
+datagen.cli.sync_coco_cache` first), stratified-samples frames, space-fills
 condition vectors for the selected preset, crosses every frame with every
 condition vector (stub inference + win/loss label), and persists one
 `simulation_runs` row plus one `simulation_results` row per (frame,
@@ -220,7 +220,7 @@ def main() -> None:
     # `run_simulation` itself stays free of this side effect — only the CLI
     # entry point needs it, not the core function or a plain import of this
     # module.
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
     parser = argparse.ArgumentParser(description="Run the data-gen simulator for one preset.")
     parser.add_argument(
