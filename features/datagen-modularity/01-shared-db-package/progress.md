@@ -23,7 +23,7 @@
 - Notes: Handled directly (doc-only). Repo layout + Database sections updated for database/; also clarified server/common/ as a distinct future server-internal-helpers location, separate from database/.
 
 ## Task 5 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 11:41:27
+- Completed: 2026-09-10 11:42:32
+- Notes: database/ 1/1, server/ 0/0 (expected, no tests exist yet), training/ 48/48, all ruff/mypy clean. Migration renders correctly offline. No stray test DB. All 5 tasks complete.
