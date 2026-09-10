@@ -1,13 +1,13 @@
-"""Ephemeral-Postgres-database helper shared by `server/` and `training/` test suites.
+"""Ephemeral-Postgres-database helper for `database/`'s own test suite.
 
-Both packages need the identical create/drop-a-disposable-database pattern to
-test the shared models against real Postgres instead of a SQLite stand-in.
-`training/` depends on `server/common` via an editable install, so the helper
-lives here to avoid duplicating create/drop logic in two independent
-packages. This is covered by the scoped exception in the repo's `CLAUDE.md`
-("Infrastructure") — fixture-driven create/drop of disposable, uniquely-named
-test databases only. It never touches the real/shared database and never runs
-a migration; schema setup here is plain `Base.metadata.create_all`.
+`server/` and `training/` both depend on `database/common` via editable
+installs as symmetric consumers of the shared DB layer, so this helper lives
+here — in `database/` itself — to avoid duplicating create/drop logic across
+independent packages. This is covered by the scoped exception in the repo's
+`CLAUDE.md` ("Infrastructure") — fixture-driven create/drop of disposable,
+uniquely-named test databases only. It never touches the real/shared
+database and never runs a migration; schema setup here is plain
+`Base.metadata.create_all`.
 """
 
 import uuid
@@ -22,9 +22,10 @@ from common.models import Base
 def _with_psycopg_driver(url: str) -> str:
     """Force the `psycopg` (v3) driver for a bare `postgresql://` URL.
 
-    `server/`'s runtime dependency is `psycopg[binary]` (v3), not the `psycopg2`
-    SQLAlchemy defaults a driver-less URL to, so admin URLs from `.env` need
-    this normalization to avoid depending on a driver that isn't installed.
+    `database/`'s runtime dependency is `psycopg[binary]` (v3), not the
+    `psycopg2` SQLAlchemy defaults a driver-less URL to, so admin URLs from
+    `.env` need this normalization to avoid depending on a driver that isn't
+    installed.
     """
     if url.startswith("postgresql://"):
         return "postgresql+psycopg://" + url[len("postgresql://") :]

@@ -172,3 +172,43 @@
 - `ruff check .` and `mypy .` stayed clean and the existing single test
   (`test_round_trips_all_three_tables`) passed unmodified, as expected for
   comment/docstring-only edits.
+
+## Review fix — S3 (stale `server/`-owns-this framing in `database/common/testing.py`)
+
+- Fourth recurrence of the same pattern across this feature's review passes
+  (after `database/tests/`, `database/migrations/`), but this one wasn't a
+  leftover `git mv` artifact naming the file's *old path* — it was the
+  module's own docstrings describing the *ownership model* itself
+  ("shared by `server/` and `training/`", "`training/` depends on
+  `server/common`", "`server/`'s runtime dependency is `psycopg[binary]`").
+  Worth distinguishing the two sub-patterns going forward: stale
+  *paths* (easy to grep for, `server/common`, `server/.env` etc.) vs. stale
+  *asymmetric-ownership prose* (harder to grep for, since the words
+  "server/" and "training/" appearing together in a docstring can be either
+  correct symmetric-consumer framing or the exact asymmetric framing this
+  feature set out to eliminate — needs a read, not just a grep).
+  - `:1` module docstring: "Ephemeral-Postgres-database helper shared by
+    `server/` and `training/` test suites." → "Ephemeral-Postgres-database
+    helper for `database/`'s own test suite."
+  - `:3-5`: "Both packages need the identical create/drop-a-disposable-database
+    pattern to test the shared models against real Postgres instead of a
+    SQLite stand-in. `training/` depends on `server/common` via an editable
+    install, so the helper lives here to avoid duplicating create/drop logic
+    in two independent packages." → "`server/` and `training/` both depend
+    on `database/common` via editable installs as symmetric consumers of the
+    shared DB layer, so this helper lives here — in `database/` itself — to
+    avoid duplicating create/drop logic across independent packages."
+  - `:25-26` (`_with_psycopg_driver` docstring): "`server/`'s runtime
+    dependency is `psycopg[binary]` (v3)..." → "`database/`'s runtime
+    dependency is `psycopg[binary]` (v3)..." (matches
+    `database/pyproject.toml`'s actual declared dependency, per the
+    finding).
+  - Swept the rest of the file (`ephemeral_postgres_database`'s docstring,
+    inline comments) for any other asymmetric-ownership prose — found none;
+    the only other docstring content is behavior description with no
+    ownership framing.
+  - `ruff check .` and `mypy .` clean, `pytest -v` still passes
+    (`test_round_trips_all_three_tables`, which exercises
+    `ephemeral_postgres_database` for real), and a direct `pg_database`
+    query post-run confirmed zero stray `test_%` databases — all as
+    expected for a pure docstring edit with zero logic changes.
