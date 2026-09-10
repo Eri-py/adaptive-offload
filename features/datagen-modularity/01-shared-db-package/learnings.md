@@ -51,3 +51,37 @@
   agent does not start Postgres itself; the user started it, and a rerun of
   `pytest -v` then passed (`test_round_trips_all_three_tables`), with no
   stray `test_%` database left behind afterward.
+
+## Task 2 — Repoint `server/` at `database/`
+
+- Removed `sqlalchemy`, `psycopg[binary]`, `alembic`, `python-dotenv` from
+  `server/pyproject.toml`'s `dependencies` (now `[]`), removed `common*`
+  from `[tool.setuptools.packages.find]`'s `include` (now just `["api*"]`),
+  and added a comment mirroring `training/pyproject.toml`'s existing
+  `../server` → `common` comment style, pointed at `pip install -e
+  ../database` instead, for when `server/api/` is built and needs
+  `common.db`/`common.models`.
+- Also removed the now-dead `[[tool.mypy.overrides]] module = "psycopg.*"`
+  block from `server/pyproject.toml` — it was config for a dependency that
+  no longer exists in this package, so leaving it in would have
+  contradicted the task's own goal of reducing `server/` to its actual
+  scope. This wasn't in the task's literal enumerated edit list but is the
+  same file already being edited, so it didn't expand the `Files` scope.
+- `pip install -e ./server[dev]` from the repo root still succeeds cleanly
+  with `dependencies = []` — pip has no problem with an empty
+  editable-install dependency list.
+- **`mypy .` failed "clean" in `server/` (exit 2, `There are no .py[i]
+  files in directory '.'`)** — the subagent correctly flagged this as
+  out of its `Files` scope rather than fixing it silently. Resolved by the
+  orchestrator directly (not delegated, per the same small-justified-fix
+  pattern used for the earlier mypy `python_version` fix in feature 01):
+  added `server/api/__init__.py` (empty placeholder) — matches the repo
+  layout `.claude/coding-guidelines.md` already documents for `server/api/`
+  and gives mypy one real file to trivially pass against instead of
+  erroring on an empty tree. `ruff check .` and `mypy .` both clean
+  afterward (1 source file).
+- Also removed `server/.env` directly (orchestrator, not a subagent task) —
+  the plan's "Approach & Key Decisions" said this file should go since
+  nothing in `server/` reads it anymore, but no task's `Files` list actually
+  included it, a gap in the plan itself. Untracked/gitignored, trivially
+  recreatable whenever `server/api/` needs `DATABASE_URL` for real.
