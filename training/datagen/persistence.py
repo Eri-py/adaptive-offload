@@ -86,6 +86,38 @@ def store_complexity_scores(engine: Engine, dataset: str, scores: dict[str, floa
         session.commit()
 
 
+def get_run_results(engine: Engine, run_id: str) -> list[ResultRow]:
+    """Read every `SimulationResult` row for `run_id` as `ResultRow`s.
+
+    Ordered by `frame_id` for deterministic output. Returns an empty list if
+    `run_id` has no result rows — including a nonexistent `run_id`, which
+    this function doesn't distinguish from "a real run with zero results";
+    callers that need to tell those apart (e.g. a re-labeling CLI) handle
+    that themselves.
+    """
+    with Session(engine) as session:
+        rows = session.execute(
+            select(SimulationResult)
+            .where(SimulationResult.run_id == run_id)
+            .order_by(SimulationResult.frame_id)
+        ).scalars()
+        return [
+            ResultRow(
+                frame_id=row.frame_id,
+                network_bandwidth_mbps=row.network_bandwidth_mbps,
+                network_latency_ms=row.network_latency_ms,
+                network_packet_loss_pct=row.network_packet_loss_pct,
+                device_load_pct=row.device_load_pct,
+                local_latency_ms=row.local_latency_ms,
+                local_accuracy=row.local_accuracy,
+                offload_latency_ms=row.offload_latency_ms,
+                offload_accuracy=row.offload_accuracy,
+                label=row.label,
+            )
+            for row in rows
+        ]
+
+
 def create_run(engine: Engine, config: RunConfig) -> str:
     """Insert one `SimulationRun` row from a resolved config snapshot, return its run id."""
     with Session(engine) as session:

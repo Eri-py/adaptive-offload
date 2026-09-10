@@ -23,10 +23,10 @@
 - Notes: preview_conditions(preset_name, count, seed) -> list[tuple[float, float, float, float]]. No DB/dotenv at all. ruff/mypy clean, 58/58 tests passed (3 new).
 
 ## Task 5 — get_run_results + re-labeling CLI
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:11:13
+- Completed: 2026-09-10 13:13:49
+- Notes: get_run_results(engine, run_id) -> list[ResultRow]; relabel_run(engine, run_id, lambda_value) -> list[tuple[str, Label, Label]]. Never calls create_run/store_results. ruff/mypy clean, 64/64 tests passed (6 new). No stray test database left behind.
 
 ## Task 6 — Split COCO acquisition: coco.py refactor + cache-population CLI
 - Status: not started

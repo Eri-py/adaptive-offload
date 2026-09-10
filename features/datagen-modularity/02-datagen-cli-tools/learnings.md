@@ -133,3 +133,53 @@
 - `ruff check .` and `mypy .` clean; full `training/` suite passes 58/58
   (55 baseline + 3 new: matches-sample-condition-vectors-directly,
   matches-for-every-preset, raises-clear-error-for-unknown-preset).
+
+## Task 5 — get_run_results + re-labeling CLI
+
+- `get_run_results(engine, run_id) -> list[ResultRow]` slots into
+  `persistence.py` right next to `create_run`/`store_results` — a plain
+  `select(SimulationResult).where(run_id == ...).order_by(frame_id)` mapped
+  back to `ResultRow` field-by-field (the reverse of `store_results`'s
+  `ResultRow` -> `SimulationResult` mapping). Ordered by `frame_id` for the
+  same "deterministic output" reason as `get_known_complexity`'s
+  `file_name` ordering. Deliberately doesn't distinguish "run exists with
+  zero results" from "run doesn't exist" — both return `[]` — per the task
+  description; that distinction is the caller's job (here, `relabel_run`'s
+  `ValueError`).
+- Almost missed the `.env`-loading convention: `preview_sample.py`'s
+  established DB-touching-CLI pattern loads `training/.env` via
+  `load_dotenv` inside `main()` only (never in the core function), and my
+  first draft of `relabel_run.py` skipped this entirely, copying
+  `get_engine()` without it. Caught immediately by hand-invoking `python -m
+  datagen.relabel_run --run-id <id> --lambda 1.0` against a manually seeded
+  run and hitting `RuntimeError: DATABASE_URL is not set` even though
+  `training/.env` has it — the pytest fixtures never exercise `main()`
+  directly (they call the core function with an injected engine), so this
+  gap wouldn't have been caught by the test suite alone. Confirms the value
+  of smoke-testing the actual CLI invocation, not just the core function
+  via pytest, for every DB-touching CLI in this feature.
+- To get a real flip case for the test (and the by-hand smoke test), needed
+  a row where offload wins at a low λ but local wins at a higher λ — that
+  requires offload to have *both* higher latency and higher accuracy than
+  local (a straight comparative advantage on latency in either direction
+  won't flip under increasing λ, since larger latency is monotonically
+  worse as its penalty weight grows). Landed on local=(100ms, 0.60) vs.
+  offload=(800ms, 0.70): OFFLOAD wins at λ=0.1 (0.62 > 0.595...), LOCAL
+  wins at λ=1.0 (0.50 > -0.10). A second row with a much larger latency gap
+  (local=50ms/0.90 vs. offload=2000ms/0.50) stays LOCAL at both λ values,
+  giving an exact expected flip count of 1/2 to assert against — not just
+  "at least one flipped."
+- Seeded each test row's stored `label` by calling `labeling.compute_label`
+  at the stored λ directly in the test setup (rather than hardcoding the
+  enum value) — mirrors how the real pipeline computes labels, and it's
+  what actually caught that my first flip-scenario arithmetic sketch (done
+  by hand in a comment) was consistent with `compute_label`'s real output,
+  not just my mental math.
+- No new stray database: same `pg_database`-query spot-check as Task 3,
+  run after the full suite plus the by-hand CLI smoke test (which seeds and
+  then manually cleans up its own run against whatever `DATABASE_URL`
+  `training/.env` points at, not an ephemeral fixture database).
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 64/64
+  (58 baseline + 6 new: get_run_results round-trip, empty-for-no-results,
+  empty-for-nonexistent-run, relabel_run reports-flips-correctly,
+  persists-nothing, raises-clear-error-for-run-with-no-results).

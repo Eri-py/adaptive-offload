@@ -14,6 +14,7 @@ from datagen.persistence import (
     RunConfig,
     create_run,
     get_known_complexity,
+    get_run_results,
     store_complexity_scores,
     store_results,
 )
@@ -138,3 +139,69 @@ def test_create_run_and_store_results_round_trips_with_fk_linkage(
         assert second.run_id == run_id
         assert second.frame_id == "000000000285.jpg"
         assert second.label == Label.LOCAL
+
+
+def test_get_run_results_round_trips_all_fields(postgres_engine: Engine) -> None:
+    config = RunConfig(
+        dataset=DATASET,
+        preset_name="baseline",
+        frame_count=500,
+        condition_vector_count=50,
+        condition_ranges={"bandwidth_mbps": [0.5, 100.0], "device_load_pct": [0.0, 100.0]},
+        seed=42,
+        lambda_value=0.005,
+    )
+    run_id = create_run(postgres_engine, config)
+
+    rows = [
+        ResultRow(
+            frame_id="000000000285.jpg",
+            network_bandwidth_mbps=3.0,
+            network_latency_ms=250.0,
+            network_packet_loss_pct=8.0,
+            device_load_pct=10.0,
+            local_latency_ms=55.0,
+            local_accuracy=0.79,
+            offload_latency_ms=400.0,
+            offload_accuracy=0.60,
+            label=Label.LOCAL,
+        ),
+        ResultRow(
+            frame_id="000000000139.jpg",
+            network_bandwidth_mbps=12.5,
+            network_latency_ms=80.0,
+            network_packet_loss_pct=1.5,
+            device_load_pct=40.0,
+            local_latency_ms=120.0,
+            local_accuracy=0.82,
+            offload_latency_ms=200.0,
+            offload_accuracy=0.91,
+            label=Label.OFFLOAD,
+        ),
+    ]
+    store_results(postgres_engine, run_id, rows)
+
+    fetched = get_run_results(postgres_engine, run_id)
+
+    # get_run_results orders by frame_id, so the fetched order differs from
+    # the insertion order above — assert against a frame_id-sorted expectation.
+    assert fetched == sorted(rows, key=lambda row: row.frame_id)
+
+
+def test_get_run_results_is_empty_for_run_with_no_results(postgres_engine: Engine) -> None:
+    config = RunConfig(
+        dataset=DATASET,
+        preset_name="baseline",
+        frame_count=500,
+        condition_vector_count=50,
+        condition_ranges={"bandwidth_mbps": [0.5, 100.0], "device_load_pct": [0.0, 100.0]},
+        seed=42,
+        lambda_value=0.005,
+    )
+    run_id = create_run(postgres_engine, config)
+
+    assert get_run_results(postgres_engine, run_id) == []
+
+
+def test_get_run_results_is_empty_for_nonexistent_run(postgres_engine: Engine) -> None:
+    assert get_run_results(postgres_engine, "00000000-0000-0000-0000-000000000000") == []
