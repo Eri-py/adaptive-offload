@@ -5,10 +5,10 @@
 - Notes: Mechanical move, no consumer missed. Test count preserved at 48 (relocated, not lost). ruff/mypy clean.
 
 ## Task 2 — Complexity-scoring CLI
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:04:58
+- Completed: 2026-09-10 13:06:29
+- Notes: score_folder(folder) -> dict[str, float], no DB, no COCO dependency. ruff/mypy clean, 52/52 tests passed (4 new).
 
 ## Task 3 — Stratified-sample preview CLI
 - Status: not started

@@ -25,3 +25,42 @@
   48 (same as baseline) — nothing added or removed, just relocated.
 - `ruff check .` and `mypy .` both clean after the move; full `training/`
   suite passes 48/48 in ~2.3s (real ephemeral-Postgres fixture, no mocks).
+
+## Task 2 — Complexity-scoring CLI
+
+- `score_folder(folder: Path) -> dict[str, float]` is the core function
+  (file name -> score, in glob order via `sorted(folder.iterdir())`),
+  wrapping `complexity.scene_complexity()`. `main()` is a thin `argparse`
+  wrapper with a required `--folder` arg, printing `name\tscore` lines. No
+  `get_engine()`/`.env` loading at all — unlike `run_simulation.py`, this
+  tool truly has zero DB/config dependency, per the spec's "no dependency
+  on any other pipeline stage" requirement.
+- Matched extensions case-insensitively (`path.suffix.lower() in
+  IMAGE_EXTENSIONS`) rather than exact-case globbing (`*.jpg` etc.) — a
+  real-world image folder is not guaranteed to use lowercase extensions,
+  and the task's `.jpg`/`.jpeg`/`.png`/`.bmp` list reads as "these image
+  types," not "these exact byte sequences."
+  `folder.iterdir()` + a suffix filter also composes more simply than
+  unioning four separate `glob()` calls (and avoids double-matching on
+  case-insensitive filesystems).
+- Two clear, distinct error types matching the two failure modes:
+  `FileNotFoundError` when the folder itself doesn't exist (checked via
+  `Path.is_dir()`, which is `False` for both "missing" and "exists but is a
+  file" — either way "no such folder" is the accurate message), `ValueError`
+  when the folder exists but the extension filter finds nothing. Both
+  messages include the folder path so a failure is actionable without a
+  stack trace.
+- Test file follows `test_complexity.py`'s no-`import pytest` convention
+  (plain `def test_...()`, same mypy/`_pytest`-stub-incompatibility reason
+  noted there) and its synthetic-image helpers (`_blank_image`,
+  `_checkerboard_image`, built with numpy + written via `cv2.imwrite`),
+  trimmed to just the two needed here — no noise-image helper since this
+  test isn't asserting anything about noise specifically.
+- Smoke-tested the actual `python -m datagen.score_complexity --folder
+  <path>` invocation by hand (not just the core function via pytest)
+  against a real temp folder with a blank PNG and a random-noise JPG, plus
+  a missing-folder case — confirmed the printed `name\tscore` lines and the
+  non-zero exit code with a clear traceback on the error path.
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 52/52
+  (48 baseline + 4 new: scores-every-image, ignores-non-matching-files,
+  missing-folder-error, empty-folder-error).
