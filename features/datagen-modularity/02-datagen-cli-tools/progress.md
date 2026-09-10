@@ -11,10 +11,10 @@
 - Notes: score_folder(folder) -> dict[str, float], no DB, no COCO dependency. ruff/mypy clean, 52/52 tests passed (4 new).
 
 ## Task 3 — Stratified-sample preview CLI
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-10 13:06:40
+- Completed: 2026-09-10 13:14:02
+- Notes: preview_sample(engine, dataset, frame_count, bucket_count, seed) -> list[tuple[str, float]]. ruff/mypy clean, 55/55 tests passed (3 new). No stray test database left behind.
 
 ## Task 4 — Condition-vector preview CLI
 - Status: not started

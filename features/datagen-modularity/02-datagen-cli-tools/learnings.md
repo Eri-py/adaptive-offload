@@ -64,3 +64,42 @@
 - `ruff check .` and `mypy .` clean; full `training/` suite passes 52/52
   (48 baseline + 4 new: scores-every-image, ignores-non-matching-files,
   missing-folder-error, empty-folder-error).
+
+## Task 3 — Stratified-sample preview CLI
+
+- `preview_sample(engine, dataset, frame_count, bucket_count, seed) ->
+  list[tuple[str, float]]` is the core function — it returns
+  `(file_name, complexity_score)` pairs, not just `list[str]`, even though
+  `sampling.stratified_sample` itself only returns file names. Pairing the
+  score in at the source (one `known_complexity[file_name]` lookup per
+  selected frame, right where the scores dict is already in scope) means
+  `main()` doesn't need to re-fetch or re-derive scores to print them "for
+  context" per the task description — it just unpacks tuples. This also
+  keeps `main()` a truly thin wrapper (`get_engine()` -> call core function
+  -> print loop) rather than partially reimplementing the core function's
+  logic to get at the scores, which would have been the alternative if the
+  core function returned bare file names.
+- Error-on-empty-dataset check lives in the core function (`if not
+  known_complexity: raise ValueError(...)`), not duplicated in `main()` —
+  `main()` calls the core function directly rather than re-checking, unlike
+  `score_complexity.py`'s pattern where `score_folder` itself both raises
+  and is the sole read path. Same shape here: one function owns the check,
+  the CLI just surfaces whatever it raises via the normal traceback/exit
+  code (consistent with how `score_complexity.main()` doesn't catch its
+  own core function's errors either).
+- Test asserts the no-run/no-result-row success criterion by querying
+  `SimulationRun`/`SimulationResult` directly via a `Session` (same pattern
+  as `test_run_simulation.py`'s `_fetch_results` helper, inlined here since
+  it's only used once) rather than through a `persistence` read function —
+  there's no `persistence.list_runs`-type read yet at this point in the
+  plan (Task 5 adds `get_run_results`, which needs a `run_id` this test
+  doesn't have), so a direct `select(SimulationRun)`/`select
+  (SimulationResult)` count is the cleanest read available without
+  reaching ahead of the plan.
+- Confirmed via a direct `pg_database` query against
+  `POSTGRES_ADMIN_URL` after the full suite run that no `test_%` database
+  was left behind — `ephemeral_postgres_database`'s `finally`-based
+  drop held even across this task's new tests.
+- `ruff check .` and `mypy .` clean; full `training/` suite passes 55/55
+  (52 baseline + 3 new: matches-stratified-sample-directly,
+  creates-no-run-or-result-rows, raises-clear-error-for-unscored-dataset).
