@@ -288,4 +288,23 @@
   collision risk — only (c) applied here, and only a read (not the grep
   alone) can tell which bucket a given hit falls into.
 - Documentation-only change, no code touched, no build/test gate applicable
+
+## Review finding N6 — `server/api/__init__.py` docstring
+
+- The file was truly 0 bytes (confirmed via `cat -A`), so no existing
+  content to preserve — a straight one-line docstring add.
+- `ruff`'s line-length rule (`E501`, 100 chars) bit on the first attempt: a
+  docstring that also explained the *history* ("empty since the DB layer
+  moved to `database/`; will hold the FastAPI app once `server/api/` is
+  built") ran to 180 characters on one line and failed `ruff check .`.
+  Rather than wrapping the docstring across multiple lines, trimmed it back
+  to just the load-bearing reason from Task 2's learnings entry — mypy
+  needs at least one file to check or it exits 2 on an empty tree — and
+  dropped the extra historical framing, since the finding only asked for
+  the actual reason the file exists, not a full changelog of it. Final
+  text: `"""Placeholder so mypy has a file to check against an
+  otherwise-empty server/ tree."""` (86 chars, one line).
+- `ruff check .` and `mypy .` both clean afterward (1 source file, same as
+  Task 2's original result) — confirms the fix doesn't regress the gate the
+  placeholder exists to satisfy.
   per the task's own scope note.
