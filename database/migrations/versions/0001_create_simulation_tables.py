@@ -4,7 +4,7 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-09-07 00:00:00.000000
 
-Creates the three tables owned by `server/common/models.py`: `simulation_runs`
+Creates the three tables owned by `database/common/models.py`: `simulation_runs`
 (one row per simulator invocation), `simulation_results` (one row per frame x
 condition pair, FK'd to its run), and `scene_complexity` (one row per frame,
 computed once and reused across runs). Authored to match those models

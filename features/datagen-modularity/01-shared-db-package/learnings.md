@@ -145,3 +145,30 @@
   logic changes, exactly as scoped — `ruff check .` and `mypy .` stayed
   clean with zero other changes needed, and the existing single test
   (`test_round_trips_all_three_tables`) still passed unmodified.
+
+## Review fixes — S2, N3 (stale `server/`-era text in `database/migrations/`)
+
+- Same pattern again, third recurrence in this feature: `git mv`-preserved
+  files carry forward comments/docstrings naming their old `server/`
+  location, and each review pass finds another pocket of them (first
+  `database/tests/`, now `database/migrations/`). Worth a final sweep for
+  any remaining `server/` references in `database/` before closing this
+  feature out, rather than relying on review passes to find them one
+  directory at a time.
+- `database/migrations/env.py` had three separate stale mentions on
+  consecutive-ish lines (a metadata comment, the `.env`-loading comment, and
+  the DATABASE_URL-precedence comment) — all three retargeted from
+  `server/common/models.py` / `server/.env` / `server/common/db.py` to their
+  `database/`-prefixed equivalents.
+  `database/migrations/versions/0001_create_simulation_tables.py`'s
+  docstring had one more (`server/common/models.py` →
+  `database/common/models.py`).
+- Confirmed via `alembic upgrade head --sql` (fully offline, no DB
+  connection attempted) that the docstring-only edit to the migration file
+  didn't change the emitted DDL at all: still the three `CREATE TABLE`s for
+  `scene_complexity`, `simulation_runs`, `simulation_results`, the `label`
+  enum, and the `alembic_version` bookkeeping table/insert, byte-for-byte
+  the same shape as recorded in Task 1's learning above.
+- `ruff check .` and `mypy .` stayed clean and the existing single test
+  (`test_round_trips_all_three_tables`) passed unmodified, as expected for
+  comment/docstring-only edits.
