@@ -246,3 +246,46 @@
   queries going forward, since the latter keeps tripping the classifier and
   needing the `postgresql+psycopg://` driver-scheme rewrite noted in Task
   3's and S1/N1/N2's learnings above.
+
+## Review fix — S5 (`.claude/coding-guidelines.md` named a future `server/common/`
+  that would collide with `database`'s top-level `common` package)
+
+- Distinct from the S1–S4 pattern above: those were all stale *past-tense*
+  references to the pre-move `server/common/` location (leftover `git mv`
+  docstrings/comments), harmless text pointing at history. S5 was the
+  opposite — a *prescriptive* rule in the guidelines telling future
+  contributors to create a new `server/common/` for server-internal
+  cross-cutting helpers, not yet acted on by any real code. Since
+  `database/pyproject.toml` ships its importable package as top-level
+  `common` (`include = ["common*"]`), a real future `server/common/` would
+  be a second top-level `common` on `sys.path` whenever anything runs from
+  `server/`, silently shadowing `database`'s `common.models`/`common.db`
+  for `server/api/` — worth flagging as a "prescribes a future collision"
+  variant of the stale-reference pattern, since a plain grep for
+  `server/common` doesn't distinguish "already happened, now stale" from
+  "hasn't happened yet, and shouldn't."
+- Fix: renamed the proposed location from `server/common/` to
+  `server/api/common/` in `.claude/coding-guidelines.md`'s "Python /
+  FastAPI (`server/`)" section — chosen over the finding's other suggestion
+  (`server/shared/`) because it matches the section's existing
+  `server/api/{contracts,controller,services,core}/` layout exactly: cross
+  cutting helpers used by more than one *service* (which already live under
+  `server/api/services/`) naturally sit as a sibling subpackage of `api`,
+  not a new top-level `server/`-rooted directory. Also added an explicit
+  one-line rationale to the guideline text itself (not just this learnings
+  file) explaining *why* a second top-level `common/` under `server/` must
+  never exist, so the collision risk is visible to whoever reads the
+  guideline next, not just to someone who reads this feature's learnings.
+- Left the *other* `server/common` hit from the grep sweep
+  (`.claude/coding-guidelines.md:19`, inside `database/`'s repo-layout
+  description: "This used to live under `server/common/`...") untouched —
+  that one is genuinely historical/past-tense ("used to live"), factually
+  correct as written, and out of S5's scope, which is specifically about
+  the *prescriptive* future-location rule at lines 106-109. Confirms the
+  S1/N1/N2 distinction between stale-path-references and ownership-prose
+  needs a third bucket: a `server/common` grep hit can be (a) stale past
+  reference, (b) correct historical reference, or (c) a live prescriptive
+  collision risk — only (c) applied here, and only a read (not the grep
+  alone) can tell which bucket a given hit falls into.
+- Documentation-only change, no code touched, no build/test gate applicable
+  per the task's own scope note.

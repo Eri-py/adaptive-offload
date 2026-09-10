@@ -104,9 +104,13 @@ config applies where.
 - Load the model once at startup (FastAPI lifespan/startup event) in
   `server/api/core/`, never per-request.
 - Cross-cutting helpers used by more than one service or by tests go in a
-  `server/common/` module (create it if it doesn't exist yet), not
+  `server/api/common/` module (create it if it doesn't exist yet), not
   duplicated per-service. Keep this separate from `database/`, which is
-  only for the shared DB layer, not general server-internal utilities.
+  only for the shared DB layer, not general server-internal utilities —
+  and note the name: `database`'s importable package is top-level `common`
+  (`import common`), so a server-internal helpers module must never be a
+  second top-level `common/` under `server/`, or it will silently shadow
+  the DB layer on `sys.path`.
 
 ## Data-gen / router training code (`training/datagen/`, `training/router/`)
 
