@@ -20,7 +20,7 @@ from common.models import SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from datagen import config
+from datagen import config, presets
 from datagen import run_simulation as run_simulation_module
 from datagen.coco import ImageRecord
 from datagen.run_simulation import run_simulation
@@ -107,7 +107,7 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
         assert run.condition_vector_count == CONDITION_VECTOR_COUNT
         assert run.seed == SEED
         assert run.lambda_value == LAMBDA_VALUE
-        preset = config.PRESETS[PRESET_NAME]
+        preset = presets.PRESETS[PRESET_NAME]
         expected_ranges: dict[str, list[float]] = {
             "bandwidth_mbps": list(preset["bandwidth_mbps"]),
             "network_latency_ms": list(preset["network_latency_ms"]),
@@ -300,7 +300,7 @@ def test_complexity_scoring_logs_progress_every_batch(
 
 
 def _expected_condition_ranges(preset_name: str) -> dict[str, list[float]]:
-    preset = config.PRESETS[preset_name]
+    preset = presets.PRESETS[preset_name]
     return {
         "bandwidth_mbps": list(preset["bandwidth_mbps"]),
         "network_latency_ms": list(preset["network_latency_ms"]),

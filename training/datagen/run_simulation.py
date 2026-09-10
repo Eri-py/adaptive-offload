@@ -30,7 +30,7 @@ from common.db import get_engine
 from dotenv import load_dotenv
 from sqlalchemy import Engine
 
-from datagen import coco, config
+from datagen import coco, config, presets
 from datagen.coco import ImageRecord
 from datagen.complexity import scene_complexity
 from datagen.conditions import sample_condition_vectors
@@ -82,11 +82,11 @@ def run_simulation(
     tunables when omitted, so a reduced-scale test run doesn't have to
     exercise the real 500 x 50 defaults against a tiny fake pool.
     """
-    if preset_name not in config.PRESETS:
+    if preset_name not in presets.PRESETS:
         raise ValueError(
-            f"Unknown preset {preset_name!r}. Valid presets: {sorted(config.PRESETS)}"
+            f"Unknown preset {preset_name!r}. Valid presets: {sorted(presets.PRESETS)}"
         )
-    preset = config.PRESETS[preset_name]
+    preset = presets.PRESETS[preset_name]
 
     resolved_image_records = (
         image_records if image_records is not None else coco.load_image_index()
@@ -224,7 +224,7 @@ def main() -> None:
     parser.add_argument(
         "--preset",
         required=True,
-        choices=sorted(config.PRESETS),
+        choices=sorted(presets.PRESETS),
         help="Named condition-scenario preset to sample condition vectors from.",
     )
     args = parser.parse_args()

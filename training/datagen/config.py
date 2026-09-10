@@ -1,11 +1,11 @@
 """Single tunable config module for the data-gen simulator.
 
 Every simulator invocation reads its frame count, condition-sampling
-parameters, preset ranges, seed, and utility-function weighting from here —
-no hardcoded tunables elsewhere in `training/datagen/`, per the feature spec.
+parameters, seed, and utility-function weighting from here — no hardcoded
+tunables elsewhere in `training/datagen/`, per the feature spec. Named
+condition-scenario presets live separately in `datagen.presets`, since a
+preset is a scenario definition rather than a single tunable knob.
 """
-
-from typing import TypedDict
 
 # --- Sampling / run-shape tunables -----------------------------------------
 
@@ -63,44 +63,3 @@ SCENE_COMPLEXITY_ACCURACY_PENALTY_COEFFICIENT = 0.15
 # both illustrative, same as every other stub-model coefficient above.
 LOCAL_ACCURACY_DEVICE_LOAD_PENALTY_COEFFICIENT = 0.001  # per device-load pct point
 OFFLOAD_ACCURACY_PACKET_LOSS_PENALTY_COEFFICIENT = 0.005  # per packet-loss pct point
-
-
-class ConditionPresetRanges(TypedDict):
-    """Per-axis (min, max) sampling ranges for one condition-scenario preset."""
-
-    bandwidth_mbps: tuple[float, float]
-    network_latency_ms: tuple[float, float]
-    packet_loss_pct: tuple[float, float]
-    device_load_pct: tuple[float, float]
-
-
-# Named condition-scenario presets. Each invocation selects one by name; the
-# resolved ranges are snapshotted onto that run's `simulation_runs` record.
-PRESETS: dict[str, ConditionPresetRanges] = {
-    "baseline": {
-        "bandwidth_mbps": (0.5, 100.0),
-        "network_latency_ms": (10.0, 400.0),
-        "packet_loss_pct": (0.0, 10.0),
-        "device_load_pct": (0.0, 100.0),
-    },
-    "network-stress": {
-        "bandwidth_mbps": (0.2, 5.0),
-        "network_latency_ms": (150.0, 400.0),
-        "packet_loss_pct": (5.0, 20.0),
-        "device_load_pct": (0.0, 100.0),
-    },
-    "device-stress": {
-        "bandwidth_mbps": (0.5, 100.0),
-        "network_latency_ms": (10.0, 400.0),
-        "packet_loss_pct": (0.0, 10.0),
-        "device_load_pct": (60.0, 100.0),
-    },
-    # Isolates the network axis from device load, per the spec's reasoning
-    # for the crossed frame x condition design.
-    "degraded-network-idle-device": {
-        "bandwidth_mbps": (0.2, 5.0),
-        "network_latency_ms": (150.0, 400.0),
-        "packet_loss_pct": (5.0, 20.0),
-        "device_load_pct": (0.0, 20.0),
-    },
-}
