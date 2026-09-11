@@ -54,7 +54,10 @@ into that one venv (`pip install -e database[dev] -e server[dev] -e training[dev
 from the repo root); run each package's lint/type/test commands from its
 own directory as before (`cd database && ruff check . && mypy . && pytest`,
 same for `server/`/`training/`) — only the venv location changed, not which
-config applies where.
+config applies where. A root-level `Makefile` wraps this (`make lint`,
+`make test`, `make check`, or per-package `make test-training`, etc. — run
+`make help` for the full list) if you'd rather not `cd` and activate by
+hand, but it's just running the same commands shown above under the hood.
 
 ## Database
 
