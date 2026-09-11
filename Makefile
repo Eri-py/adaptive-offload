@@ -22,7 +22,9 @@ ACTIVATE := source $(VENV)/bin/activate
 .PHONY: help venv \
 	test lint check \
 	test-database test-server test-training \
-	lint-database lint-server lint-training
+	lint-database lint-server lint-training \
+	run-simulation score-complexity preview-sample preview-conditions \
+	relabel-run sync-coco-cache
 
 .DEFAULT_GOAL := help
 
@@ -75,3 +77,28 @@ lint-server: ## Run ruff check + mypy for server/
 
 lint-training: ## Run ruff check + mypy for training/
 	$(ACTIVATE) && cd training && ruff check . && mypy .
+
+# training/datagen/cli/*'s six standalone entry points — pass extra flags via
+# ARGS, e.g. `make run-simulation ARGS="--preset baseline"`. These are real
+# tools (run-simulation and relabel-run write to / read from the actual
+# Postgres instance via DATABASE_URL) — this Makefile just saves the `cd
+# training && python -m datagen.cli.<name>` typing, it doesn't change what
+# any of them do.
+
+run-simulation: ## Run the full simulator pipeline (e.g. ARGS="--preset baseline")
+	$(ACTIVATE) && cd training && python -m datagen.cli.run_simulation $(ARGS)
+
+score-complexity: ## Score every image in a folder (e.g. ARGS="--folder /path/to/images")
+	$(ACTIVATE) && cd training && python -m datagen.cli.score_complexity $(ARGS)
+
+preview-sample: ## Preview a stratified frame sample (e.g. ARGS="--seed 7")
+	$(ACTIVATE) && cd training && python -m datagen.cli.preview_sample $(ARGS)
+
+preview-conditions: ## Preview condition vectors for a preset (e.g. ARGS="--preset baseline")
+	$(ACTIVATE) && cd training && python -m datagen.cli.preview_conditions $(ARGS)
+
+relabel-run: ## Recompute labels for an existing run (e.g. ARGS="--run-id X --lambda 0.5")
+	$(ACTIVATE) && cd training && python -m datagen.cli.relabel_run $(ARGS)
+
+sync-coco-cache: ## Download any missing COCO val2017 images into the local cache
+	$(ACTIVATE) && cd training && python -m datagen.cli.sync_coco_cache
