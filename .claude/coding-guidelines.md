@@ -54,10 +54,7 @@ into that one venv (`pip install -e database[dev] -e server[dev] -e training[dev
 from the repo root); run each package's lint/type/test commands from its
 own directory as before (`cd database && ruff check . && mypy . && pytest`,
 same for `server/`/`training/`) — only the venv location changed, not which
-config applies where. A root-level `Makefile` wraps this (`make lint`,
-`make test`, `make check`, or per-package `make test-training`, etc. — run
-`make help` for the full list) if you'd rather not `cd` and activate by
-hand, but it's just running the same commands shown above under the hood.
+config applies where.
 
 ## Database
 
@@ -123,6 +120,15 @@ hand, but it's just running the same commands shown above under the hood.
 - Anything the pipeline depends on is a runnable script, not notebook-only
   logic. Notebooks are for exploration, not for producing artifacts other
   code reads.
+- `training/datagen/cli/`'s standalone entry points (`run_simulation`,
+  `score_complexity`, `preview_sample`, `preview_conditions`, `relabel_run`,
+  `sync_coco_cache`) are registered as `[project.scripts]` in
+  `training/pyproject.toml` — once the shared venv is activated, run them by
+  name (e.g. `run-simulation --preset baseline`), not
+  `python -m datagen.cli.<name>`. Add new standalone tools to both places:
+  the module under `training/datagen/cli/` and an entry in
+  `training/pyproject.toml`'s `[project.scripts]` (then `pip install -e
+  ./training` again to regenerate the installed script).
 - Seed all randomness (condition sampling, train/test split) for
   reproducibility.
 - The frame-level train/test split is enforced by a helper function that

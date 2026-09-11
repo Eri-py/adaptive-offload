@@ -16,6 +16,17 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+# Installed as real executables in .venv/bin/ by `pip install -e .` — once
+# the shared venv is activated, e.g. `run-simulation --preset baseline`
+# works from any directory, no `python -m datagen.cli.<name>` needed.
+[project.scripts]
+run-simulation = "datagen.cli.run_simulation:main"
+score-complexity = "datagen.cli.score_complexity:main"
+preview-sample = "datagen.cli.preview_sample:main"
+preview-conditions = "datagen.cli.preview_conditions:main"
+relabel-run = "datagen.cli.relabel_run:main"
+sync-coco-cache = "datagen.cli.sync_coco_cache:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
