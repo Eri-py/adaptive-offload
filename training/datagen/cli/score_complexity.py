@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from datagen.complexity import scene_complexity
+from datagen.sampling.complexity import scene_complexity
 
 # Extensions this tool treats as images, matched case-insensitively.
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")

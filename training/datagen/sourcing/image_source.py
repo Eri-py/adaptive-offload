@@ -24,9 +24,9 @@ from typing import Any, NamedTuple
 
 import requests
 
-# training/data/coco/ — datagen.py lives at training/datagen/coco.py, so the
-# data directory is a sibling of the datagen package, one level up.
-COCO_DIR = Path(__file__).resolve().parent.parent / "data" / "coco"
+# training/data/coco/ — this file lives at training/datagen/sourcing/image_source.py,
+# so the data directory is a sibling of the datagen package, two levels up.
+COCO_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "coco"
 ANNOTATIONS_PATH = COCO_DIR / "annotations" / "instances_val2017.json"
 IMAGES_DIR = COCO_DIR / "val2017"
 

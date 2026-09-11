@@ -14,9 +14,9 @@ from common.models import Label, SimulationResult, SimulationRun
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from datagen import labeling
 from datagen.cli.relabel_run import RelabeledRow, relabel_run
 from datagen.persistence import ResultRow, RunConfig, create_run, get_run_results, store_results
+from datagen.simulate import labeling
 
 DATASET = "coco_val2017"
 STORED_LAMBDA = 0.1

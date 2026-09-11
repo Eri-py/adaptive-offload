@@ -25,8 +25,8 @@ from common.models import Label
 from dotenv import load_dotenv
 from sqlalchemy import Engine
 
-from datagen import labeling
 from datagen.persistence import get_run_results
+from datagen.simulate import labeling
 
 
 class RelabeledRow(NamedTuple):

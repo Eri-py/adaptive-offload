@@ -1,4 +1,4 @@
-"""Tests for `datagen.coco`.
+"""Tests for `datagen.sourcing.image_source`.
 
 Uses small fake annotation/image fixtures under `tmp_path` and an injected
 fetch callable throughout — never touches the real `training/data/coco/`
@@ -12,7 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from datagen.coco import (
+from datagen.sourcing.image_source import (
     ImageRecord,
     download_missing_images,
     load_image_index,

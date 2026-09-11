@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from datagen.complexity import scene_complexity
+from datagen.sampling.complexity import scene_complexity
 
 
 def _blank_image(size: int = 200) -> np.ndarray:

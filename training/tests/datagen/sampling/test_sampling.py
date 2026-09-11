@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datagen.sampling import stratified_sample
+from datagen.sampling.sampling import stratified_sample
 
 
 def _synthetic_scores(count: int = 200) -> dict[str, float]:

@@ -32,11 +32,7 @@ from common.db import get_engine
 from dotenv import load_dotenv
 from sqlalchemy import Engine
 
-from datagen import coco, config, presets
-from datagen.coco import ImageRecord
-from datagen.complexity import scene_complexity
-from datagen.conditions import sample_condition_vectors
-from datagen.labeling import compute_label
+from datagen import config
 from datagen.persistence import (
     ResultRow,
     RunConfig,
@@ -45,8 +41,14 @@ from datagen.persistence import (
     store_complexity_scores,
     store_results,
 )
-from datagen.sampling import stratified_sample
-from datagen.stub_inference import stub_inference
+from datagen.sampling import presets
+from datagen.sampling.complexity import scene_complexity
+from datagen.sampling.conditions import sample_condition_vectors
+from datagen.sampling.sampling import stratified_sample
+from datagen.simulate.labeling import compute_label
+from datagen.simulate.stub_inference import stub_inference
+from datagen.sourcing import image_source
+from datagen.sourcing.image_source import ImageRecord
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ def run_simulation(
     """Run one full simulator invocation for `preset_name`, return its run id.
 
     `image_records` and `resolve_image` default to the real COCO val2017 pool
-    (`coco.load_image_index()` / `coco.resolve_image_path`) when omitted —
+    (`image_source.load_image_index()` / `image_source.resolve_image_path`) when omitted —
     tests inject a small fake pool and a resolver pointed at synthetic
     temp-directory images instead. `frame_count`/`condition_vector_count`/
     `bucket_count`/`seed`/`lambda_value` default to `datagen.config`'s
@@ -91,10 +93,10 @@ def run_simulation(
     preset = presets.PRESETS[preset_name]
 
     resolved_image_records = (
-        image_records if image_records is not None else coco.load_image_index()
+        image_records if image_records is not None else image_source.load_image_index()
     )
     resolved_resolve_image = (
-        resolve_image if resolve_image is not None else coco.resolve_image_path
+        resolve_image if resolve_image is not None else image_source.resolve_image_path
     )
     resolved_frame_count = frame_count if frame_count is not None else config.FRAME_COUNT
     resolved_condition_vector_count = (

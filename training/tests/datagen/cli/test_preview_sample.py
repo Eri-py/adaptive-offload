@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from datagen.cli.preview_sample import preview_sample
 from datagen.persistence import store_complexity_scores
-from datagen.sampling import stratified_sample
+from datagen.sampling.sampling import stratified_sample
 
 DATASET = "coco_val2017"
 

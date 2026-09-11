@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import argparse
 
-from datagen import config, presets
-from datagen.conditions import sample_condition_vectors
+from datagen import config
+from datagen.sampling import presets
+from datagen.sampling.conditions import sample_condition_vectors
 
 
 def preview_conditions(

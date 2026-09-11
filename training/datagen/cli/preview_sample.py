@@ -24,7 +24,7 @@ from sqlalchemy import Engine
 
 from datagen import config
 from datagen.persistence import get_known_complexity
-from datagen.sampling import stratified_sample
+from datagen.sampling.sampling import stratified_sample
 
 
 def preview_sample(

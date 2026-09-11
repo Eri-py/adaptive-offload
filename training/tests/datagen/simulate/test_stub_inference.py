@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datagen.stub_inference import stub_inference
+from datagen.simulate.stub_inference import stub_inference
 
 # Field order matches conditions.sample_condition_vectors's output.
 _BASE_CONDITION = (10.0, 100.0, 2.0, 30.0)  # bandwidth, net latency, loss, device load

@@ -5,7 +5,7 @@ from __future__ import annotations
 from common.models import Label
 
 from datagen import config
-from datagen.labeling import compute_label
+from datagen.simulate.labeling import compute_label
 
 _TOLERANCE = 1e-9
 

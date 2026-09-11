@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 
 from datagen.cli.preview_conditions import preview_conditions
-from datagen.conditions import sample_condition_vectors
-from datagen.presets import PRESETS
+from datagen.sampling.conditions import sample_condition_vectors
+from datagen.sampling.presets import PRESETS
 
 COUNT = 50
 SEED = 42
