@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from datagen import config
 from datagen.cli import run_simulation as run_simulation_module
-from datagen.cli.run_simulation import run_simulation
+from datagen.cli.run_simulation import _require_images_dir, run_simulation
 from datagen.sampling import presets
 from datagen.sourcing.image_source import ImageRecord
 
@@ -74,6 +74,19 @@ def _fetch_results(engine: Engine, run_id: str) -> list[SimulationResult]:
             .order_by(SimulationResult.id)
             .all()
         )
+
+
+def test_require_images_dir_accepts_existing_directory(tmp_path: Path) -> None:
+    _require_images_dir(tmp_path)
+
+
+def test_require_images_dir_raises_for_nonexistent_path(tmp_path: Path) -> None:
+    missing_dir = tmp_path / "does-not-exist"
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        _require_images_dir(missing_dir)
+
+    assert str(missing_dir) in str(exc_info.value)
 
 
 def test_run_simulation_creates_expected_rows_with_full_linkage(

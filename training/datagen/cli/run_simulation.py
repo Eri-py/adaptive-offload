@@ -4,26 +4,34 @@ Real invocation (once `training`'s package is installed, per this repo's
 `datagen.*`-not-`training.datagen.*` import-root convention — `training/`
 itself is the import root, the same way `server/` is for `common`):
 
-    python -m datagen.cli.run_simulation --preset baseline
+    run-simulation --preset baseline --annotations <path> --images <folder> \\
+        --dataset <name>
 
-Builds the real Postgres engine from `DATABASE_URL`, scores any COCO
-val2017 pool images not yet covered by the `scene_complexity` table
-(images must already be cached locally; run `python -m
-datagen.cli.sync_coco_cache` first), stratified-samples frames, space-fills
-condition vectors for the selected preset, crosses every frame with every
-condition vector (stub inference + win/loss label), and persists one
-`simulation_runs` row plus one `simulation_results` row per (frame,
-condition) pair.
+`--annotations` is a COCO-format annotations file (JSON with an `"images"`
+list), `--images` is the local folder to resolve those images' file names
+from, and `--dataset` names the dataset scene-complexity scores get stored
+under (so different image pools never share/collide on the same
+`scene_complexity` rows). Builds the real Postgres engine from
+`DATABASE_URL`, scores any pool images not yet covered by the
+`scene_complexity` table for that dataset (for the COCO val2017 pool,
+images must already be cached locally; run `python -m
+datagen.cli.sync_coco_cache` first), stratified-samples frames,
+space-fills condition vectors for the selected preset, crosses every frame
+with every condition vector (stub inference + win/loss label), and
+persists one `simulation_runs` row plus one `simulation_results` row per
+(frame, condition) pair.
 
 The CLI (`main`) is a thin wrapper around `run_simulation`, the directly
 callable core function — every real dependency (`image_records`,
-`resolve_image`, the run-shape tunables) is injectable so tests can swap in
-a small fake image pool instead of the real ~5,000-image COCO set.
+`resolve_image`, `dataset`, the run-shape tunables) is injectable so tests
+can swap in a small fake image pool instead of the real ~5,000-image COCO
+set.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -70,6 +78,7 @@ def run_simulation(
     *,
     image_records: list[ImageRecord] | None = None,
     resolve_image: Callable[[str], Path] | None = None,
+    dataset: str | None = None,
     frame_count: int | None = None,
     condition_vector_count: int | None = None,
     bucket_count: int | None = None,
@@ -81,10 +90,11 @@ def run_simulation(
     `image_records` and `resolve_image` default to the real COCO val2017 pool
     (`image_source.load_image_index()` / `image_source.resolve_image_path`) when omitted —
     tests inject a small fake pool and a resolver pointed at synthetic
-    temp-directory images instead. `frame_count`/`condition_vector_count`/
-    `bucket_count`/`seed`/`lambda_value` default to `datagen.config`'s
-    tunables when omitted, so a reduced-scale test run doesn't have to
-    exercise the real 500 x 50 defaults against a tiny fake pool.
+    temp-directory images instead. `dataset`/`frame_count`/
+    `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` default to
+    `datagen.config`'s tunables when omitted, so a reduced-scale test run
+    doesn't have to exercise the real 500 x 50 defaults against a tiny fake
+    pool.
     """
     if preset_name not in presets.PRESETS:
         raise ValueError(
@@ -107,10 +117,11 @@ def run_simulation(
     resolved_bucket_count = (
         bucket_count if bucket_count is not None else config.STRATIFICATION_BUCKET_COUNT
     )
+    resolved_dataset = dataset if dataset is not None else config.DATASET_NAME
     resolved_seed = seed if seed is not None else config.SEED
     resolved_lambda = lambda_value if lambda_value is not None else config.DEFAULT_LAMBDA
 
-    known_complexity = get_known_complexity(engine, config.DATASET_NAME)
+    known_complexity = get_known_complexity(engine, resolved_dataset)
 
     # Flushed in batches (not once at the end) so a network error, corrupt
     # file, or interrupted run loses at most one batch's worth of scoring
@@ -134,11 +145,11 @@ def run_simulation(
         pending_batch[record.file_name] = score
         scored_count += 1
         if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
-            store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
+            store_complexity_scores(engine, resolved_dataset, pending_batch)
             pending_batch = {}
             logger.info("Scored %d/%d images.", scored_count, total_to_score)
     if pending_batch:
-        store_complexity_scores(engine, config.DATASET_NAME, pending_batch)
+        store_complexity_scores(engine, resolved_dataset, pending_batch)
         logger.info("Scored %d/%d images.", scored_count, total_to_score)
 
     sampled_frames = stratified_sample(
@@ -166,7 +177,7 @@ def run_simulation(
         "device_load_pct": list(preset["device_load_pct"]),
     }
     run_config = RunConfig(
-        dataset=config.DATASET_NAME,
+        dataset=resolved_dataset,
         preset_name=preset_name,
         frame_count=len(sampled_frames),
         condition_vector_count=len(condition_vectors),
@@ -216,6 +227,17 @@ def run_simulation(
     return run_id
 
 
+def _require_images_dir(images_dir: Path) -> None:
+    """Fail fast with a clear error if `images_dir` isn't an existing folder.
+
+    Kept as a standalone function (rather than inlined in `main()`) so it's
+    directly unit-testable without going through argparse or a database
+    connection.
+    """
+    if not images_dir.is_dir():
+        raise FileNotFoundError(f"No such images folder: {images_dir}")
+
+
 def main() -> None:
     # CLI-only convenience: load DATABASE_URL from training/.env if it isn't
     # already in the environment (never overrides an explicit `export`).
@@ -224,17 +246,51 @@ def main() -> None:
     # module.
     load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
-    parser = argparse.ArgumentParser(description="Run the data-gen simulator for one preset.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the data-gen simulator for one preset against a COCO-format "
+            "annotations file and images folder, storing scene-complexity "
+            "scores under the given dataset name."
+        )
+    )
     parser.add_argument(
         "--preset",
         required=True,
         choices=sorted(presets.PRESETS),
         help="Named condition-scenario preset to sample condition vectors from.",
     )
+    parser.add_argument(
+        "--annotations",
+        type=Path,
+        required=True,
+        help="Path to a COCO-format annotations file (JSON with an 'images' list).",
+    )
+    parser.add_argument(
+        "--images",
+        type=Path,
+        required=True,
+        help="Folder to resolve image files from.",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        required=True,
+        help="Dataset name scene-complexity scores are stored under.",
+    )
     args = parser.parse_args()
 
+    _require_images_dir(args.images)
+    image_records = image_source.load_image_index(args.annotations)
+    resolve_image = functools.partial(image_source.resolve_image_path, images_dir=args.images)
+
     engine = get_engine()
-    run_id = run_simulation(engine, args.preset)
+    run_id = run_simulation(
+        engine,
+        args.preset,
+        image_records=image_records,
+        resolve_image=resolve_image,
+        dataset=args.dataset,
+    )
     print(f"Created run {run_id}")
 
 
