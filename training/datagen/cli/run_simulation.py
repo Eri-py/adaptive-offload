@@ -66,9 +66,9 @@ logger = logging.getLogger(__name__)
 # or persisted, only how often) — kept local here rather than in
 # `config.py`, whose tunables all affect the simulation's actual behavior/
 # output. 200 keeps a worst-case loss (a crash right before a flush) to a
-# small fraction of the ~5,000-image val2017 pool while still batching most
-# of the network/DB round-trip savings a straight per-image commit would
-# give up.
+# small fraction of a real-sized (thousands-of-images) image pool while still
+# batching most of the network/DB round-trip savings a straight per-image
+# commit would give up.
 COMPLEXITY_SCORE_FLUSH_BATCH_SIZE = 200
 
 
@@ -88,10 +88,11 @@ def run_simulation(
     """Run one full simulator invocation for `preset_name`, return its run id.
 
     `image_records` and `resolve_image` are required — there is no default
-    image pool; the real CLI (`main`) always supplies the real COCO val2017
-    pool (`image_source.load_image_index()` / `image_source.resolve_image_path`),
-    and tests inject a small fake pool and a resolver pointed at synthetic
-    temp-directory images instead. `dataset`/`frame_count`/
+    image pool; the real CLI (`main`) always builds them from the caller's
+    `--annotations`/`--images` (`image_source.load_image_index()` /
+    `image_source.resolve_image_path`), and tests inject a small fake pool
+    and a resolver pointed at synthetic temp-directory images instead.
+    `dataset`/`frame_count`/
     `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` default to
     `datagen.config`'s tunables when omitted, so a reduced-scale test run
     doesn't have to exercise the real 500 x 50 defaults against a tiny fake

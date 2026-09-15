@@ -196,7 +196,7 @@ None.
   in `image_source.py`), so it isn't waste — it's just over the stated budget.
 - **Fix:** Compress to two lines, or drop it entirely if S3 is accepted (the
   constants go away with it).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — resolved for free by S3 (the flagged comment block and the constants it explained were deleted entirely; confirmed `config.py` no longer contains it). No separate commit needed.
 
 #### N2 — `config.py:27` still describes the frame pool as val2017-specific
 
@@ -205,7 +205,7 @@ None.
   pool.` — `FRAME_COUNT` now applies to whatever pool `--images`/`--annotations`
   name, which is the entire point of the feature.
 - **Fix:** Replace "the val2017 pool" with "the run's image pool".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed directly (trivial wording fix, folded into "Address N1-N3: fix stale val2017/comment wording left after S3").
 
 #### N3 — Two more val2017 assumptions in `run_simulation.py`'s prose
 
@@ -217,7 +217,7 @@ None.
   deleting.
 - **Fix:** Generalize the batch-size rationale to "the image pool"; update or
   remove the docstring sentence to match whatever is decided for S3.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed directly (trivial wording fix, folded into "Address N1-N3: fix stale val2017/comment wording left after S3").
 
 #### N4 — Four CLI docstrings still show `python -m` invocations the guidelines forbid
 

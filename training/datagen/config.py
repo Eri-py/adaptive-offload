@@ -9,7 +9,7 @@ preset is a scenario definition rather than a single tunable knob.
 
 # --- Sampling / run-shape tunables -----------------------------------------
 
-# Frames sampled (stratified by scene complexity) from the val2017 pool.
+# Frames sampled (stratified by scene complexity) from the run's image pool.
 FRAME_COUNT = 500
 
 # Space-filling condition vectors sampled per run; crossed with every frame.
