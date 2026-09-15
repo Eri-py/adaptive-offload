@@ -230,7 +230,7 @@ None.
   sibling. Pre-existing, not introduced here.
 - **Fix:** Swap each for its `[project.scripts]` name (`preview-conditions`,
   `preview-sample`, `score-complexity`, `relabel-run`).
-- **Decision:** — _(pending)_
+- **Decision:** Declined — pre-existing, outside this feature's file scope, and worth doing as one sweep across all four CLIs rather than as a drive-by on the one file that happened to appear in this diff.
 
 #### N5 — `run_simulation.py`'s first line references a dead task numbering
 
@@ -240,7 +240,7 @@ None.
   to a reader of the code. Same for `test_run_simulation.py:3`. Pre-existing.
 - **Fix:** Drop the "Tasks 3-10" clause; the docstring's next paragraph already
   describes what it wires together.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — pre-existing cosmetic debt from an earlier feature; not worth a commit on its own, fold it in the next time that docstring is edited for a real reason.
 
 ## Tests
 
