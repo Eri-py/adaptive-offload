@@ -7,21 +7,6 @@ condition-scenario presets live separately in `datagen.presets`, since a
 preset is a scenario definition rather than a single tunable knob.
 """
 
-from pathlib import Path
-
-# --- COCO val2017 default paths ---------------------------------------------
-# These are `datagen.sourcing.image_source`'s default `annotations_path`/
-# `images_dir` values — kept here, not in `image_source.py`, so that module's
-# real logic stays generic (any COCO-format dataset) with no hardcoded
-# dataset-specific paths of its own, per this file's own "no hardcoded
-# tunables elsewhere" rule above.
-
-# training/data/coco/ — this file lives at training/datagen/config.py, so the
-# data directory is a sibling of the datagen package, one level up.
-DATASET_DIR = Path(__file__).resolve().parent.parent / "data" / "coco"
-ANNOTATIONS_PATH = DATASET_DIR / "annotations" / "instances_val2017.json"
-IMAGES_DIR = DATASET_DIR / "val2017"
-
 # --- Sampling / run-shape tunables -----------------------------------------
 
 # Frames sampled (stratified by scene complexity) from the val2017 pool.

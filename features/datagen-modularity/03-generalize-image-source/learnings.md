@@ -194,3 +194,48 @@
   confirming the new tests and all existing DB-backed tests pass against
   live Postgres. `ruff check .` and `mypy .` both clean in `training/`
   after the change (40 source files, no issues).
+
+## Review fix — S3
+
+- Deleted `DATASET_DIR`/`ANNOTATIONS_PATH`/`IMAGES_DIR` and their whole
+  explanatory comment block from `config.py`, along with the now-unused
+  `from pathlib import Path` import — nothing else in `config.py` used
+  `Path`. `config.DATASET_NAME` was left untouched per the finding's own
+  instruction (still a live default for `preview_sample.py`).
+- `image_source.py` stopped importing `ANNOTATIONS_PATH`/`IMAGES_DIR` from
+  `datagen.config` entirely (not just unused — deleted, since they no
+  longer exist). `load_image_index(annotations_path: Path)` and
+  `resolve_image_path(file_name: str, *, images_dir: Path)` both lost their
+  `= ANNOTATIONS_PATH`/`= IMAGES_DIR` defaults and are now required
+  parameters. Rewrote the module docstring's closing paragraph (previously
+  "the COCO val2017 defaults ... live in `datagen.config`") to state there
+  is no default annotations/images path anymore and the caller always
+  supplies them.
+- In `run_simulation.py`: `image_records`/`resolve_image` dropped their
+  `| None = None` defaults and became plain required keyword-only params.
+  Removed the two `resolved_image_records`/`resolved_resolve_image`
+  None-fallback assignments entirely (not just simplified) and replaced
+  their three call-site uses (`total_to_score` length, the `for record in
+  ...` loop, `resolved_resolve_image(record.file_name)`) with the plain
+  `image_records`/`resolve_image` parameter names directly — no
+  indirection needed once there's no resolution branch. Corrected the
+  docstring sentence that described the removed fallback ("default to the
+  real COCO val2017 pool ... when omitted") to state they're required and
+  that `main()` always supplies the real pool while tests supply a fake
+  one. Left the rest of the docstring (the `dataset`/`frame_count`/etc.
+  tunables paragraph) untouched, as instructed — that's covered by
+  separate nitpick findings.
+- `main()` and all six DB-backed integration tests in
+  `test_run_simulation.py` already passed both `image_records=` and
+  `resolve_image=` explicitly, so neither needed any change — confirmed by
+  grep before touching anything. `test_image_source.py` already passed
+  explicit `images_dir=`/`annotations_path=` in every call too; also
+  needed no changes.
+- Final grep sweep (`grep -rn "DATASET_DIR\|ANNOTATIONS_PATH\|IMAGES_DIR"
+  training/`) came back with zero hits anywhere in the package — fully
+  deleted, not just unused.
+- Postgres was reachable — ran the real suite: `pytest -q` in `training/`
+  gives 72 passed (unchanged from the prior S2 fix's count, since this fix
+  changes no test-observable behavior, only removes dead code and fixes a
+  docstring). `ruff check .` and `mypy .` both clean in `training/` after
+  the change.

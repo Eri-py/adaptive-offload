@@ -158,7 +158,7 @@ None.
   live default for `preview_sample.py:72`. If a default pool is wanted for
   interactive use, that is a separate decision worth making explicitly rather
   than inheriting.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: remove dead COCO default paths and run_simulation's unused fallback"
 
 #### S4 — `sourcing/__init__.py` still calls the package "image acquisition"
 

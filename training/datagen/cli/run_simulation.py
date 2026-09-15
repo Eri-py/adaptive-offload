@@ -76,8 +76,8 @@ def run_simulation(
     engine: Engine,
     preset_name: str,
     *,
-    image_records: list[ImageRecord] | None = None,
-    resolve_image: Callable[[str], Path] | None = None,
+    image_records: list[ImageRecord],
+    resolve_image: Callable[[str], Path],
     dataset: str | None = None,
     frame_count: int | None = None,
     condition_vector_count: int | None = None,
@@ -87,9 +87,10 @@ def run_simulation(
 ) -> str:
     """Run one full simulator invocation for `preset_name`, return its run id.
 
-    `image_records` and `resolve_image` default to the real COCO val2017 pool
-    (`image_source.load_image_index()` / `image_source.resolve_image_path`) when omitted —
-    tests inject a small fake pool and a resolver pointed at synthetic
+    `image_records` and `resolve_image` are required — there is no default
+    image pool; the real CLI (`main`) always supplies the real COCO val2017
+    pool (`image_source.load_image_index()` / `image_source.resolve_image_path`),
+    and tests inject a small fake pool and a resolver pointed at synthetic
     temp-directory images instead. `dataset`/`frame_count`/
     `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` default to
     `datagen.config`'s tunables when omitted, so a reduced-scale test run
@@ -102,12 +103,6 @@ def run_simulation(
         )
     preset = presets.PRESETS[preset_name]
 
-    resolved_image_records = (
-        image_records if image_records is not None else image_source.load_image_index()
-    )
-    resolved_resolve_image = (
-        resolve_image if resolve_image is not None else image_source.resolve_image_path
-    )
     resolved_frame_count = frame_count if frame_count is not None else config.FRAME_COUNT
     resolved_condition_vector_count = (
         condition_vector_count
@@ -134,12 +129,12 @@ def run_simulation(
     # already persisted from a prior run) -- the denominator for the
     # progress log below, so resumed runs report progress against the
     # remaining work, not the full pool size.
-    total_to_score = len(resolved_image_records) - len(known_complexity)
+    total_to_score = len(image_records) - len(known_complexity)
     scored_count = 0
-    for record in resolved_image_records:
+    for record in image_records:
         if record.file_name in known_complexity:
             continue
-        image_path = resolved_resolve_image(record.file_name)
+        image_path = resolve_image(record.file_name)
         score = scene_complexity(image_path)
         all_complexity[record.file_name] = score
         pending_batch[record.file_name] = score

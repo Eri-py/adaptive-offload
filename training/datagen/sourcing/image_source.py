@@ -12,10 +12,10 @@ fails loudly (rather than trying to "top up" missing files) if either isn't
 there. The main simulator pipeline runs against exactly what it's given —
 acquiring the data is the caller's responsibility, not this module's.
 
-Every function here takes its path as an explicit parameter — the COCO
-val2017 defaults (`ANNOTATIONS_PATH`, `IMAGES_DIR`) live in `datagen.config`,
-not in this module, per `config.py`'s "no hardcoded tunables elsewhere in
-`training/datagen/`" rule.
+Every function here takes its path as an explicit, required parameter —
+there is no default dataset, annotations path, or images path anymore; the
+caller (the `--annotations`/`--images` CLI flags, or a test) is always the
+one who supplies them.
 """
 
 from __future__ import annotations
@@ -23,8 +23,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, NamedTuple
-
-from datagen.config import ANNOTATIONS_PATH, IMAGES_DIR
 
 
 class ImageRecord(NamedTuple):
@@ -34,7 +32,7 @@ class ImageRecord(NamedTuple):
     file_name: str
 
 
-def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRecord]:
+def load_image_index(annotations_path: Path) -> list[ImageRecord]:
     """Read the COCO-format `images` array and return (image_id, file_name) pairs.
 
     Raises `FileNotFoundError` if `annotations_path` doesn't exist, or
@@ -92,7 +90,7 @@ def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRec
     return records
 
 
-def resolve_image_path(file_name: str, *, images_dir: Path = IMAGES_DIR) -> Path:
+def resolve_image_path(file_name: str, *, images_dir: Path) -> Path:
     """Return the local path to `file_name`.
 
     Pure local lookup, no network access: `file_name` is expected to already
