@@ -1,11 +1,16 @@
-"""COCO val2017 annotation loading and local image-file lookup.
+"""COCO-format annotation loading and local image-file resolution.
 
-Reads the pre-downloaded COCO val2017 annotations file to get the pool of
-(image_id, file_name) pairs, and resolves each image's local file path — a
-pure local lookup that fails clearly if the file isn't already cached under
-`training/data/coco/val2017/`. Populating that cache (downloading whatever's
-missing) is a separate, explicitly-run step: see `download_missing_images`
-below and `python -m datagen.cli.sync_coco_cache`. Keeping acquisition out of
+Reads a COCO-format annotations file to get the pool of (image_id,
+file_name) pairs, and resolves each image's local file path — a pure local
+lookup that fails clearly if the file isn't already present under the given
+images directory. This works for any COCO-format dataset, not just COCO
+val2017.
+
+The one COCO-specific piece still living here is the val2017 download
+helper: `download_missing_images` (plus `fetch_image_bytes` and
+`COCO_VAL2017_BASE_URL`) populates `training/data/coco/val2017/` from the
+official COCO val2017 hosting, as a separate, explicitly-run step — see
+`python -m datagen.cli.sync_coco_cache`. Keeping acquisition out of
 `resolve_image_path` means the main simulator pipeline and the
 complexity-scoring entry point only ever read local files and fail loudly on
 a miss, rather than silently reaching out to the network mid-run.
@@ -38,16 +43,39 @@ FetchFn = Callable[[str], bytes]
 
 
 class ImageRecord(NamedTuple):
-    """One COCO val2017 image's id and file name, from the annotations file."""
+    """One image's id and file name, from a COCO-format annotations file."""
 
     image_id: int
     file_name: str
 
 
 def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRecord]:
-    """Read the COCO `images` array and return (image_id, file_name) pairs."""
+    """Read the COCO-format `images` array and return (image_id, file_name) pairs.
+
+    Raises `FileNotFoundError` if `annotations_path` doesn't exist, or
+    `ValueError` if it exists but isn't valid JSON or doesn't have an
+    `"images"` key.
+    """
+    if not annotations_path.exists():
+        raise FileNotFoundError(
+            f"Annotations file not found at {annotations_path}. "
+            "Check the path or generate/download the annotations file first."
+        )
+
     with annotations_path.open("r", encoding="utf-8") as f:
-        data: dict[str, list[Any]] = json.load(f)
+        try:
+            data: dict[str, list[Any]] = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Annotations file at {annotations_path} is not valid JSON: {exc}"
+            ) from exc
+
+    if "images" not in data:
+        raise ValueError(
+            f"Annotations file at {annotations_path} has no \"images\" key — "
+            "expected a COCO-format annotations file."
+        )
+
     return [
         ImageRecord(image_id=entry["id"], file_name=entry["file_name"]) for entry in data["images"]
     ]
@@ -65,15 +93,11 @@ def resolve_image_path(file_name: str, *, images_dir: Path = IMAGES_DIR) -> Path
 
     Pure local lookup, no network access: `file_name` is expected to already
     exist under `images_dir` (the dataset is pre-downloaded). Raises
-    `FileNotFoundError` if it isn't there — run
-    `python -m datagen.cli.sync_coco_cache` to populate the cache first.
+    `FileNotFoundError` if it isn't there.
     """
     local_path = images_dir / file_name
     if not local_path.exists():
-        raise FileNotFoundError(
-            f"COCO image {file_name!r} not found under {images_dir}. "
-            "Run `python -m datagen.cli.sync_coco_cache` to download missing images."
-        )
+        raise FileNotFoundError(f"Image {file_name!r} not found under {images_dir}.")
     return local_path
 
 
