@@ -7,13 +7,18 @@ images directory. This works for any COCO-format dataset, not just COCO
 val2017.
 
 The one COCO-specific piece still living here is the val2017 download
-helper: `download_missing_images` (plus `fetch_image_bytes` and
-`COCO_VAL2017_BASE_URL`) populates `training/data/coco/val2017/` from the
-official COCO val2017 hosting, as a separate, explicitly-run step — see
-`python -m datagen.cli.sync_coco_cache`. Keeping acquisition out of
-`resolve_image_path` means the main simulator pipeline and the
-complexity-scoring entry point only ever read local files and fail loudly on
-a miss, rather than silently reaching out to the network mid-run.
+helper: `download_missing_images` (plus `fetch_image_bytes`) populates
+`training/data/coco/val2017/` from the official COCO val2017 hosting, as a
+separate, explicitly-run step — see `python -m datagen.cli.sync_coco_cache`.
+Keeping acquisition out of `resolve_image_path` means the main simulator
+pipeline and the complexity-scoring entry point only ever read local files
+and fail loudly on a miss, rather than silently reaching out to the network
+mid-run.
+
+Every function here takes its path/URL as an explicit parameter — the COCO
+val2017 defaults (`ANNOTATIONS_PATH`, `IMAGES_DIR`, `COCO_VAL2017_BASE_URL`)
+live in `datagen.config`, not in this module, per `config.py`'s "no
+hardcoded tunables elsewhere in `training/datagen/`" rule.
 
 This module caches image *bytes* only — it does not store any computed
 values (e.g. scene complexity), which live in Postgres per the feature spec
@@ -29,13 +34,7 @@ from typing import Any, NamedTuple
 
 import requests
 
-# training/data/coco/ — this file lives at training/datagen/sourcing/image_source.py,
-# so the data directory is a sibling of the datagen package, two levels up.
-COCO_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "coco"
-ANNOTATIONS_PATH = COCO_DIR / "annotations" / "instances_val2017.json"
-IMAGES_DIR = COCO_DIR / "val2017"
-
-COCO_VAL2017_BASE_URL = "https://images.cocodataset.org/val2017"
+from datagen.config import ANNOTATIONS_PATH, COCO_VAL2017_BASE_URL, IMAGES_DIR
 
 # A fetch callable takes an image URL and returns its raw bytes. The default
 # (`fetch_image_bytes`) makes a real HTTP GET; tests inject a fake instead.

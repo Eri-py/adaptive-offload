@@ -22,14 +22,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from datagen import config
 from datagen.sourcing import image_source
 
 
 def sync_coco_cache(
     *,
-    annotations_path: Path = image_source.ANNOTATIONS_PATH,
-    images_dir: Path = image_source.IMAGES_DIR,
-    base_url: str = image_source.COCO_VAL2017_BASE_URL,
+    annotations_path: Path = config.ANNOTATIONS_PATH,
+    images_dir: Path = config.IMAGES_DIR,
+    base_url: str = config.COCO_VAL2017_BASE_URL,
     fetch: image_source.FetchFn = image_source.fetch_image_bytes,
 ) -> tuple[int, int]:
     """Download whichever COCO val2017 images aren't already cached locally.
