@@ -59,6 +59,36 @@ def test_load_image_index_raises_value_error_when_images_key_missing(tmp_path: P
         load_image_index(annotations_path)
 
 
+def test_load_image_index_raises_value_error_when_top_level_is_not_object(
+    tmp_path: Path,
+) -> None:
+    annotations_path = tmp_path / "instances_val2017.json"
+    annotations_path.write_text(json.dumps(42))
+
+    with pytest.raises(ValueError, match="instances_val2017.json"):
+        load_image_index(annotations_path)
+
+
+def test_load_image_index_raises_value_error_when_images_value_is_not_list(
+    tmp_path: Path,
+) -> None:
+    annotations_path = tmp_path / "instances_val2017.json"
+    annotations_path.write_text(json.dumps({"images": "nope"}))
+
+    with pytest.raises(ValueError, match="instances_val2017.json"):
+        load_image_index(annotations_path)
+
+
+def test_load_image_index_raises_value_error_when_entry_missing_required_key(
+    tmp_path: Path,
+) -> None:
+    annotations_path = tmp_path / "instances_val2017.json"
+    annotations_path.write_text(json.dumps({"images": [{"id": 1}]}))
+
+    with pytest.raises(ValueError, match=r"images\[0\]"):
+        load_image_index(annotations_path)
+
+
 def test_resolve_image_path_returns_path_for_cached_file(tmp_path: Path) -> None:
     images_dir = tmp_path / "val2017"
     images_dir.mkdir()

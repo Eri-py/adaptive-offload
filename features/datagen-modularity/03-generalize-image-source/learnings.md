@@ -146,3 +146,51 @@
   and all 7 existing DB-backed tests actually pass against live Postgres,
   not just by inspection.
 - `ruff check .` and `mypy .` both clean in `training/` after the change.
+
+## Review fix — S2
+
+- `load_image_index`'s parse result is now annotated `data: Any` (was
+  `dict[str, list[Any]]`, which mypy accepted unconditionally regardless of
+  what `json.load` actually returned — an unsound narrowing the finding
+  called out). Real narrowing now happens via explicit `isinstance` checks
+  in sequence: `isinstance(data, dict)` → `ValueError` naming the path and
+  `type(data).__name__` if false; then the existing `"images" not in data`
+  key check (unchanged); then `isinstance(data["images"], list)` →
+  `ValueError` naming the path and the actual type if false. After that,
+  mypy treats `images` as `list[Any]` for the comprehension-turned-loop,
+  which is why the annotation swap is what makes the narrowing sound rather
+  than just silent — confirmed by `mypy .` passing clean with no `Any`
+  leaking past the checks (a manual re-check: without the `isinstance(data,
+  dict)` branch, `mypy` still passed today only because the old annotation
+  lied to it; the fix means it passes because the checks are real).
+- The list comprehension became an explicit `for` loop over
+  `enumerate(images)` so each entry can be validated (`isinstance(entry,
+  dict)` and `"id"`/`"file_name"` both present) before indexing into it,
+  raising `ValueError` naming the annotations path, the `images[<index>]`
+  position, and `entry!r` for the offending value — matches the finding's
+  requested wording (name the path and the offending entry index).
+- Order preserved: existence (`FileNotFoundError`) → JSON parse
+  (`ValueError` on `JSONDecodeError`) → top-level-is-dict (`ValueError`,
+  new) → `"images"` key present (`ValueError`, unchanged) →
+  `"images"`-is-a-list (`ValueError`, new) → per-entry shape (`ValueError`,
+  new). All five previously-passing tests in
+  `test_image_source.py` (missing file, invalid JSON, missing `"images"`
+  key, plus the two `resolve_image_path` tests) needed zero changes — the
+  new checks only add failure paths, they don't touch the ones already
+  covered.
+- Added three new tests to `test_image_source.py`, following the file's
+  existing `_write_fake_annotations`/`tmp_path` pattern directly (each
+  writes its own malformed JSON rather than reusing the helper, since the
+  helper always produces a valid shape): non-dict top-level (`42`),
+  non-list `"images"` value (`"nope"`), and an `images` entry missing
+  `"file_name"` (`[{"id": 1}]`) — the third asserts the message contains
+  `images[0]` to confirm the offending index is actually named, not just
+  that *a* `ValueError` was raised.
+- One `ruff` line-length fix needed on the first pass: the new
+  not-a-dict `ValueError` f-string exceeded 100 chars on one line; wrapped
+  it across three lines.
+- Postgres was reachable — ran the real suite, not just a compile check:
+  `pytest -q` in `training/` gives 72 passed (69 before this fix + 3 new),
+  confirming the new tests and all existing DB-backed tests pass against
+  live Postgres. `ruff check .` and `mypy .` both clean in `training/`
+  after the change (40 source files, no issues).

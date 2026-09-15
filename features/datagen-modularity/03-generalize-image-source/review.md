@@ -131,7 +131,7 @@ None.
   for each; in the comprehension, raise a `ValueError` naming the path and the
   offending entry index when an entry isn't a dict or lacks `id`/`file_name`.
   Annotate the parse result as `Any` (or `object`) so the narrowing is real.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: validate annotations JSON shape in load_image_index"
 
 #### S3 — The COCO default paths and `run_simulation()`'s implicit pool fallback are now dead, and contradict the spec's "no defaults" rule
 

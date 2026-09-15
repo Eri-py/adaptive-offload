@@ -49,11 +49,18 @@ def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRec
 
     with annotations_path.open("r", encoding="utf-8") as f:
         try:
-            data: dict[str, list[Any]] = json.load(f)
+            data: Any = json.load(f)
         except json.JSONDecodeError as exc:
             raise ValueError(
                 f"Annotations file at {annotations_path} is not valid JSON: {exc}"
             ) from exc
+
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Annotations file at {annotations_path} does not contain a JSON object at "
+            f"the top level — expected a COCO-format annotations file, got "
+            f"{type(data).__name__}."
+        )
 
     if "images" not in data:
         raise ValueError(
@@ -61,9 +68,28 @@ def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRec
             "expected a COCO-format annotations file."
         )
 
-    return [
-        ImageRecord(image_id=entry["id"], file_name=entry["file_name"]) for entry in data["images"]
-    ]
+    images = data["images"]
+    if not isinstance(images, list):
+        raise ValueError(
+            f"Annotations file at {annotations_path} has an \"images\" value that is not "
+            f"a list — expected a COCO-format annotations file, got {type(images).__name__}."
+        )
+
+    records = []
+    for index, entry in enumerate(images):
+        if (
+            not isinstance(entry, dict)
+            or "id" not in entry
+            or "file_name" not in entry
+        ):
+            raise ValueError(
+                f"Annotations file at {annotations_path} has a malformed entry at "
+                f"images[{index}] — expected an object with \"id\" and \"file_name\" keys, "
+                f"got {entry!r}."
+            )
+        records.append(ImageRecord(image_id=entry["id"], file_name=entry["file_name"]))
+
+    return records
 
 
 def resolve_image_path(file_name: str, *, images_dir: Path = IMAGES_DIR) -> Path:
