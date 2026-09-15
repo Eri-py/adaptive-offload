@@ -107,7 +107,7 @@ None.
   and `session.query(SceneComplexity).filter_by(dataset="test_dataset_xyz")
   .count() == POOL_SIZE`, plus that no rows exist under `config.DATASET_NAME`.
   ~15 lines reusing `_write_fake_pool`/`_make_resolve_image`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: add test for non-default dataset in run_simulation"
 
 #### S2 — `load_image_index` validates the `"images"` key but not its shape
 

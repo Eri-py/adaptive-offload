@@ -153,6 +153,43 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
         assert row.created_at is not None
 
 
+def test_run_simulation_stores_rows_under_caller_supplied_dataset(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Review finding S1: `--dataset`/`dataset=` must land scores and runs
+    under the caller's dataset key, not `config.DATASET_NAME` -- the
+    feature's headline behavior, previously uncovered by any test.
+    """
+    custom_dataset = "test_dataset_xyz"
+    image_records = _write_fake_pool(tmp_path)
+
+    run_id = run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+        dataset=custom_dataset,
+    )
+
+    with Session(postgres_engine) as session:
+        run = session.get(SimulationRun, run_id)
+        assert run is not None
+        assert run.dataset == custom_dataset
+
+        assert (
+            session.query(SceneComplexity).filter_by(dataset=custom_dataset).count()
+            == POOL_SIZE
+        )
+        assert (
+            session.query(SceneComplexity).filter_by(dataset=config.DATASET_NAME).count() == 0
+        )
+
+
 def test_run_simulation_is_reproducible_and_reuses_known_complexity(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:

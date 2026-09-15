@@ -127,3 +127,22 @@
   --dataset" error and never reaches `get_engine()`/DB connection code.
   `ruff check .` and `mypy .` both clean (still 42 source files touched by
   mypy, no issues).
+
+## Review fix — S1
+
+- Added `test_run_simulation_stores_rows_under_caller_supplied_dataset` to
+  `training/tests/datagen/cli/test_run_simulation.py` (placed right before
+  the existing reproducibility test), the first test in the file to pass
+  `dataset=` to `run_simulation`. It reuses `_write_fake_pool` /
+  `_make_resolve_image` exactly like the neighboring tests and asserts three
+  things against a custom `"test_dataset_xyz"` key: `run.dataset ==
+  custom_dataset`, `SceneComplexity` row count under that dataset equals
+  `POOL_SIZE`, and — the part that would actually catch a `resolved_dataset`
+  regression reverting to the default — zero `SceneComplexity` rows exist
+  under `config.DATASET_NAME`.
+- Postgres was reachable this time (unlike the Task 1 note above where it
+  was refused) — ran the real suite, not just a compile check: `pytest -q`
+  in `training/` gives 69 passed (previously 68), confirming the new test
+  and all 7 existing DB-backed tests actually pass against live Postgres,
+  not just by inspection.
+- `ruff check .` and `mypy .` both clean in `training/` after the change.
