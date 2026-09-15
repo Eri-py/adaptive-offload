@@ -11,18 +11,16 @@ from pathlib import Path
 
 # --- COCO val2017 default paths ---------------------------------------------
 # These are `datagen.sourcing.image_source`'s default `annotations_path`/
-# `images_dir`/`base_url` values (and `sync_coco_cache`'s own defaults) — kept
-# here, not in `image_source.py`, so that module's real logic stays generic
-# (any COCO-format dataset) with no hardcoded dataset-specific paths of its
-# own, per this file's own "no hardcoded tunables elsewhere" rule above.
+# `images_dir` values — kept here, not in `image_source.py`, so that module's
+# real logic stays generic (any COCO-format dataset) with no hardcoded
+# dataset-specific paths of its own, per this file's own "no hardcoded
+# tunables elsewhere" rule above.
 
 # training/data/coco/ — this file lives at training/datagen/config.py, so the
 # data directory is a sibling of the datagen package, one level up.
-COCO_DIR = Path(__file__).resolve().parent.parent / "data" / "coco"
-ANNOTATIONS_PATH = COCO_DIR / "annotations" / "instances_val2017.json"
-IMAGES_DIR = COCO_DIR / "val2017"
-
-COCO_VAL2017_BASE_URL = "https://images.cocodataset.org/val2017"
+DATASET_DIR = Path(__file__).resolve().parent.parent / "data" / "coco"
+ANNOTATIONS_PATH = DATASET_DIR / "annotations" / "instances_val2017.json"
+IMAGES_DIR = DATASET_DIR / "val2017"
 
 # --- Sampling / run-shape tunables -----------------------------------------
 

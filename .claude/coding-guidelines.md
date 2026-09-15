@@ -120,9 +120,14 @@ config applies where.
 - Anything the pipeline depends on is a runnable script, not notebook-only
   logic. Notebooks are for exploration, not for producing artifacts other
   code reads.
+- `run-simulation` never fetches data itself — it assumes the caller already
+  has a COCO-format annotations file and every referenced image present
+  locally (`--annotations`/`--images`), and fails clearly rather than trying
+  to top up anything missing. Acquiring/downloading a dataset, if ever
+  needed again, is a separate, explicitly-run concern outside this pipeline.
 - `training/datagen/cli/`'s standalone entry points (`run_simulation`,
-  `score_complexity`, `preview_sample`, `preview_conditions`, `relabel_run`,
-  `sync_coco_cache`) are registered as `[project.scripts]` in
+  `score_complexity`, `preview_sample`, `preview_conditions`, `relabel_run`)
+  are registered as `[project.scripts]` in
   `training/pyproject.toml` — once the shared venv is activated, run them by
   name (e.g. `run-simulation --preset baseline`), not
   `python -m datagen.cli.<name>`. Add new standalone tools to both places:

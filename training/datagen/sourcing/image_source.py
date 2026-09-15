@@ -6,39 +6,25 @@ lookup that fails clearly if the file isn't already present under the given
 images directory. This works for any COCO-format dataset, not just COCO
 val2017.
 
-The one COCO-specific piece still living here is the val2017 download
-helper: `download_missing_images` (plus `fetch_image_bytes`) populates
-`training/data/coco/val2017/` from the official COCO val2017 hosting, as a
-separate, explicitly-run step — see `python -m datagen.cli.sync_coco_cache`.
-Keeping acquisition out of `resolve_image_path` means the main simulator
-pipeline and the complexity-scoring entry point only ever read local files
-and fail loudly on a miss, rather than silently reaching out to the network
-mid-run.
+This module never fetches anything over the network: it assumes the caller
+already has the annotations file and every image file present locally, and
+fails loudly (rather than trying to "top up" missing files) if either isn't
+there. The main simulator pipeline runs against exactly what it's given —
+acquiring the data is the caller's responsibility, not this module's.
 
-Every function here takes its path/URL as an explicit parameter — the COCO
-val2017 defaults (`ANNOTATIONS_PATH`, `IMAGES_DIR`, `COCO_VAL2017_BASE_URL`)
-live in `datagen.config`, not in this module, per `config.py`'s "no
-hardcoded tunables elsewhere in `training/datagen/`" rule.
-
-This module caches image *bytes* only — it does not store any computed
-values (e.g. scene complexity), which live in Postgres per the feature spec
-(see the dedicated scene-complexity table).
+Every function here takes its path as an explicit parameter — the COCO
+val2017 defaults (`ANNOTATIONS_PATH`, `IMAGES_DIR`) live in `datagen.config`,
+not in this module, per `config.py`'s "no hardcoded tunables elsewhere in
+`training/datagen/`" rule.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NamedTuple
 
-import requests
-
-from datagen.config import ANNOTATIONS_PATH, COCO_VAL2017_BASE_URL, IMAGES_DIR
-
-# A fetch callable takes an image URL and returns its raw bytes. The default
-# (`fetch_image_bytes`) makes a real HTTP GET; tests inject a fake instead.
-FetchFn = Callable[[str], bytes]
+from datagen.config import ANNOTATIONS_PATH, IMAGES_DIR
 
 
 class ImageRecord(NamedTuple):
@@ -80,56 +66,14 @@ def load_image_index(annotations_path: Path = ANNOTATIONS_PATH) -> list[ImageRec
     ]
 
 
-def fetch_image_bytes(url: str) -> bytes:
-    """Default fetch: a real HTTP GET. Injected/mocked away in tests."""
-    response = requests.get(url, timeout=30)
-    response.raise_for_status()
-    return response.content
-
-
 def resolve_image_path(file_name: str, *, images_dir: Path = IMAGES_DIR) -> Path:
     """Return the local path to `file_name`.
 
     Pure local lookup, no network access: `file_name` is expected to already
-    exist under `images_dir` (the dataset is pre-downloaded). Raises
+    exist under `images_dir` (the dataset is provided ahead of time). Raises
     `FileNotFoundError` if it isn't there.
     """
     local_path = images_dir / file_name
     if not local_path.exists():
         raise FileNotFoundError(f"Image {file_name!r} not found under {images_dir}.")
     return local_path
-
-
-def download_missing_images(
-    image_records: list[ImageRecord],
-    *,
-    images_dir: Path = IMAGES_DIR,
-    base_url: str = COCO_VAL2017_BASE_URL,
-    fetch: FetchFn = fetch_image_bytes,
-) -> list[str]:
-    """Download whichever of `image_records` aren't already cached locally.
-
-    Files already present under `images_dir` are left untouched and never
-    passed to `fetch`. Returns the file names actually downloaded (a subset
-    of `image_records`' file names, in the order given).
-    """
-    downloaded: list[str] = []
-    for record in image_records:
-        local_path = images_dir / record.file_name
-        if local_path.exists():
-            continue
-
-        images_dir.mkdir(parents=True, exist_ok=True)
-        image_bytes = fetch(f"{base_url}/{record.file_name}")
-        # Write to a sibling `.part` path first and atomically rename into
-        # place only once the write has fully completed. Writing
-        # `local_path` directly would leave a truncated file cached forever
-        # if the process is interrupted mid-write (e.g. on a slow/unreliable
-        # connection) — a later call would treat that truncated file as a
-        # valid cache hit (the `local_path.exists()` check above) and never
-        # re-fetch it.
-        part_path = local_path.with_suffix(local_path.suffix + ".part")
-        part_path.write_bytes(image_bytes)
-        part_path.replace(local_path)
-        downloaded.append(record.file_name)
-    return downloaded

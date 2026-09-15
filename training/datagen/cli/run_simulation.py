@@ -11,11 +11,12 @@ itself is the import root, the same way `server/` is for `common`):
 list), `--images` is the local folder to resolve those images' file names
 from, and `--dataset` names the dataset scene-complexity scores get stored
 under (so different image pools never share/collide on the same
-`scene_complexity` rows). Builds the real Postgres engine from
+`scene_complexity` rows). This tool never fetches anything over the network
+— both the annotations file and every image must already be present at the
+given paths; it runs the simulation against exactly what it's given, rather
+than trying to top up missing data. Builds the real Postgres engine from
 `DATABASE_URL`, scores any pool images not yet covered by the
-`scene_complexity` table for that dataset (for the COCO val2017 pool,
-images must already be cached locally; run `python -m
-datagen.cli.sync_coco_cache` first), stratified-samples frames,
+`scene_complexity` table for that dataset, stratified-samples frames,
 space-fills condition vectors for the selected preset, crosses every frame
 with every condition vector (stub inference + win/loss label), and
 persists one `simulation_runs` row plus one `simulation_results` row per
