@@ -170,7 +170,7 @@ None.
   reader of the package sees, and it is wrong.
 - **Fix:** Reword to something like `"""Image sourcing: COCO-format
   annotation-index loading and local image-file resolution (never fetches)."""`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed directly (one-line docstring fix, folded into "Address S4, S5: fix stale package docstrings"). Trimmed the parenthetical to fit ruff's 100-char line limit.
 
 #### S5 — `sampling/__init__.py` still advertises condition presets
 
@@ -182,7 +182,7 @@ None.
   this package.
 - **Fix:** Drop "condition presets and" — e.g. `"""Frame/condition sampling:
   complexity scoring, condition-vector sampling, frame sampling."""`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed directly (one-line docstring fix, folded into "Address S4, S5: fix stale package docstrings").
 
 ## Nitpicks
 

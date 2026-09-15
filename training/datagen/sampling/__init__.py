@@ -1,1 +1,1 @@
-"""Frame/condition sampling: complexity scoring, condition presets and sampling, frame sampling."""
+"""Frame/condition sampling: complexity scoring, condition-vector sampling, frame sampling."""
