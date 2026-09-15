@@ -13,7 +13,7 @@
 - Notes: Postgres started mid-task by the user; full suite reran and confirmed 77/77 passed (72 baseline + 3 Task 1 + 2 Task 2), including all 7 existing DB-backed run_simulation tests unmodified. ruff/mypy clean, --help and missing-args behavior verified by hand.
 
 ## Task 3 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-15 12:58:10
+- Completed: 2026-09-15 12:58:23
+- Notes: 77/77 tests pass, ruff clean, mypy clean (42 source files).
