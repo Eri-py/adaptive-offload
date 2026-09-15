@@ -20,10 +20,9 @@ from common.models import SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from datagen import config
+from datagen import config, presets
 from datagen.cli import run_simulation as run_simulation_module
 from datagen.cli.run_simulation import _require_images_dir, run_simulation
-from datagen.sampling import presets
 from datagen.sourcing.image_source import ImageRecord
 
 POOL_SIZE = 20

@@ -1,7 +1,7 @@
 """Validates the shape of `datagen.presets`' named condition-scenario ranges
 (no I/O)."""
 
-from datagen.sampling import presets
+from datagen import presets
 
 _REQUIRED_AXES = ("bandwidth_mbps", "network_latency_ms", "packet_loss_pct", "device_load_pct")
 

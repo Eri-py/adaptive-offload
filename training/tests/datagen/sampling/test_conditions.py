@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from datagen.presets import PRESETS
 from datagen.sampling.conditions import sample_condition_vectors
-from datagen.sampling.presets import PRESETS
 
 # Axis order matches the returned tuple's field order in conditions.py.
 _AXES = ("bandwidth_mbps", "network_latency_ms", "packet_loss_pct", "device_load_pct")

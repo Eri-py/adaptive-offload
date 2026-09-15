@@ -41,7 +41,7 @@ from common.db import get_engine
 from dotenv import load_dotenv
 from sqlalchemy import Engine
 
-from datagen import config
+from datagen import config, presets
 from datagen.persistence import (
     ResultRow,
     RunConfig,
@@ -50,7 +50,6 @@ from datagen.persistence import (
     store_complexity_scores,
     store_results,
 )
-from datagen.sampling import presets
 from datagen.sampling.complexity import scene_complexity
 from datagen.sampling.conditions import sample_condition_vectors
 from datagen.sampling.sampling import stratified_sample

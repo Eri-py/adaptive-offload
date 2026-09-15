@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import argparse
 
-from datagen import config
-from datagen.sampling import presets
+from datagen import config, presets
 from datagen.sampling.conditions import sample_condition_vectors
 
 

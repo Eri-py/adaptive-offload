@@ -5,14 +5,14 @@ Pure function: given a preset's per-axis `(min, max)` ranges (from
 scales each dimension into its preset range, so the sampled conditions cover
 the full configured range on every axis instead of clustering at a few
 points. No I/O, no database access; the preset dict and seed are passed in by
-the caller rather than imported from `datagen.sampling.presets`.
+the caller rather than imported from `datagen.presets`.
 """
 
 from __future__ import annotations
 
 from scipy.stats import qmc
 
-from datagen.sampling.presets import ConditionPresetRanges
+from datagen.presets import ConditionPresetRanges
 
 # Dimension order matches the returned tuple's field order.
 _AXES = ("bandwidth_mbps", "network_latency_ms", "packet_loss_pct", "device_load_pct")
