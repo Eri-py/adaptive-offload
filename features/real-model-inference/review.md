@@ -51,7 +51,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/simulate/ground_truth.py:668-678`
 - **Issue:** val2017 has 446 crowd annotations spread over 411 images (about 8% of the pool). A crowd box covers a whole group of objects. Standard COCO evaluation ignores these regions, and a detector almost never produces one box matching a crowd box at IoU >= 0.5. So these boxes pull accuracy down on those frames, for both models, and push both toward the same score. The spec says "each ground-truth box", so this follows the spec's wording, but it is almost certainly not what was meant.
 - **Fix:** Skip entries with `entry.get("iscrowd", 0) == 1` in `load_ground_truth`, and add a one-line test. Mention the change in the spec or plan as a clarification.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: exclude COCO iscrowd annotations from ground truth"
 
 #### S3 — `persistence.py` now imports `ultralytics`/`torch` indirectly
 

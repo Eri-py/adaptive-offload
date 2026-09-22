@@ -72,6 +72,45 @@ def test_load_ground_truth_round_trips_multi_image_multi_annotation_fixture(
     ]
 
 
+def test_load_ground_truth_excludes_crowd_annotations(tmp_path: Path) -> None:
+    annotations_path = tmp_path / "instances_val2017.json"
+    annotations_path.write_text(
+        json.dumps(
+            {
+                "categories": _FAKE_CATEGORIES,
+                "annotations": [
+                    # image 4: one crowd "cat" box (excluded) and one regular
+                    # "car" box (kept).
+                    {
+                        "id": 200,
+                        "image_id": 4,
+                        "category_id": 1,
+                        "bbox": [1.0, 2.0, 3.0, 4.0],
+                        "area": 12.0,
+                        "iscrowd": 1,
+                        "segmentation": [],
+                    },
+                    {
+                        "id": 201,
+                        "image_id": 4,
+                        "category_id": 2,
+                        "bbox": [5.0, 6.0, 7.0, 8.0],
+                        "area": 56.0,
+                        "iscrowd": 0,
+                        "segmentation": [],
+                    },
+                ],
+            }
+        )
+    )
+
+    ground_truth = load_ground_truth(annotations_path)
+
+    assert ground_truth[4] == [
+        Box(category_name="car", x_min=5.0, y_min=6.0, x_max=12.0, y_max=14.0)
+    ]
+
+
 def test_load_ground_truth_omits_image_id_with_no_annotations(tmp_path: Path) -> None:
     ground_truth = load_ground_truth(_write_fake_annotations(tmp_path))
 

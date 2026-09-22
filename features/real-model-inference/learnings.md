@@ -319,3 +319,35 @@
 - Full gate after the fix: `pytest -q` → 94 passed (was 93; +1 for the new
   regression test), `ruff check .` → all checks passed, `mypy .` → success
   on all 42 source files.
+
+## Review fix — S2
+
+- `load_ground_truth` (`training/datagen/simulate/ground_truth.py`) was
+  turning every COCO `annotations` entry into a `Box` to match against,
+  including `iscrowd=1` entries. A crowd annotation is a single box drawn
+  around a whole cluster of instances (e.g. "a crowd of people"), which
+  standard COCO evaluation excludes from per-instance matching — a
+  detector's normal per-object boxes essentially never hit IoU ≥ 0.5
+  against one, so leaving them in silently deflated accuracy on ~8% of
+  val2017 images for both models alike (a wash in relative terms, but wrong
+  in absolute terms and wrong per the intent behind "each ground-truth
+  box").
+- Fix: `if entry.get("iscrowd", 0) == 1: continue` at the top of the
+  `annotations` loop, before the `image_id`/`bbox` extraction — skips
+  building a `Box` for that entry entirely, so it's absent from both the
+  per-image list and any downstream matching. `.get(..., 0)` treats a
+  missing `iscrowd` field as not-crowd, matching real COCO files (the field
+  is always present in the real annotations file, but synthetic/fixture
+  JSON in tests doesn't have to include it).
+- Verified against the real file
+  (`training/data/coco/annotations/instances_val2017.json`): 36,781 total
+  annotation entries, 446 flagged `iscrowd=1`, 36,335 remain after the
+  filter — exactly the count the finding predicted, dropped 1:1.
+- New regression test:
+  `test_load_ground_truth_excludes_crowd_annotations` in
+  `training/tests/datagen/simulate/test_ground_truth.py` — one image with a
+  crowd-flagged "cat" box and a regular "car" box; asserts only the "car"
+  `Box` survives for that image.
+- Full gate after the fix: `pytest -q` → 95 passed (was 94; +1 for the new
+  test), `ruff check .` → all checks passed, `mypy .` → success on all 42
+  source files.

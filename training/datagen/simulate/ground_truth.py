@@ -36,7 +36,8 @@ def load_ground_truth(annotations_path: Path) -> dict[int, list[Box]]:
     Returns a `dict` mapping `image_id` to that image's list of ground-truth
     `Box`es. An `image_id` with no matching `annotations` entries is simply
     absent from the returned dict — the caller treats a missing key as "zero
-    ground-truth boxes for this frame".
+    ground-truth boxes for this frame". Crowd annotations (`iscrowd=1`) are
+    excluded, matching standard COCO evaluation convention.
 
     Raises `FileNotFoundError` if `annotations_path` doesn't exist, or
     `ValueError` if it exists but isn't valid JSON or doesn't have
@@ -94,6 +95,8 @@ def load_ground_truth(annotations_path: Path) -> dict[int, list[Box]]:
 
     ground_truth: dict[int, list[Box]] = {}
     for entry in annotations:
+        if entry.get("iscrowd", 0) == 1:
+            continue
         image_id = entry["image_id"]
         x, y, width, height = entry["bbox"]
         box = Box(

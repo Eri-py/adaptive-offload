@@ -26,7 +26,9 @@ hand-picked formulas.
   annotations file's `annotations` array, matched to the frame via
   `image_id`): for each ground-truth box, check whether any same-class
   predicted box matches it at IoU ≥ 0.5; accuracy is the fraction of
-  ground-truth boxes matched. A frame with zero ground-truth boxes needs a
+  ground-truth boxes matched. Crowd-flagged annotations (`iscrowd=1`) are
+  excluded from ground truth, matching standard COCO evaluation convention.
+  A frame with zero ground-truth boxes needs a
   defined accuracy value (see Open Questions).
 - `network_bandwidth_mbps`/`network_latency_ms`/`network_packet_loss_pct`
   (offload) and `device_load_pct` (local) continue to add synthetic latency
