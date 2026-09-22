@@ -65,7 +65,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/tests/datagen/cli/test_run_simulation.py` (every `run_simulation` call passes `ground_truth={}`)
 - **Issue:** The `ground_truth.get(record.image_id, [])` lookup (`run_simulation.py:~301`) is never exercised with real data. If it used `file_name` instead, or dropped the boxes, every test would still pass and every real frame would silently score 1.0. This is exactly the kind of research-output corruption the testing bar asks tests to catch.
 - **Fix:** Add one test with a non-empty `ground_truth` dict for some pool `image_id`s. Use a fake whose returned accuracy depends on `len(ground_truth_boxes)`, or that records the boxes it received. Assert that the persisted `model_inference.accuracy` / `simulation_results` values reflect it.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: test that ground truth reaches inference functions keyed by image_id"
 
 #### S5 — Weight files resolve against the working directory and download silently when missing
 

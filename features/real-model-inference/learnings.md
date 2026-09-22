@@ -396,3 +396,39 @@
 - Full gate: `pytest -q` → 95 passed (unchanged — no test added/removed),
   `ruff check .` → all checks passed, `mypy .` → success on all 43 source
   files (was 42; +1 for the new module).
+
+## Review fix — S4
+
+- Finding: every existing `run_simulation()` call in
+  `test_run_simulation.py` passed `ground_truth={}`, so
+  `_compute_missing_model_inference`'s `ground_truth.get(record.image_id,
+  [])` lookup (`run_simulation.py:315`) was never exercised with real data.
+  A regression swapping the key to `record.file_name`, or silently dropping
+  the boxes before the inference call, would have passed every test in the
+  suite unnoticed.
+- Fix: added `test_run_simulation_passes_correct_ground_truth_to_inference_functions`.
+  Gave three distinct pool `image_id`s (0, 1, 2) three distinct
+  ground-truth box counts (3, 0 via a deliberately absent dict entry, 1),
+  and a new fake inference function,
+  `_make_ground_truth_sensitive_inference_fn`, whose `DetectionResult.accuracy`
+  is `min(1.0, len(ground_truth_boxes) / 3.0)` — an exact, invertible
+  function of the box count it's called with (unlike the module's existing
+  `_make_fake_inference_fn`, which returns a fixed `DetectionResult`
+  regardless of input, so couldn't distinguish "got the right boxes" from
+  "got nothing"). Ran `run_simulation()` with this `ground_truth` dict and
+  fake, then queried the persisted `ModelInference` rows (keyed by
+  `file_name`, so mapped `image_id -> file_name` via the same
+  `ImageRecord`s `_write_fake_pool` returned) and asserted each of the
+  three images' `accuracy` decodes back to exactly the box count that image
+  was given.
+- Key realization while writing this: `_compute_missing_model_inference`
+  runs inference over *every* pool image on a fresh dataset, not just the
+  frames `stratified_sample` later selects for `simulation_results` — so
+  the test didn't need `frame_count` tricks to guarantee the three chosen
+  `image_id`s were covered; querying `ModelInference` directly (rather than
+  `SimulationResult`) sidesteps sampling nondeterminism entirely, per the
+  finding's own suggestion that `ModelInference` is more direct.
+- Full gate: `pytest -q` → 96 passed (was 95; +1 new test, all others
+  green), `ruff check .` → all checks passed, `mypy .` → success on all 43
+  source files (unchanged file count — only `test_run_simulation.py`
+  touched).

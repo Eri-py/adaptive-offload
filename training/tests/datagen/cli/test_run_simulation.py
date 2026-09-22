@@ -85,6 +85,38 @@ def _make_fake_inference_fn(call_count: dict[str, int] | None = None) -> RunInfe
     return run_inference
 
 
+def _make_ground_truth_sensitive_inference_fn(
+    call_count: dict[str, int] | None = None,
+) -> RunInferenceFn:
+    """A fake whose `accuracy` is an exact, invertible function of the
+    number of ground-truth boxes it's called with (`min(1.0, n / 3.0)`).
+
+    Unlike `_make_fake_inference_fn` above (fixed output regardless of
+    input), this lets a test recover exactly how many ground-truth boxes a
+    given call received by reading the persisted accuracy back -- used by
+    the S4 ground-truth-plumbing test below, which needs to prove the right
+    `image_id`'s boxes (not the wrong key's, not an empty/dropped list)
+    reached each frame's inference call.
+    """
+
+    def run_inference(image_path: Path, ground_truth_boxes: list[Box]) -> DetectionResult:
+        if call_count is not None:
+            call_count["n"] += 1
+        return DetectionResult(latency_ms=50.0, accuracy=min(1.0, len(ground_truth_boxes) / 3.0))
+
+    return run_inference
+
+
+def _make_box() -> Box:
+    """A single ground-truth box with arbitrary coordinates.
+
+    Only `len(ground_truth_boxes)` matters to
+    `_make_ground_truth_sensitive_inference_fn` above -- the coordinates
+    and category are irrelevant filler.
+    """
+    return Box(category_name="fake-category", x_min=0.0, y_min=0.0, x_max=10.0, y_max=10.0)
+
+
 def _fetch_results(engine: Engine, run_id: str) -> list[SimulationResult]:
     with Session(engine) as session:
         return (
@@ -721,3 +753,75 @@ def test_run_simulation_reuses_known_model_inference_on_second_call(
         )
     # Two rows (LOCAL, OFFLOAD) per pool image, not doubled by the second run.
     assert len(inference_rows) == POOL_SIZE * 2
+
+
+def test_run_simulation_passes_correct_ground_truth_to_inference_functions(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Review finding S4: `_compute_missing_model_inference` must look up
+    each frame's ground truth by `record.image_id`
+    (`ground_truth.get(record.image_id, [])`) and pass exactly those boxes
+    through to `run_local_inference`/`run_offload_inference` -- not
+    `record.file_name`, and not an empty/dropped list regardless of what was
+    actually given.
+
+    Gives three distinct pool images three distinct ground-truth box counts
+    (3, 0, 1 -- the zero-box one deliberately has no `ground_truth` entry at
+    all, exercising the `.get(..., [])` default path) and a fake inference
+    function whose returned `accuracy` is an exact, invertible function of
+    `len(ground_truth_boxes)`. Then checks each image's persisted
+    `model_inference.accuracy` decodes back to exactly the box count that
+    image (and only that image) was given. If the lookup used the wrong key
+    (e.g. `file_name`) or the boxes were silently dropped before reaching
+    the inference functions, every image would instead show the zero-box
+    accuracy (0.0) -- this test fails loudly in either case, unlike every
+    other test in this module, which passes `ground_truth={}` and so could
+    never catch this bug class.
+    """
+    image_records = _write_fake_pool(tmp_path)
+
+    three_box_image_id = 0
+    zero_box_image_id = 1
+    one_box_image_id = 2
+    ground_truth: dict[int, list[Box]] = {
+        three_box_image_id: [_make_box(), _make_box(), _make_box()],
+        one_box_image_id: [_make_box()],
+        # zero_box_image_id has no entry -- must default to zero boxes via
+        # `.get(record.image_id, [])`, not raise or reuse another image's.
+    }
+
+    run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_ground_truth_sensitive_inference_fn(),
+        run_offload_inference=_make_ground_truth_sensitive_inference_fn(),
+        ground_truth=ground_truth,
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+
+    file_name_by_image_id = {record.image_id: record.file_name for record in image_records}
+    with Session(postgres_engine) as session:
+        inference_rows = (
+            session.query(ModelInference).filter_by(dataset=config.DATASET_NAME).all()
+        )
+    accuracy_by_file_name = {row.file_name: row.accuracy for row in inference_rows}
+
+    for image_id, expected_box_count in (
+        (three_box_image_id, 3),
+        (zero_box_image_id, 0),
+        (one_box_image_id, 1),
+    ):
+        file_name = file_name_by_image_id[image_id]
+        expected_accuracy = min(1.0, expected_box_count / 3.0)
+        assert accuracy_by_file_name[file_name] == pytest.approx(expected_accuracy), (
+            f"image_id={image_id} (file_name={file_name!r}) expected accuracy "
+            f"{expected_accuracy} from {expected_box_count} ground-truth boxes, "
+            f"got {accuracy_by_file_name[file_name]} -- the wrong ground-truth "
+            "boxes (or none) reached this frame's inference call."
+        )
