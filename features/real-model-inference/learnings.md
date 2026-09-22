@@ -250,3 +250,40 @@
   reduced — confirmed by re-running after all edits landed). `run-simulation
   --help` also confirmed working.
   Postgres.
+
+## Review fix — B1
+
+- First-call latency inflation was real and large: measured on this machine
+  (RTX 5070) before the fix, `build_local_inference_fn()`/
+  `build_offload_inference_fn()`'s returned closure's *first* call paid for
+  `ultralytics`' lazy weight/backend init (and CUDA context setup for the
+  offload path) inside the timed wall-clock window, since nothing had
+  touched the model between `model.to(...)` and the first real
+  `model(...)` call.
+- Fix: one discarded warmup inference — `model(np.zeros((640, 640, 3),
+  dtype=np.uint8), device=..., verbose=False)` — right after `model.to(...)`
+  in both `build_local_inference_fn` and `build_offload_inference_fn`,
+  before the closure is defined/returned. This pays the one-time init cost
+  during the *builder* call (outside any per-frame timing), not during the
+  first `run_inference` call.
+- Hand-verified before/after with a real image (`000000000139.jpg`) against
+  real ground truth from `instances_val2017.json`, run through the fixed
+  code:
+  - LOCAL (CPU, yolov8n): first call 35.9 ms, second call (different image)
+    32.5 ms — both in the same tens-of-ms ballpark, no outlier.
+  - OFFLOAD (CUDA, yolov8x): first call 55.9 ms, second call 24.9 ms — also
+    both tens-of-ms, no outlier. (First slightly higher than second here,
+    plausibly image-content-dependent NMS/decode cost, not init — nowhere
+    near the ~700 ms the finding reported pre-fix.)
+  - The one-time cost didn't vanish, it moved: `build_local_inference_fn()`
+    itself took ~1.4 s and `build_offload_inference_fn()` ~1.7 s
+    (warmup inference plus model load), which is fine since builders run
+    once per simulator invocation, not once per frame.
+- No real (non-ephemeral) `model_inference` cache existed to clean up — the
+  only persisted rows anywhere were from ephemeral pytest fixtures that
+  tear themselves down — so the finding's "delete affected rows" step was
+  correctly out of scope for this fix per the task instructions.
+- Full gate re-confirmed clean after the fix: `pytest -q` → 93 passed
+  (unaffected, since the existing suite uses fake inference functions, not
+  real models), `ruff check .` → all checks passed, `mypy .` → success on
+  all 42 source files.

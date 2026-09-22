@@ -71,6 +71,11 @@ def build_local_inference_fn() -> RunInferenceFn:
     """
     model = YOLO("yolov8n.pt")
     model.to("cpu")
+    # Discard a warmup inference: the first real call otherwise pays for
+    # lazy initialisation on top of actual inference, inflating the first
+    # frame's measured latency by roughly two orders of magnitude (see
+    # review finding B1).
+    model(np.zeros((640, 640, 3), dtype=np.uint8), device="cpu", verbose=False)
 
     def run_inference(
         image_path: Path, ground_truth_boxes: list[ground_truth.Box]
@@ -97,6 +102,11 @@ def build_offload_inference_fn() -> RunInferenceFn:
     """
     model = YOLO("yolov8x.pt")
     model.to("cuda")
+    # Discard a warmup inference: the first real call otherwise pays for
+    # lazy initialisation and CUDA context setup on top of actual inference,
+    # inflating the first frame's measured latency by roughly two orders of
+    # magnitude (see review finding B1).
+    model(np.zeros((640, 640, 3), dtype=np.uint8), device="cuda", verbose=False)
 
     def run_inference(
         image_path: Path, ground_truth_boxes: list[ground_truth.Box]

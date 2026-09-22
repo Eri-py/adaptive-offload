@@ -35,7 +35,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/simulate/inference.py:72-82` (also `:98-106`)
 - **Issue:** The wall-clock window around the first `model(...)` call also covers one-time lazy initialisation (and CUDA context setup for the offload model). I measured the same image at 708.9 ms local / 705.5 ms offload cold, and 15.2 ms / 17.4 ms warm, which is about 46x. `_compute_missing_model_inference` persists that value, and `store_model_inference` never overwrites an existing row. So the first uncovered frame of every invocation (in sorted val2017 order, `000000000139.jpg`) keeps a latency roughly 700 ms too high in the cache for good. Every future run that samples that frame gets distorted latencies and possibly a flipped label. The learnings file noticed the warmup but treated it as harmless.
 - **Fix:** In each builder, after `model.to(...)`, run one warmup inference that is thrown away before returning the closure. A small dummy array is enough, for example `model(np.zeros((640, 640, 3), dtype=np.uint8), device=..., verbose=False)`. If a real run has already filled the cache, delete the affected `model_inference` rows.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1: discard model warmup before caching real inference latency"
 
 ## Suggestions
 
