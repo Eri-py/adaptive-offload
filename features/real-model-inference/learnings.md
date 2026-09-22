@@ -31,3 +31,17 @@
   language carefully before pattern-matching a sibling module's convention wholesale.
 - `ruff`'s line-length limit in `training/` is 100 chars (not the more common 88/120) —
   a single-line multi-kwarg `Box(...)` assertion tripped `E501`; had to wrap it.
+
+## Task 3
+
+- `score_accuracy`/`_iou` are pure and only depend on `ground_truth.Box`, so no DB or
+  fixture setup was needed for tests — plain module-level `Box` constants sufficed.
+- Picking IoU test fixtures by exact fraction (rather than "clearly high"/"clearly
+  low") makes the below-threshold and custom-threshold tests self-documenting: two
+  10x10 boxes offset by (5, 5) give intersection 25 / union 175 = IoU ≈ 0.143, which
+  is below the default 0.5 threshold but above a relaxed 0.1 one — one fixture pair
+  covers both the "doesn't match by default" and "does match with a lower threshold"
+  cases with a comment stating the exact number instead of a vague description.
+- No surprises versus Task 2's setup: same venv activation (`source ../.venv/bin/activate`
+  from `training/`), same ruff (100-char line length) and mypy (`strict = true`)
+  config applied cleanly with no adjustments needed.

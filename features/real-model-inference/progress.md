@@ -13,10 +13,10 @@
 - Notes: 9/9 tests pass, ruff/mypy clean. Smoke-tested against real annotations file: 4952/5000 images have ground truth (48 have none, a known COCO val2017 quirk).
 
 ## Task 3 — Real-inference core types and IoU-based accuracy scoring
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 12:43:02
+- Completed: 2026-09-22 12:44:34
+- Notes: 7 new tests, full suite 88/88 pass, ruff/mypy clean.
 
 ## Task 4 — Condition-driven latency overhead (replaces `stub_inference`)
 - Status: not started
