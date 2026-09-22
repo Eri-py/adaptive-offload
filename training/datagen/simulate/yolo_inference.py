@@ -27,6 +27,7 @@ import numpy as np
 from ultralytics import YOLO  # type: ignore[attr-defined]
 from ultralytics.engine.results import Results
 
+from datagen import config
 from datagen.simulate import ground_truth
 from datagen.simulate.inference import DetectionResult, RunInferenceFn, score_accuracy
 
@@ -38,8 +39,16 @@ def build_local_inference_fn() -> RunInferenceFn:
     itself (not `ultralytics`' own reported `speed['inference']`), so the
     measurement reflects this simulator's actual observed per-frame cost
     end-to-end, the same way a real on-device caller would experience it.
+
+    Raises `FileNotFoundError` if the weights aren't at
+    `config.LOCAL_MODEL_WEIGHTS_PATH`. `ultralytics`'s `YOLO(...)` will
+    otherwise silently download a fresh copy there instead of failing — it
+    matches on the file's basename against its list of known asset names
+    regardless of whether the given path is missing, so a fixed path alone
+    isn't enough to make a missing file fail clearly.
     """
-    model = YOLO("yolov8n.pt")
+    _require_weights_file(config.LOCAL_MODEL_WEIGHTS_PATH)
+    model = YOLO(config.LOCAL_MODEL_WEIGHTS_PATH)
     model.to("cpu")
     # Discard a warmup inference: the first real call otherwise pays for
     # lazy initialisation on top of actual inference, inflating the first
@@ -69,8 +78,13 @@ def build_offload_inference_fn() -> RunInferenceFn:
     Same shape as `build_local_inference_fn`, but the extra-large model on
     `device="cuda"`. No CUDA-availability fallback — this simulator assumes a
     real GPU is present, per the feature's approach and key decisions.
+
+    Raises `FileNotFoundError` if the weights aren't at
+    `config.OFFLOAD_MODEL_WEIGHTS_PATH` — see `build_local_inference_fn` for
+    why this check is needed even with a fixed path.
     """
-    model = YOLO("yolov8x.pt")
+    _require_weights_file(config.OFFLOAD_MODEL_WEIGHTS_PATH)
+    model = YOLO(config.OFFLOAD_MODEL_WEIGHTS_PATH)
     model.to("cuda")
     # Discard a warmup inference: the first real call otherwise pays for
     # lazy initialisation and CUDA context setup on top of actual inference,
@@ -90,6 +104,24 @@ def build_offload_inference_fn() -> RunInferenceFn:
         return DetectionResult(latency_ms=latency_ms, accuracy=accuracy)
 
     return run_inference
+
+
+def _require_weights_file(weights_path: Path) -> None:
+    """Fail fast with a clear error if `weights_path` isn't an existing file.
+
+    `ultralytics`'s `YOLO(...)` resolves its `model` argument by basename
+    against a list of known official asset names (e.g. `yolov8n.pt`), not by
+    whether the given path looks like a path — so passing a fixed but
+    missing path still triggers a silent multi-hundred-MB download to that
+    path rather than an error. Checking existence ourselves first keeps this
+    simulator's "never fetches data itself" guarantee.
+    """
+    if not weights_path.is_file():
+        raise FileNotFoundError(
+            f"Model weights not found at {weights_path}. Place the real "
+            "YOLO weights file there before running the simulator — "
+            "run-simulation does not download weights itself."
+        )
 
 
 def _to_boxes(result: Results) -> list[ground_truth.Box]:

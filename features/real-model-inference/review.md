@@ -72,7 +72,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/simulate/inference.py:72`, `:98`
 - **Issue:** `YOLO("yolov8n.pt")` looks for the file in the working directory. If you run `run-simulation` from the repo root, or anywhere other than `training/`, it silently downloads about 136 MB of weights into that directory. That cuts against the guideline "`run-simulation` never fetches data itself … fails clearly rather than trying to top up anything missing". It also means the weights actually used can vary with where the command was run from.
 - **Fix:** Resolve the weights from a fixed location (e.g. `Path(__file__).resolve().parents[2] / "yolov8n.pt"`, or `config` constants). Optionally fail with a clear message if the file is missing, instead of downloading it.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S5: resolve YOLO weights from a fixed path, fail clearly if missing"
 
 #### S6 — Cached inference rows don't record which weights produced them
 

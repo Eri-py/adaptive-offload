@@ -432,3 +432,54 @@
   green), `ruff check .` → all checks passed, `mypy .` → success on all 43
   source files (unchanged file count — only `test_run_simulation.py`
   touched).
+
+## Review fix — S5
+
+- Confirmed empirically (not just from reading source) that `ultralytics`'s
+  `YOLO(...)` auto-downloads even when given a full, non-relative path: the
+  download decision in `ultralytics.utils.downloads.attempt_download_asset`
+  is made by checking the path's *basename* against a hardcoded list of
+  known official asset names (`GITHUB_ASSETS_NAMES`), not by whether the
+  string "looks like" a bare model name vs. a path. Both `"yolov8n.pt"` and
+  `"yolov8x.pt"` are in that list. So `Path("/tmp/nowhere/yolov8n.pt")`
+  missing on disk still triggers `safe_download(..., file=<that full
+  path>)` — it just downloads to the (now-fixed) full path instead of
+  wherever cwd happened to be. Fixing the path alone (per the finding's
+  first suggested fix) is therefore *not* sufficient to stop the silent
+  download; an explicit existence check before constructing `YOLO(...)` is
+  required too. Proved this with `unittest.mock.patch` on
+  `ultralytics.utils.downloads.safe_download` to observe the call without
+  letting an actual download run — see the S5 fix commit/PR discussion for
+  the repro script shape if this needs re-verifying against a future
+  `ultralytics` version.
+- Added `LOCAL_MODEL_WEIGHTS_PATH`/`OFFLOAD_MODEL_WEIGHTS_PATH` to
+  `datagen/config.py`, resolved via `Path(__file__).resolve().parents[1]`
+  (config.py lives at `training/datagen/config.py`, weights at
+  `training/yolov8n.pt`/`training/yolov8x.pt`, one level up from
+  `datagen/`) — same fixed-location-regardless-of-cwd pattern as this
+  repo's other `Path(__file__).resolve()`-based lookups
+  (`relabel_run.py`/`preview_sample.py`/`run_simulation.py`'s `.env`
+  loading). Note: the finding's suggestion that `config.py` already had a
+  `DATASET_DIR`/`ANNOTATIONS_PATH`/`IMAGES_DIR` precedent to mirror turned
+  out not to match the current codebase — those names don't exist anywhere
+  in `training/`; `images_dir`/`annotations_path` are CLI args, not config
+  constants. Followed the general style of `config.py` (uppercase module
+  constant + explanatory comment) instead of a literal nonexistent
+  precedent.
+- `yolo_inference.py`'s two builders now call a shared `_require_weights_file`
+  helper (fail-fast `FileNotFoundError` naming the expected path, styled
+  after `sourcing/image_source.py`'s `load_image_index`/`resolve_image_path`
+  error messages) before constructing `YOLO(...)`, so a missing weights file
+  fails clearly instead of downloading.
+- Hand-verified the actual regression: running
+  `build_local_inference_fn()` from the **repo root** (not `training/`) now
+  loads correctly via the fixed path — before this fix it would have looked
+  for `yolov8n.pt` relative to the repo root and either failed or
+  downloaded there. Also verified the fail-fast path directly by
+  monkeypatching `config.LOCAL_MODEL_WEIGHTS_PATH` to a nonexistent path
+  and confirming `FileNotFoundError` is raised with no download attempted.
+- Full gate after this fix: `pytest -q` → 96 passed (no new tests were
+  needed — this finding was a robustness fix to model-loading plumbing that
+  the existing suite doesn't exercise against real weight files; verified
+  by hand instead, per the task instructions), `ruff check .` → all checks
+  passed, `mypy .` → success on all 43 source files.
