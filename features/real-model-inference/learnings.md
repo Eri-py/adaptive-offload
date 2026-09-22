@@ -180,3 +180,73 @@
   it); and an empty/unknown dataset returning `{}`. All 11 tests in
   `test_persistence.py` (3 new + 8 pre-existing) pass against real ephemeral
   Postgres.
+
+## Task 7
+
+- The broken `stub_inference` import was the only thing blocking test
+  collection for the whole `training/` suite (as Task 6's note above
+  confirmed) — fixing it in `run_simulation.py` alone was enough to bring the
+  full `pytest -q` back from "fails to collect" to "93 passed", no other file
+  needed touching.
+- `_compute_missing_model_inference` reuses `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE`
+  as instructed, but that has a side effect worth flagging for anyone reading
+  test output: because the constant is a shared module attribute (not
+  captured per-function at def time), monkeypatching it in a test affects
+  *both* the complexity-scoring loop and the model-inference loop's flush
+  cadence at once. `test_complexity_scoring_logs_progress_every_batch`
+  originally asserted on *all* `INFO`-level log records unfiltered by
+  message; once `_compute_missing_model_inference`'s own "Computed inference
+  for X/Y images." progress lines started firing at the same cadence, that
+  assertion broke (8 messages instead of the expected 4). Fixed by filtering
+  `progress_messages` to only messages starting with `"Scored"` — keeps the
+  test scoped to what it's actually named/documented to check (the
+  complexity-scoring loop's own progress logging) rather than accidentally
+  asserting on a second loop's unrelated log lines.
+- `test_run_simulation_creates_expected_rows_with_full_linkage`'s
+  `call_count["n"] == POOL_SIZE` assertion on the shared `resolve_image` fake
+  broke the same way, for a different reason: every pool image that's new to
+  *both* caches now gets `resolve_image` called on it twice — once by the
+  complexity-scoring loop, once by `_compute_missing_model_inference` — since
+  each loop independently needs the resolved path for its own work (scoring
+  vs. running inference) and neither shares its resolution with the other.
+  Updated the assertion to `POOL_SIZE * 2`. This is expected/correct
+  behavior per the task's design (each loop calls `resolve_image` itself),
+  not a bug — `resolve_image` is a cheap local path lookup, not an expensive
+  I/O op worth caching across loops for this.
+- A parameter literally named `ground_truth` (shadowing the module import
+  `from datagen.simulate import ground_truth, inference`) works fine both at
+  runtime and under `mypy --strict`, given `from __future__ import
+  annotations`: the annotation `ground_truth: dict[int, list[ground_truth.Box]]`
+  resolves `ground_truth.Box` against the *module* in the enclosing scope
+  (annotations are deferred strings, evaluated by mypy against the module's
+  global namespace), while the function *body* only ever needs the parameter
+  (the dict), never the module — no actual name collision in practice. Used
+  this for both `run_simulation`'s and `_compute_missing_model_inference`'s
+  new `ground_truth` parameter, matching the plan's specified parameter name
+  exactly rather than renaming it to dodge the shadow.
+- `_compute_missing_model_inference` recomputes *both* `Label.LOCAL` and
+  `Label.OFFLOAD` for a file even if only one of the two is missing from the
+  cache (per the task's explicit instruction) — `store_model_inference`'s
+  existing per-`(file_name, model_path)` dedup silently no-ops the
+  already-cached one on insert, so this never double-persists, it just
+  costs one redundant inference call in the (expected to be rare) partial-
+  cache case. Not optimized further since the task called this out
+  explicitly as the intended shape.
+- New tests: `test_condition_never_changes_accuracy_for_a_given_frame` groups
+  `simulation_results` rows by `frame_id` and asserts each frame's
+  `local_accuracy`/`offload_accuracy` form a single-element set across all
+  `CONDITION_VECTOR_COUNT` sampled conditions for that frame, while also
+  asserting latency actually *does* vary (guards against a vacuously-passing
+  fake). `test_run_simulation_reuses_known_model_inference_on_second_call`
+  mirrors the existing complexity-cache-reuse test's shape: runs
+  `run_simulation()` twice against the same pool with call-counting
+  `run_local_inference`/`run_offload_inference` fakes, and asserts the second
+  run's fakes are called zero times, plus that `model_inference` row count
+  stays at `POOL_SIZE * 2` (not doubled) after the second run.
+- Full gate confirmed clean: `pytest -q` → 93 passed (91 pre-existing incl. 2
+  fixed above, + 2 new), `ruff check .` → all checks passed, `mypy .` →
+  success on all 42 source files (the Task 4-6 note's single pre-existing
+  `import-not-found` error at `run_simulation.py:57` is gone, not just
+  reduced — confirmed by re-running after all edits landed). `run-simulation
+  --help` also confirmed working.
+  Postgres.

@@ -37,10 +37,10 @@
 - Notes: 11/11 scoped tests pass (real Postgres), ruff clean, mypy has exactly the 1 expected pre-existing error.
 
 ## Task 7 — Wire real inference into `run_simulation`'s orchestration
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 14:20:25
+- Completed: 2026-09-22 14:27:22
+- Notes: Full suite 93/93 pass, ruff clean, mypy fully clean (stub_inference import error from Tasks 4-6 now resolved). run-simulation --help confirmed working. Both new acceptance-criteria tests (condition-invariant accuracy, cross-run model-inference cache reuse) verified individually.
 
 ## Task 8 — Regression test run
 - Status: not started

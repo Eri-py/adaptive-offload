@@ -16,13 +16,15 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from common.models import SceneComplexity, SimulationResult, SimulationRun
+from common.models import ModelInference, SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from datagen import config, presets
 from datagen.cli import run_simulation as run_simulation_module
 from datagen.cli.run_simulation import _require_images_dir, run_simulation
+from datagen.simulate.ground_truth import Box
+from datagen.simulate.inference import DetectionResult, RunInferenceFn
 from datagen.sourcing.image_source import ImageRecord
 
 POOL_SIZE = 20
@@ -65,6 +67,24 @@ def _make_resolve_image(tmp_path: Path, call_count: dict[str, int]) -> Callable[
     return resolve_image
 
 
+def _make_fake_inference_fn(call_count: dict[str, int] | None = None) -> RunInferenceFn:
+    """A small, fast, deterministic stand-in for a real YOLO inference closure.
+
+    Returns a fixed `DetectionResult` regardless of the image path or
+    ground-truth boxes given -- no real model, no real inference. When
+    `call_count` is given, increments `call_count["n"]` on every call, so
+    tests can assert on how many times (or how few) the fake was invoked --
+    mirrors `_make_resolve_image`'s call-counting shape above.
+    """
+
+    def run_inference(image_path: Path, ground_truth_boxes: list[Box]) -> DetectionResult:
+        if call_count is not None:
+            call_count["n"] += 1
+        return DetectionResult(latency_ms=50.0, accuracy=0.8)
+
+    return run_inference
+
+
 def _fetch_results(engine: Engine, run_id: str) -> list[SimulationResult]:
     with Session(engine) as session:
         return (
@@ -100,6 +120,9 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
         PRESET_NAME,
         image_records=image_records,
         resolve_image=resolve_image,
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -108,8 +131,10 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
     )
 
     assert run_id
-    # Every pool image is new the first time, so every one gets resolved.
-    assert call_count["n"] == POOL_SIZE
+    # Every pool image is new the first time, so every one gets resolved
+    # twice: once by the complexity-scoring loop, once by the
+    # model-inference loop (`_compute_missing_model_inference`).
+    assert call_count["n"] == POOL_SIZE * 2
 
     with Session(postgres_engine) as session:
         run = session.get(SimulationRun, run_id)
@@ -168,6 +193,9 @@ def test_run_simulation_stores_rows_under_caller_supplied_dataset(
         PRESET_NAME,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -201,6 +229,9 @@ def test_run_simulation_is_reproducible_and_reuses_known_complexity(
         PRESET_NAME,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, first_call_count),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -214,6 +245,9 @@ def test_run_simulation_is_reproducible_and_reuses_known_complexity(
         PRESET_NAME,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, second_call_count),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -289,6 +323,9 @@ def test_complexity_scoring_flushes_to_postgres_in_batches(
         PRESET_NAME,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -328,6 +365,9 @@ def test_complexity_scoring_logs_progress_every_batch(
             PRESET_NAME,
             image_records=image_records,
             resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            run_local_inference=_make_fake_inference_fn(),
+            run_offload_inference=_make_fake_inference_fn(),
+            ground_truth={},
             frame_count=FRAME_COUNT,
             condition_vector_count=CONDITION_VECTOR_COUNT,
             bucket_count=BUCKET_COUNT,
@@ -335,8 +375,15 @@ def test_complexity_scoring_logs_progress_every_batch(
             lambda_value=LAMBDA_VALUE,
         )
 
+    # Filtered to the complexity-scoring loop's own "Scored ..." messages --
+    # the model-inference loop (`_compute_missing_model_inference`) logs its
+    # own "Computed inference for ..." progress lines at the same batch
+    # cadence (it reuses the same monkeypatched constant), which is this
+    # test's own module-level concern, not this one's.
     progress_messages = [
-        record.getMessage() for record in caplog.records if record.levelno == logging.INFO
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.INFO and record.getMessage().startswith("Scored")
     ]
     # POOL_SIZE=20 at batch_size=6 flushes as 6, 6, 6, 2 (same cadence as the
     # S2 flush-batching test above), so progress is reported 4 times, each
@@ -377,6 +424,9 @@ def test_run_simulation_never_conflates_two_different_preset_runs(
         baseline_preset,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=CONDITION_VECTOR_COUNT,
         bucket_count=BUCKET_COUNT,
@@ -392,6 +442,9 @@ def test_run_simulation_never_conflates_two_different_preset_runs(
         stress_preset,
         image_records=image_records,
         resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
         frame_count=FRAME_COUNT,
         condition_vector_count=stress_condition_vector_count,
         bucket_count=BUCKET_COUNT,
@@ -460,6 +513,9 @@ def test_run_simulation_warns_when_sample_comes_back_short(
             PRESET_NAME,
             image_records=image_records,
             resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            run_local_inference=_make_fake_inference_fn(),
+            run_offload_inference=_make_fake_inference_fn(),
+            ground_truth={},
             frame_count=requested_frame_count,
             condition_vector_count=CONDITION_VECTOR_COUNT,
             bucket_count=BUCKET_COUNT,
@@ -489,6 +545,9 @@ def test_run_simulation_does_not_warn_when_sample_meets_target(
             PRESET_NAME,
             image_records=image_records,
             resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            run_local_inference=_make_fake_inference_fn(),
+            run_offload_inference=_make_fake_inference_fn(),
+            ground_truth={},
             frame_count=FRAME_COUNT,
             condition_vector_count=CONDITION_VECTOR_COUNT,
             bucket_count=BUCKET_COUNT,
@@ -498,3 +557,117 @@ def test_run_simulation_does_not_warn_when_sample_meets_target(
 
     warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
     assert warnings == []
+
+
+def test_condition_never_changes_accuracy_for_a_given_frame(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Spec acceptance criterion: for a given frame, every `simulation_results`
+    row across all sampled conditions carries the same `local_accuracy`/
+    `offload_accuracy` -- accuracy comes from real IoU-based scoring on the
+    frame alone, and `apply_condition_overhead` never touches it, only
+    latency. Latency is allowed (expected, given the fixed-`DetectionResult`
+    fake plus `apply_condition_overhead`'s condition-driven overhead) to
+    differ across conditions.
+    """
+    image_records = _write_fake_pool(tmp_path)
+
+    run_id = run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+
+    results = _fetch_results(postgres_engine, run_id)
+    results_by_frame: dict[str, list[SimulationResult]] = {}
+    for row in results:
+        results_by_frame.setdefault(row.frame_id, []).append(row)
+
+    assert len(results_by_frame) == FRAME_COUNT
+    for frame_id, frame_rows in results_by_frame.items():
+        assert len(frame_rows) == CONDITION_VECTOR_COUNT
+        local_accuracies = {row.local_accuracy for row in frame_rows}
+        offload_accuracies = {row.offload_accuracy for row in frame_rows}
+        assert len(local_accuracies) == 1, (
+            f"frame {frame_id!r} has varying local_accuracy across conditions: "
+            f"{[row.local_accuracy for row in frame_rows]}"
+        )
+        assert len(offload_accuracies) == 1, (
+            f"frame {frame_id!r} has varying offload_accuracy across conditions: "
+            f"{[row.offload_accuracy for row in frame_rows]}"
+        )
+        # Latency, unlike accuracy, is allowed to vary across conditions --
+        # asserting it actually does (rather than merely allowing it) guards
+        # against a degenerate fake that would make this test vacuous.
+        local_latencies = {row.local_latency_ms for row in frame_rows}
+        offload_latencies = {row.offload_latency_ms for row in frame_rows}
+        assert len(local_latencies) > 1 or len(offload_latencies) > 1
+
+
+def test_run_simulation_reuses_known_model_inference_on_second_call(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Mirrors `test_run_simulation_is_reproducible_and_reuses_known_complexity`'s
+    pattern for `model_inference`: a second `run_simulation()` call against
+    the same dataset/pool must not re-run real inference for any frame
+    already covered by both `Label.LOCAL` and `Label.OFFLOAD` in Postgres.
+    """
+    image_records = _write_fake_pool(tmp_path)
+
+    first_local_call_count = {"n": 0}
+    first_offload_call_count = {"n": 0}
+    run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(first_local_call_count),
+        run_offload_inference=_make_fake_inference_fn(first_offload_call_count),
+        ground_truth={},
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+    # Every pool image is new the first time, so both fakes are called once
+    # per image in the pool.
+    assert first_local_call_count["n"] == POOL_SIZE
+    assert first_offload_call_count["n"] == POOL_SIZE
+
+    second_local_call_count = {"n": 0}
+    second_offload_call_count = {"n": 0}
+    run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(second_local_call_count),
+        run_offload_inference=_make_fake_inference_fn(second_offload_call_count),
+        ground_truth={},
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+    # The second run must not recompute inference for any already-known
+    # image -- neither fake should be called at all.
+    assert second_local_call_count["n"] == 0
+    assert second_offload_call_count["n"] == 0
+
+    with Session(postgres_engine) as session:
+        inference_rows = (
+            session.query(ModelInference).filter_by(dataset=config.DATASET_NAME).all()
+        )
+    # Two rows (LOCAL, OFFLOAD) per pool image, not doubled by the second run.
+    assert len(inference_rows) == POOL_SIZE * 2
