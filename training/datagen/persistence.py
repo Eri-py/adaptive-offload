@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from common.models import Label, SceneComplexity, SimulationResult, SimulationRun
+from common.models import Label, ModelInference, SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
+
+from datagen.simulate.inference import DetectionResult
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,65 @@ def store_complexity_scores(engine: Engine, dataset: str, scores: dict[str, floa
             SceneComplexity(dataset=dataset, file_name=file_name, scene_complexity=score)
             for file_name, score in scores.items()
             if file_name not in known_file_names
+        ]
+        session.add_all(new_rows)
+        session.commit()
+
+
+def get_known_model_inference(
+    engine: Engine, dataset: str
+) -> dict[str, dict[Label, DetectionResult]]:
+    """Read all cached `model_inference` rows for `dataset`.
+
+    Returns `{file_name: {model_path: DetectionResult(...)}}` — a
+    `file_name` key is present only for whichever `Label` values actually
+    have a persisted row for it, so a file may map to just one of the two
+    paths rather than necessarily both. Ordered by `file_name` — same
+    determinism reasoning as `get_known_complexity`.
+    """
+    with Session(engine) as session:
+        rows = session.execute(
+            select(ModelInference)
+            .where(ModelInference.dataset == dataset)
+            .order_by(ModelInference.file_name)
+        ).scalars()
+        results: dict[str, dict[Label, DetectionResult]] = {}
+        for row in rows:
+            results.setdefault(row.file_name, {})[row.model_path] = DetectionResult(
+                latency_ms=row.latency_ms, accuracy=row.accuracy
+            )
+        return results
+
+
+def store_model_inference(
+    engine: Engine, dataset: str, results: dict[str, dict[Label, DetectionResult]]
+) -> None:
+    """Insert new `model_inference` rows, skipping `(file_name, model_path)` pairs already present.
+
+    Mirrors `store_complexity_scores`'s already-known-check shape, but keyed
+    on the two-column `(file_name, model_path)` pair rather than a single
+    column, since a `model_inference` row's identity within a dataset also
+    depends on which model produced it.
+    """
+    with Session(engine) as session:
+        known_pairs = set(
+            session.execute(
+                select(ModelInference.file_name, ModelInference.model_path).where(
+                    ModelInference.dataset == dataset
+                )
+            ).all()
+        )
+        new_rows = [
+            ModelInference(
+                dataset=dataset,
+                file_name=file_name,
+                model_path=model_path,
+                latency_ms=result.latency_ms,
+                accuracy=result.accuracy,
+            )
+            for file_name, by_model in results.items()
+            for model_path, result in by_model.items()
+            if (file_name, model_path) not in known_pairs
         ]
         session.add_all(new_rows)
         session.commit()

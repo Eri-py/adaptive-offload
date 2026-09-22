@@ -31,10 +31,10 @@
 - Notes: Real YOLOv8n(CPU)/YOLOv8x(GPU) inference confirmed working — hand-smoke-tested by both the subagent and independently by the orchestrator (matching results on the same image). ultralytics 8.4.159 added; no mypy override needed (fully typed). Orchestrator added `*.pt` to .gitignore after the subagent flagged that downloaded weight files (yolov8n.pt 6.5MB, yolov8x.pt 137MB) landed untracked in training/. Scoped tests 28/28 pass, ruff clean, mypy has exactly the 1 expected pre-existing error (run_simulation.py's broken stub_inference import, Task 7's job).
 
 ## Task 6 — Persistence functions for the model-inference cache
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 14:18:30
+- Completed: 2026-09-22 14:20:11
+- Notes: 11/11 scoped tests pass (real Postgres), ruff clean, mypy has exactly the 1 expected pre-existing error.
 
 ## Task 7 — Wire real inference into `run_simulation`'s orchestration
 - Status: not started

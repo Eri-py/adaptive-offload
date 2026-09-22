@@ -14,10 +14,13 @@ from datagen.persistence import (
     RunConfig,
     create_run,
     get_known_complexity,
+    get_known_model_inference,
     get_run_results,
     store_complexity_scores,
+    store_model_inference,
     store_results,
 )
+from datagen.simulate.inference import DetectionResult
 
 DATASET = "coco_val2017"
 
@@ -56,6 +59,55 @@ def test_get_known_complexity_is_scoped_to_dataset(postgres_engine: Engine) -> N
 
     assert get_known_complexity(postgres_engine, DATASET) == {"000000000139.jpg": 0.37}
     assert get_known_complexity(postgres_engine, "some_other_dataset") == {"img1.jpg": 0.5}
+
+
+def test_store_and_get_known_model_inference_round_trips(postgres_engine: Engine) -> None:
+    results = {
+        "000000000139.jpg": {
+            Label.LOCAL: DetectionResult(latency_ms=42.0, accuracy=0.75),
+            Label.OFFLOAD: DetectionResult(latency_ms=120.0, accuracy=0.91),
+        }
+    }
+    store_model_inference(postgres_engine, DATASET, results)
+
+    fetched = get_known_model_inference(postgres_engine, DATASET)
+
+    assert fetched == results
+
+
+def test_store_model_inference_skips_already_known_pairs(postgres_engine: Engine) -> None:
+    store_model_inference(
+        postgres_engine,
+        DATASET,
+        {"000000000139.jpg": {Label.LOCAL: DetectionResult(latency_ms=42.0, accuracy=0.75)}},
+    )
+
+    # Re-storing the same (file_name, model_path) pair with different values
+    # must not overwrite it (and must not raise on the primary-key
+    # collision); a genuinely new pair on the same file still gets inserted.
+    store_model_inference(
+        postgres_engine,
+        DATASET,
+        {
+            "000000000139.jpg": {
+                Label.LOCAL: DetectionResult(latency_ms=999.0, accuracy=0.01),
+                Label.OFFLOAD: DetectionResult(latency_ms=120.0, accuracy=0.91),
+            }
+        },
+    )
+
+    fetched = get_known_model_inference(postgres_engine, DATASET)
+
+    assert fetched == {
+        "000000000139.jpg": {
+            Label.LOCAL: DetectionResult(latency_ms=42.0, accuracy=0.75),
+            Label.OFFLOAD: DetectionResult(latency_ms=120.0, accuracy=0.91),
+        }
+    }
+
+
+def test_get_known_model_inference_is_empty_for_unknown_dataset(postgres_engine: Engine) -> None:
+    assert get_known_model_inference(postgres_engine, "no_such_dataset") == {}
 
 
 def test_create_run_and_store_results_round_trips_with_fk_linkage(

@@ -150,3 +150,33 @@
   with the `.to()` call but harmless — kept both since the task's practical
   guidance explicitly showed the per-call `device=` form and it costs nothing
   to be explicit at the call site too.
+
+## Task 6
+
+- `get_known_model_inference`/`store_model_inference` follow `get_known_complexity`/
+  `store_complexity_scores`'s shape exactly, just keyed on the composite
+  `(file_name, model_path)` pair instead of `file_name` alone: the already-known
+  check selects both `ModelInference.file_name` and `ModelInference.model_path`
+  columns and builds a `set` of the resulting `Row` tuples — `Row` (SQLAlchemy's
+  `select(...).all()` row type) compares equal to a plain Python tuple, so
+  `(file_name, model_path) not in known_pairs` works directly with no need to
+  convert each `Row` to a tuple first.
+- `persistence.py` now imports `DetectionResult` from `datagen.simulate.inference`
+  — the first cross-import from `persistence.py` into `datagen.simulate`. No
+  circular-import issue: `inference.py` doesn't import `persistence`.
+- Verified the task's stated pre-existing-breakage boundary still holds exactly
+  as scoped: `ruff check .` is fully clean (after fixing one new `E501` from an
+  over-100-char one-line docstring, wrapped into a multi-line docstring instead),
+  and `mypy .` reports exactly the same single pre-existing `import-not-found`
+  error at `datagen/cli/run_simulation.py:57` (the deleted `stub_inference`
+  module) — nothing new introduced by this task's changes. Used the scoped test
+  path `pytest tests/datagen/test_persistence.py -v` per the task's instruction,
+  not a bare `pytest`, since the full suite still fails to collect due to that
+  same known `run_simulation.py` import (Task 7's job, untouched here).
+- Test coverage added: round-trip storing both `Label` values for one file and
+  reading them back nested correctly; skip-already-known behavior (re-storing an
+  existing `(file_name, model_path)` pair with different values doesn't overwrite
+  it, while a genuinely new pair on the same file still gets inserted alongside
+  it); and an empty/unknown dataset returning `{}`. All 11 tests in
+  `test_persistence.py` (3 new + 8 pre-existing) pass against real ephemeral
+  Postgres.
