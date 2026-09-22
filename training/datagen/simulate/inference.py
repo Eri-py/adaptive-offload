@@ -4,15 +4,35 @@
 produces (real measured latency, real measured accuracy). `score_accuracy`
 is the pure IoU-based scoring function that turns a model's predicted boxes
 plus a frame's ground-truth boxes into an accuracy value — independent of
-which model produced the predictions. A later task adds the real
-YOLO-model-running pieces on top of this.
+which model produced the predictions. `apply_condition_overhead` adds
+synthetic condition-driven latency overhead (device load, bandwidth, network
+latency, packet loss) on top of a real measured base latency, now that a
+real base latency exists; it does not touch accuracy at all, since accuracy
+now comes from real IoU-based scoring rather than a synthetic model. A later
+task adds the real YOLO-model-running pieces on top of this.
 """
 
 from __future__ import annotations
 
 from typing import NamedTuple
 
+import numpy as np
+
+from datagen.config import (
+    LOCAL_LATENCY_DEVICE_LOAD_COEFFICIENT_MS,
+    LOCAL_LATENCY_NOISE_STD_MS,
+    OFFLOAD_LATENCY_BANDWIDTH_COEFFICIENT_MS,
+    OFFLOAD_LATENCY_NETWORK_LATENCY_COEFFICIENT,
+    OFFLOAD_LATENCY_NOISE_STD_MS,
+    OFFLOAD_LATENCY_PACKET_LOSS_PENALTY_COEFFICIENT_MS,
+)
 from datagen.simulate import ground_truth
+
+# Condition-vector field order, matching `conditions.sample_condition_vectors`.
+_BANDWIDTH_INDEX = 0
+_NETWORK_LATENCY_INDEX = 1
+_PACKET_LOSS_INDEX = 2
+_DEVICE_LOAD_INDEX = 3
 
 
 class DetectionResult(NamedTuple):
@@ -20,6 +40,60 @@ class DetectionResult(NamedTuple):
 
     latency_ms: float
     accuracy: float
+
+
+def apply_condition_overhead(
+    condition: tuple[float, float, float, float],
+    local_base: DetectionResult,
+    offload_base: DetectionResult,
+    seed: int,
+) -> tuple[float, float, float, float]:
+    """Add synthetic condition-driven latency overhead to real base latencies.
+
+    `condition` is `(bandwidth_mbps, network_latency_ms, packet_loss_pct,
+    device_load_pct)`, matching `conditions.sample_condition_vectors`'s
+    output order. `local_base`/`offload_base` are each path's real measured
+    `DetectionResult` (real base latency, real IoU-scored accuracy) for one
+    frame, independent of condition. Latency noise is independent Gaussian
+    noise drawn from a `seed`-derived RNG, in a fixed draw order, so the same
+    `(condition, local_base, offload_base, seed)` always returns identical
+    values and varying `seed` alone changes only the noise draws.
+
+    Returns `(local_latency_ms, local_accuracy, offload_latency_ms,
+    offload_accuracy)`. Accuracy is passed through unchanged from
+    `local_base`/`offload_base` — condition never modifies accuracy, since
+    accuracy is now real measured IoU-based scoring rather than a synthetic
+    model.
+    """
+    bandwidth_mbps = condition[_BANDWIDTH_INDEX]
+    network_latency_ms = condition[_NETWORK_LATENCY_INDEX]
+    packet_loss_pct = condition[_PACKET_LOSS_INDEX]
+    device_load_pct = condition[_DEVICE_LOAD_INDEX]
+
+    rng = np.random.default_rng(seed)
+    local_latency_noise = rng.normal(0.0, LOCAL_LATENCY_NOISE_STD_MS)
+    offload_latency_noise = rng.normal(0.0, OFFLOAD_LATENCY_NOISE_STD_MS)
+
+    local_latency_ms = (
+        local_base.latency_ms
+        + LOCAL_LATENCY_DEVICE_LOAD_COEFFICIENT_MS * device_load_pct
+        + local_latency_noise
+    )
+
+    offload_latency_ms = (
+        offload_base.latency_ms
+        + OFFLOAD_LATENCY_BANDWIDTH_COEFFICIENT_MS / bandwidth_mbps
+        + OFFLOAD_LATENCY_NETWORK_LATENCY_COEFFICIENT * network_latency_ms
+        + OFFLOAD_LATENCY_PACKET_LOSS_PENALTY_COEFFICIENT_MS * packet_loss_pct
+        + offload_latency_noise
+    )
+
+    return (
+        float(local_latency_ms),
+        local_base.accuracy,
+        float(offload_latency_ms),
+        offload_base.accuracy,
+    )
 
 
 def score_accuracy(

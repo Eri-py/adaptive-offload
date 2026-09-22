@@ -19,10 +19,10 @@
 - Notes: 7 new tests, full suite 88/88 pass, ruff/mypy clean.
 
 ## Task 4 — Condition-driven latency overhead (replaces `stub_inference`)
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 12:44:45
+- Completed: 2026-09-22 12:47:58
+- Notes: 28/28 scoped tests pass, ruff clean. mypy has exactly 1 expected error (run_simulation.py's still-live stub_inference import — Task 7's job). Full suite pytest currently INTERRUPTS entirely (not just skips one file) on that same import error — deferring full-suite runs to Task 7/8, using scoped paths for Tasks 5-6 verification instead.
 
 ## Task 5 — Real YOLO-backed inference builders
 - Status: not started

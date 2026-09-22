@@ -45,3 +45,33 @@
 - No surprises versus Task 2's setup: same venv activation (`source ../.venv/bin/activate`
   from `training/`), same ruff (100-char line length) and mypy (`strict = true`)
   config applied cleanly with no adjustments needed.
+
+## Task 4
+
+- `stub_inference`'s draw order was `local_latency_noise, offload_latency_noise,
+  local_accuracy_noise, offload_accuracy_noise`. Since `apply_condition_overhead` drops
+  accuracy noise entirely, its draw order (`local_latency_noise, offload_latency_noise`)
+  is a prefix of the old order — same `rng.normal` calls in the same sequence for the
+  two draws that survive, so seed-derived latency noise values are bit-identical to what
+  `stub_inference` would have produced for the same seed, condition, and base latency.
+  Not required by the task, but worth knowing if anyone compares old vs. new latency
+  distributions.
+- Left an explicit deliberate gap in the grep sweep: `training/datagen/cli/run_simulation.py`
+  (live `from datagen.simulate.stub_inference import stub_inference` import) and
+  `training/datagen/simulate/labeling.py` (a docstring comment naming `stub_inference`)
+  both still reference the deleted module by name — both out of this task's `Files` list,
+  both Task 7's job to rewire. Confirmed via `mypy` and `pytest` (full suite, not just the
+  scoped `tests/datagen/simulate/` directory) that this produces exactly one failure point:
+  `tests/datagen/cli/test_run_simulation.py` fails to collect
+  (`ModuleNotFoundError: No module named 'datagen.simulate.stub_inference'`), and `mypy .`
+  reports exactly one `import-not-found` error, both pointing at
+  `datagen/cli/run_simulation.py:57`. Nothing else in the full suite is affected — worth
+  the orchestrator double-checking this stays a single, expected, localized failure when
+  Task 7 lands, rather than spreading.
+- Reworded my own new `apply_condition_overhead` docstring to avoid literally saying
+  "`stub_inference`" (used "the old formula" instead), so the `grep -rn "stub_inference"
+  training/` sweep's only non-`egg-info` hits are the two known out-of-scope files above —
+  makes it obvious at a glance that nothing *I* touched still references the deleted name.
+- `training/training.egg-info/SOURCES.txt` (a build artifact, not source) also still lists
+  `datagen/simulate/stub_inference.py`; harmless and regenerated on next build, not worth
+  touching.
