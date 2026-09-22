@@ -287,3 +287,35 @@
   (unaffected, since the existing suite uses fake inference functions, not
   real models), `ruff check .` → all checks passed, `mypy .` → success on
   all 42 source files.
+
+## Review fix — S1
+
+- `all_complexity` in `run_simulation` accumulates from `get_known_complexity`
+  (every persisted `scene_complexity` row for the dataset name, which can
+  span a wider or different pool than the current invocation's
+  `image_records`) plus any newly scored images from the current pool. It
+  was passed straight into `stratified_sample`, so a stale/wider history
+  under the same `--dataset` could hand back a frame with no matching
+  `all_model_inference` entry — a bare `KeyError` at
+  `all_model_inference[frame_id][Label.LOCAL]`, after the `simulation_runs`
+  row had already been created.
+- Fix: build `pool_file_names = {record.file_name for record in
+  image_records}` and filter `all_complexity` down to just those names
+  (`pool_complexity`) before calling `stratified_sample`. This is correct
+  behavior unconditionally — sampling should only ever draw from the
+  current pool — not just a guard against the mismatch case, so no
+  fail-early/error-message branch was needed.
+- Regression test
+  (`test_run_simulation_excludes_out_of_pool_frames_from_sampling`) seeds an
+  extra `SceneComplexity` row directly via a `Session(postgres_engine)`
+  block (mirroring how other tests in this file seed data directly) for a
+  file name never in `_write_fake_pool`'s pool, under the same
+  `config.DATASET_NAME` the default-dataset test runs use, with a
+  mid-range `scene_complexity` value (0.5) so it would be a plausible pick
+  if the filter were missing rather than one `stratified_sample` would have
+  skipped anyway. Asserts `run_simulation()` completes normally and that
+  the out-of-pool file name never appears among the persisted
+  `simulation_results.frame_id` values.
+- Full gate after the fix: `pytest -q` → 94 passed (was 93; +1 for the new
+  regression test), `ruff check .` → all checks passed, `mypy .` → success
+  on all 42 source files.

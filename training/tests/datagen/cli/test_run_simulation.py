@@ -396,6 +396,56 @@ def test_complexity_scoring_logs_progress_every_batch(
     ]
 
 
+def test_run_simulation_excludes_out_of_pool_frames_from_sampling(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    """Review finding S1: `scene_complexity` can hold rows for frames outside
+    the current pool (e.g. a wider or different image set scored under the
+    same `--dataset` name in an earlier run). Sampling must never draw one of
+    those in -- it has no `model_inference` entry, which used to raise a bare
+    `KeyError` after the run row was already created. Seeds an extra
+    `scene_complexity` row for a file name that is not part of this test's
+    fake pool, under the same dataset the run below uses, and asserts the run
+    both completes and never persists that file name into
+    `simulation_results`.
+    """
+    image_records = _write_fake_pool(tmp_path)
+    out_of_pool_file_name = "not_in_pool.jpg"
+
+    with Session(postgres_engine) as session:
+        session.add(
+            SceneComplexity(
+                dataset=config.DATASET_NAME,
+                file_name=out_of_pool_file_name,
+                # A mid-range value, not an extreme outlier -- so if the
+                # filter were missing, this row would be a plausible pick
+                # rather than one `stratified_sample` would skip anyway.
+                scene_complexity=0.5,
+            )
+        )
+        session.commit()
+
+    run_id = run_simulation(
+        postgres_engine,
+        PRESET_NAME,
+        image_records=image_records,
+        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+        run_local_inference=_make_fake_inference_fn(),
+        run_offload_inference=_make_fake_inference_fn(),
+        ground_truth={},
+        frame_count=FRAME_COUNT,
+        condition_vector_count=CONDITION_VECTOR_COUNT,
+        bucket_count=BUCKET_COUNT,
+        seed=SEED,
+        lambda_value=LAMBDA_VALUE,
+    )
+
+    results = _fetch_results(postgres_engine, run_id)
+    assert len(results) == FRAME_COUNT * CONDITION_VECTOR_COUNT
+    sampled_frame_ids = {row.frame_id for row in results}
+    assert out_of_pool_file_name not in sampled_frame_ids
+
+
 def _expected_condition_ranges(preset_name: str) -> dict[str, list[float]]:
     preset = presets.PRESETS[preset_name]
     return {

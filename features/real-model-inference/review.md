@@ -44,7 +44,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/cli/run_simulation.py:181-183`, `:218-219`
 - **Issue:** `stratified_sample` draws from `all_complexity`, which holds *every* `scene_complexity` row for the dataset in the DB plus the current pool. Inference results exist only for the current `image_records` plus the cached `model_inference` rows. If complexity was scored for a larger or different pool under the same `--dataset` name, a sampled frame has no inference entry. Examples: an earlier `score-complexity` run over full val2017, followed by `run-simulation` with a subset annotations file. `all_model_inference[frame_id]` then raises `KeyError` after the run row is already created. Under the old stub this was harmless because it never needed the image.
 - **Fix:** Pass `stratified_sample` only the complexities of frames that have both labels in `all_model_inference`, and filter to the current pool, e.g. `{f: c for f, c in all_complexity.items() if f in pool_names}`. Or fail early with a clear message naming the mismatch. Add a test that seeds `scene_complexity` with an extra file not in the pool.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: guard sampling against frames with no cached inference"
 
 #### S2 — COCO `iscrowd=1` regions are counted as ground-truth boxes to match
 

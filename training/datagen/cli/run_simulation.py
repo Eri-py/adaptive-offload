@@ -178,8 +178,22 @@ def run_simulation(
         run_offload_inference,
     )
 
+    # `all_complexity` can hold `scene_complexity` rows for frames outside
+    # this invocation's pool — e.g. an earlier `score-complexity`/
+    # `run-simulation` run over a larger or different image set stored under
+    # the same `--dataset` name. Sampling must never draw one of those: it
+    # has no corresponding `all_model_inference` entry, which would raise a
+    # bare `KeyError` below once the run row already exists. Restrict to the
+    # current pool's file names before sampling so this can't happen,
+    # regardless of what else `scene_complexity` holds for this dataset.
+    pool_file_names = {record.file_name for record in image_records}
+    pool_complexity = {
+        file_name: score
+        for file_name, score in all_complexity.items()
+        if file_name in pool_file_names
+    }
     sampled_frames = stratified_sample(
-        all_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
+        pool_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
     )
     if len(sampled_frames) < resolved_frame_count:
         logger.warning(
