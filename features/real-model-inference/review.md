@@ -102,7 +102,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/simulate/labeling.py:3`
 - **Issue:** The docstring still says "Consumes the four `stub_inference` outputs". Task 4 left this for Task 7, which never picked it up, so the plan's `grep` success criterion fails.
 - **Fix:** Reword it to "the four per-row latency/accuracy values from `inference.apply_condition_overhead`".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: fix stale stub_inference reference in labeling.py"
 
 #### N4 — A partial cache hit re-runs both models and diverges from the persisted value
 
