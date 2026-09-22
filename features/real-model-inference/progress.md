@@ -7,10 +7,10 @@
 - Notes: 1/1 test passes, ruff/mypy clean, verified `label` enum type created exactly once across migration chain.
 
 ## Task 2 — Ground-truth parsing module
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 12:40:33
+- Completed: 2026-09-22 12:42:50
+- Notes: 9/9 tests pass, ruff/mypy clean. Smoke-tested against real annotations file: 4952/5000 images have ground truth (48 have none, a known COCO val2017 quirk).
 
 ## Task 3 — Real-inference core types and IoU-based accuracy scoring
 - Status: not started

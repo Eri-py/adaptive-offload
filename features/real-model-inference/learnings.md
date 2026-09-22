@@ -15,3 +15,19 @@
   touching Postgres at all — same pattern migration `0001` used.
 - Composite PKs with an enum member as one of the parts round-trip fine through
   `session.get(Model, (a, b, Label.X))`.
+
+## Task 2
+
+- Initially over-built `load_ground_truth`'s per-entry validation (checking each
+  `categories`/`annotations` entry's shape, plus a `category_id`-not-found check),
+  mirroring `image_source.load_image_index`'s per-entry checks too literally. The
+  plan explicitly scopes this out ("Full five-case shape validation ... is not
+  required here — file-level and key-level validation is sufficient"), and adding
+  it anyway means untested code paths (extra `ValueError` branches with no test
+  coverage) — trimmed back to only file-existence, JSON-validity, and top-level
+  `annotations`/`categories` key-presence-and-list-type checks, letting a genuinely
+  malformed entry surface as a plain `KeyError`/`ValueError` from tuple-unpacking
+  instead of a custom message. Worth reading a task's explicit scope-narrowing
+  language carefully before pattern-matching a sibling module's convention wholesale.
+- `ruff`'s line-length limit in `training/` is 100 chars (not the more common 88/120) —
+  a single-line multi-kwarg `Box(...)` assertion tripped `E501`; had to wrap it.
