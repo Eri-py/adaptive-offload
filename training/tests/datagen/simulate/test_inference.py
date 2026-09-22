@@ -2,6 +2,8 @@
 condition-driven latency-overhead pieces.
 """
 
+import pytest
+
 from datagen.simulate.ground_truth import Box
 from datagen.simulate.inference import DetectionResult, apply_condition_overhead, score_accuracy
 
@@ -88,7 +90,7 @@ def test_apply_condition_overhead_adds_on_top_of_real_base_latency() -> None:
         zero_condition, higher_local_base, _OFFLOAD_BASE, _SEED
     )
 
-    assert higher_local_latency_ms - base_local_latency_ms == 20.0
+    assert higher_local_latency_ms - base_local_latency_ms == pytest.approx(20.0)
 
 
 _CAT_BOX = Box(category_name="cat", x_min=0.0, y_min=0.0, x_max=10.0, y_max=10.0)

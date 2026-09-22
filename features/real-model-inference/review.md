@@ -109,14 +109,14 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/cli/run_simulation.py:301-306`
 - **Issue:** If a file has only one label cached, both models run again. The new value for the already-cached label is used in memory for this run, but the insert skips it, so the DB keeps the old value. This run's `simulation_results` then don't match what a rerun with the same seed would produce. Rare, since it needs a crash between two per-label inserts that are committed together.
 - **Fix:** Run only the missing label(s), and take the known one from `known_model_inference`.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — needs an unlikely partial-commit state, and the effect is limited to one run's rows for one frame.
 
 #### N5 — Exact float equality in a test
 
 - **File:** `training/tests/datagen/simulate/test_inference.py:91`
 - **Issue:** `higher - base == 20.0` depends on floating-point arithmetic cancelling exactly. It passes today with seed 42 but is fragile.
 - **Fix:** Use `pytest.approx(20.0)`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N5: use pytest.approx for float comparison in test_inference.py"
 
 ## Tests
 
