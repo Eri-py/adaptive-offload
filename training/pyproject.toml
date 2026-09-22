@@ -22,9 +22,6 @@ dependencies = [
 [project.scripts]
 run-simulation = "datagen.cli.run_simulation:main"
 score-complexity = "datagen.cli.score_complexity:main"
-preview-sample = "datagen.cli.preview_sample:main"
-preview-conditions = "datagen.cli.preview_conditions:main"
-relabel-run = "datagen.cli.relabel_run:main"
 
 [project.optional-dependencies]
 dev = [
