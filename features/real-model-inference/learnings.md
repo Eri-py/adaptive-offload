@@ -75,3 +75,78 @@
 - `training/training.egg-info/SOURCES.txt` (a build artifact, not source) also still lists
   `datagen/simulate/stub_inference.py`; harmless and regenerated on next build, not worth
   touching.
+
+## Task 5
+
+- `pip install ultralytics` pulls in `torch` + a full CUDA/cuDNN wheel set (cublas,
+  cudnn, cufft, cusparse, cusolver, curand, nvjitlink, nvtx, ...) as transitive
+  dependencies — several GB total, took well over an hour on this connection even
+  though each individual wheel download itself wasn't slow. Not a hang; just a
+  genuinely large one-time install. Confirmed progress throughout by watching the
+  pip process's open file descriptors (`/proc/<pid>/fd`, which wheel it currently
+  had open for unpacking) and `/proc/<pid>/io`'s `write_bytes` counter climbing,
+  rather than assuming a stall from silent stdout (pip's progress bar doesn't
+  flush cleanly through a piped/redirected `tail`).
+- `ultralytics` (8.4.159, resolved from `ultralytics>=8.0`) ships its own
+  `py.typed` marker and is fully inline-typed — the task's own guidance to
+  "add `ultralytics.*` to `ignore_missing_imports` if it ships without inline
+  type stubs" turned out not to apply; I added the override first, then verified
+  ultralytics actually has `py.typed` and removed it again since it was a no-op
+  at best and would have silently masked real type errors in this dependency
+  going forward. Two real (non-missing-stub) mypy findings came from this instead:
+  1. `from ultralytics import YOLO` triggers `[attr-defined]` under `strict`'s
+     implied `no_implicit_reexport`, because `ultralytics/__init__.py` builds its
+     `__all__` via `*MODELS` (a runtime tuple unpack) rather than a literal string
+     list/tuple — mypy's re-export check doesn't statically evaluate that, even
+     though `"YOLO"` genuinely ends up in `__all__` at runtime. Resolved with a
+     narrow `# type: ignore[attr-defined]` plus a comment explaining why (not a
+     missing-stub issue).
+  2. `Model.__call__`'s real return type is
+     `Iterator[Results | Tensor] | list[Results] | list[Tensor]` (a single
+     non-overloaded signature covering both `stream=True` and `stream=False`),
+     so `results[0]` doesn't type-check directly. Since this module never passes
+     `stream=True`, `cast(list[Results], model(...))` narrows it correctly and
+     documents the assumption inline. Also needed `assert boxes is not None`
+     in `_to_boxes` since `Results.boxes` is typed `Boxes | None` (only `None`
+     for non-detection tasks — segmentation/pose/classification — which this
+     module never loads).
+- Chose wall-clock `time.perf_counter()` around the `model(...)` call itself
+  over `results[0].speed['inference']` for `latency_ms`: the task's own guidance
+  flagged this as a judgment call, and wall-clock is the more honest "what would
+  a real caller actually observe" number for this simulator's purposes (it also
+  includes ultralytics' own pre/post-processing inside the call, not just the
+  raw forward pass, which is closer to what a real on-device or offload caller
+  would experience end-to-end).
+- Hand-smoke-tested `build_local_inference_fn()`/`build_offload_inference_fn()`
+  against 3 real `val2017` images with real ground truth loaded via
+  `ground_truth.load_ground_truth`, picking images_id 289343, 61471, 472375
+  (each has 3-4 real ground-truth boxes, categories including dog/person/bench/
+  bicycle/bottle/toilet/motorcycle/cup). Observed real `DetectionResult`s:
+  - image 289343 (gt: dog, person, bench, bicycle) — local: latency 701.8ms,
+    accuracy 0.75; offload: latency 686.7ms, accuracy 1.0. (This first call's
+    latency for both paths includes one-time CUDA-context/lazy-init warmup
+    inside the wall-clock window — not representative of steady-state
+    per-frame cost; see the next two images.)
+  - image 61471 (gt: dog, bottle, toilet) — local: latency 29.0ms, accuracy
+    0.667; offload: latency 23.5ms, accuracy 1.0.
+  - image 472375 (gt: dog, motorcycle, cup, cup) — local: latency 27.6ms,
+    accuracy 0.25; offload: latency 21.5ms, accuracy 0.5.
+  All six results have `latency_ms > 0` and `accuracy` in `[0, 1]`, and accuracy
+  values genuinely vary (0.25 to 1.0, never uniformly 0.0 or uniformly 1.0
+  across every image) — confirms COCO category names from `model.names` really
+  do match `ground_truth.Box.category_name` values for `score_accuracy`'s
+  name-based matching, not silently broken/always-zero or always-perfect
+  matching.
+- `YOLO("yolov8n.pt")`/`YOLO("yolov8x.pt")` download their pretrained weights
+  into the current working directory (`training/yolov8n.pt`, `training/yolov8x.pt`
+  in this run, ~6.2MB and ~130.5MB respectively) on first use, not into a
+  `~/.cache`-style location as the task's practical guidance suggested — worth
+  the orchestrator/Task 7 deciding whether these should be `.gitignore`d (they
+  currently aren't tracked since nothing has `git add`ed them, but nothing
+  currently prevents an accidental `git add .` from picking them up).
+- `model.to(device)` (called once, at builder time, before the closure is
+  returned) works cleanly for both `"cpu"` and `"cuda"`; also passing `device=`
+  again per-call (`model(image_path, device="cpu"/"cuda", ...)`) is redundant
+  with the `.to()` call but harmless — kept both since the task's practical
+  guidance explicitly showed the per-call `device=` form and it costs nothing
+  to be explicit at the call site too.

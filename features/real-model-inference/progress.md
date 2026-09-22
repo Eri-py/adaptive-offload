@@ -25,10 +25,10 @@
 - Notes: 28/28 scoped tests pass, ruff clean. mypy has exactly 1 expected error (run_simulation.py's still-live stub_inference import — Task 7's job). Full suite pytest currently INTERRUPTS entirely (not just skips one file) on that same import error — deferring full-suite runs to Task 7/8, using scoped paths for Tasks 5-6 verification instead.
 
 ## Task 5 — Real YOLO-backed inference builders
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 12:48:22
+- Completed: 2026-09-22 14:18:13
+- Notes: Real YOLOv8n(CPU)/YOLOv8x(GPU) inference confirmed working — hand-smoke-tested by both the subagent and independently by the orchestrator (matching results on the same image). ultralytics 8.4.159 added; no mypy override needed (fully typed). Orchestrator added `*.pt` to .gitignore after the subagent flagged that downloaded weight files (yolov8n.pt 6.5MB, yolov8x.pt 137MB) landed untracked in training/. Scoped tests 28/28 pass, ruff clean, mypy has exactly the 1 expected pre-existing error (run_simulation.py's broken stub_inference import, Task 7's job).
 
 ## Task 6 — Persistence functions for the model-inference cache
 - Status: not started
