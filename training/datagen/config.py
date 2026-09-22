@@ -33,11 +33,8 @@ DEFAULT_LAMBDA = 0.3
 DATASET_NAME = "coco_val2017"
 
 # --- Model weight locations --------------------------------------------------
-# Resolved relative to this file's own location (`training/datagen/config.py`,
-# one level below `training/`), not the working directory the simulator was
-# launched from — otherwise `YOLO(...)` would look for the weights wherever
-# `run-simulation` happened to be invoked from and could silently download a
-# fresh copy there instead of failing clearly.
+# Resolved relative to this file, not cwd, so a missing file fails clearly
+# instead of `YOLO(...)` silently downloading to wherever the CLI was run from.
 LOCAL_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "yolov8n.pt"
 OFFLOAD_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "yolov8x.pt"
 

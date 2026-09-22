@@ -19,11 +19,7 @@ from typing import cast
 
 import numpy as np
 
-# `ultralytics`'s top-level `__all__` builds the model names from a runtime
-# tuple (`*MODELS`) rather than a literal string list, which mypy's
-# no-implicit-reexport check (implied by `strict = true`) doesn't statically
-# recognize as an explicit re-export — hence the ignore, not a missing-stub
-# problem (the package ships a `py.typed` marker and is otherwise fully typed).
+# mypy can't see YOLO in ultralytics' runtime-built __all__ (not a missing-stub issue).
 from ultralytics import YOLO  # type: ignore[attr-defined]
 from ultralytics.engine.results import Results
 

@@ -95,7 +95,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/cli/run_simulation.py:71-81`, `run_simulation.py:221-227`, `training/datagen/simulate/inference.py:27-31`, `training/datagen/config.py:33-39`
 - **Issue:** `.claude/coding-guidelines.md` says comments should be one line, two at most, with no multi-line block comments. These are 5–11 line blocks (the flush-size comment grew from 9 to 11 lines, and the config header is 7).
 - **Fix:** Cut each to one or two lines stating the why, e.g. `# mypy can't see YOLO in ultralytics' runtime-built __all__.`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: trim multi-line comments to match the repo's comment guideline"
 
 #### N3 — Stale `stub_inference` reference left in `labeling.py`
 

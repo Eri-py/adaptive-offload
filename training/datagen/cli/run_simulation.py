@@ -68,17 +68,8 @@ from datagen.sourcing.image_source import ImageRecord
 
 logger = logging.getLogger(__name__)
 
-# How many newly-scored images/newly-computed model-inference results to
-# accumulate before flushing to Postgres in the complexity-scoring and
-# model-inference loops below. This is a crash-resilience/robustness knob,
-# not a research-relevant tunable (it never changes what gets computed or
-# persisted, only how often) — kept local here rather than in `config.py`,
-# whose tunables all affect the simulation's actual behavior/output. 200
-# keeps a worst-case loss (a crash right before a flush) to a small fraction
-# of a real-sized (thousands-of-images) image pool while still batching most
-# of the network/DB round-trip savings a straight per-image commit would
-# give up. Reused (rather than duplicated) for the model-inference loop —
-# same reasoning, same value.
+# Crash-resilience batch size for flushing new complexity/inference results to
+# Postgres — bounds work lost to a crash without losing per-image commit batching.
 COMPLEXITY_SCORE_FLUSH_BATCH_SIZE = 200
 
 
@@ -232,13 +223,8 @@ def run_simulation(
         local_base = all_model_inference[frame_id][Label.LOCAL]
         offload_base = all_model_inference[frame_id][Label.OFFLOAD]
         for condition_index, condition in enumerate(condition_vectors):
-            # A distinct-but-deterministic seed per (frame, condition) pair —
-            # `apply_condition_overhead`'s own contract only guarantees
-            # determinism for a fixed seed, so reusing one seed for every row
-            # would make every row draw identical noise. Index-derived
-            # offsets from the run's seed keep this reproducible across two
-            # runs of the same preset/config/seed/pool without needing
-            # per-row random state.
+            # Distinct-but-deterministic seed per row so rows don't draw identical
+            # noise, while staying reproducible across runs of the same seed/pool.
             row_seed = resolved_seed + frame_index * len(condition_vectors) + condition_index
             (
                 local_latency_ms,

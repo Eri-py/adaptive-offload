@@ -512,3 +512,26 @@
   exact numbers aren't expected to match run-to-run).
 - Full gate: `pytest -q` → 96 passed, `ruff check .` → all checks passed,
   `mypy .` → success on all 43 source files.
+
+## Review fix — N2
+
+- Trimmed four over-long comment blocks down to the guideline's 1-2 line
+  budget (`.claude/coding-guidelines.md`'s "Comments" section: one line,
+  under ~100 chars, two only when truly needed, explain *why* not *what*):
+  - `training/datagen/cli/run_simulation.py`, `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE`
+    comment: 11 lines → 2 lines.
+  - `training/datagen/cli/run_simulation.py`, per-(frame, condition) `row_seed`
+    comment inside `run_simulation`'s main loop: 7 lines → 2 lines.
+  - `training/datagen/simulate/yolo_inference.py`, the mypy
+    `# type: ignore[attr-defined]` comment above `from ultralytics import
+    YOLO` (this code moved here from `inference.py` under S3, after N2 was
+    originally filed against the old location): 5 lines → 1 line, closely
+    matching the finding's own suggested wording.
+  - `training/datagen/config.py`, the "Model weight locations" section
+    comment (added under S5, also after N2 was filed): 5 lines → 2 lines.
+  - Left the "Condition-driven latency-overhead coefficients" section comment
+    in `config.py` untouched — N2 doesn't reference it, and touching it would
+    be scope creep beyond this finding.
+- Pure comment-text changes; no behavior touched. Full gate: `pytest -q` → 96
+  passed, `ruff check .` → all checks passed, `mypy .` → success on all 43
+  source files.
