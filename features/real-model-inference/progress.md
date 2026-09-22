@@ -43,7 +43,7 @@
 - Notes: Full suite 93/93 pass, ruff clean, mypy fully clean (stub_inference import error from Tasks 4-6 now resolved). run-simulation --help confirmed working. Both new acceptance-criteria tests (condition-invariant accuracy, cross-run model-inference cache reuse) verified individually.
 
 ## Task 8 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-22 14:27:37
+- Completed: 2026-09-22 14:27:54
+- Notes: database/ 1/1 pass, training/ 93/93 pass, ruff/mypy clean in both packages.
