@@ -35,41 +35,9 @@ from datagen.simulate.inference import DetectionResult, RunInferenceFn, score_ac
 def build_local_inference_fn() -> RunInferenceFn:
     """Load YOLOv8n once on CPU; return a closure that runs real local inference.
 
-    The returned closure measures wall-clock latency around the model call
-    itself (not `ultralytics`' own reported `speed['inference']`), so the
-    measurement reflects this simulator's actual observed per-frame cost
-    end-to-end, the same way a real on-device caller would experience it.
-
-    Raises `FileNotFoundError` if the weights aren't at
-    `config.LOCAL_MODEL_WEIGHTS_PATH`. `ultralytics`'s `YOLO(...)` will
-    otherwise silently download a fresh copy there instead of failing — it
-    matches on the file's basename against its list of known asset names
-    regardless of whether the given path is missing, so a fixed path alone
-    isn't enough to make a missing file fail clearly.
+    See `_build_inference_fn` for the shared setup/measurement behavior.
     """
-    _require_weights_file(config.LOCAL_MODEL_WEIGHTS_PATH)
-    model = YOLO(config.LOCAL_MODEL_WEIGHTS_PATH)
-    model.to("cpu")
-    # Discard a warmup inference: the first real call otherwise pays for
-    # lazy initialisation on top of actual inference, inflating the first
-    # frame's measured latency by roughly two orders of magnitude (see
-    # review finding B1).
-    model(np.zeros((640, 640, 3), dtype=np.uint8), device="cpu", verbose=False)
-
-    def run_inference(
-        image_path: Path, ground_truth_boxes: list[ground_truth.Box]
-    ) -> DetectionResult:
-        start = time.perf_counter()
-        # `stream=False` (the default) always returns a `list[Results]`, never
-        # the `Iterator` variant `__call__`'s general signature also allows.
-        results = cast(list[Results], model(image_path, device="cpu", verbose=False))
-        latency_ms = (time.perf_counter() - start) * 1000.0
-
-        predicted_boxes = _to_boxes(results[0])
-        accuracy = score_accuracy(predicted_boxes, ground_truth_boxes)
-        return DetectionResult(latency_ms=latency_ms, accuracy=accuracy)
-
-    return run_inference
+    return _build_inference_fn(config.LOCAL_MODEL_WEIGHTS_PATH, "cpu")
 
 
 def build_offload_inference_fn() -> RunInferenceFn:
@@ -77,26 +45,46 @@ def build_offload_inference_fn() -> RunInferenceFn:
 
     Same shape as `build_local_inference_fn`, but the extra-large model on
     `device="cuda"`. No CUDA-availability fallback — this simulator assumes a
-    real GPU is present, per the feature's approach and key decisions.
-
-    Raises `FileNotFoundError` if the weights aren't at
-    `config.OFFLOAD_MODEL_WEIGHTS_PATH` — see `build_local_inference_fn` for
-    why this check is needed even with a fixed path.
+    real GPU is present, per the feature's approach and key decisions. See
+    `_build_inference_fn` for the shared setup/measurement behavior.
     """
-    _require_weights_file(config.OFFLOAD_MODEL_WEIGHTS_PATH)
-    model = YOLO(config.OFFLOAD_MODEL_WEIGHTS_PATH)
-    model.to("cuda")
-    # Discard a warmup inference: the first real call otherwise pays for
-    # lazy initialisation and CUDA context setup on top of actual inference,
-    # inflating the first frame's measured latency by roughly two orders of
-    # magnitude (see review finding B1).
-    model(np.zeros((640, 640, 3), dtype=np.uint8), device="cuda", verbose=False)
+    return _build_inference_fn(config.OFFLOAD_MODEL_WEIGHTS_PATH, "cuda")
+
+
+def _build_inference_fn(weights_path: Path, device: str) -> RunInferenceFn:
+    """Load a YOLO model once on `device`; return a closure that runs real inference.
+
+    Shared by `build_local_inference_fn` and `build_offload_inference_fn`,
+    which differ only in which weights file and device they pass here.
+
+    Raises `FileNotFoundError` if the weights aren't at `weights_path`.
+    `ultralytics`'s `YOLO(...)` will otherwise silently download a fresh copy
+    there instead of failing — it matches on the file's basename against its
+    list of known asset names regardless of whether the given path is
+    missing, so a fixed path alone isn't enough to make a missing file fail
+    clearly.
+
+    The returned closure measures wall-clock latency around the model call
+    itself (not `ultralytics`' own reported `speed['inference']`), so the
+    measurement reflects this simulator's actual observed per-frame cost
+    end-to-end, the same way a real on-device caller would experience it.
+    """
+    _require_weights_file(weights_path)
+    model = YOLO(weights_path)
+    model.to(device)
+    # Discard a warmup inference: the first real call otherwise pays for lazy
+    # initialisation (and, on GPU, CUDA context setup) on top of actual
+    # inference, inflating the first frame's measured latency by roughly two
+    # orders of magnitude (see review finding B1).
+    model(np.zeros((640, 640, 3), dtype=np.uint8), device=device, verbose=False)
 
     def run_inference(
         image_path: Path, ground_truth_boxes: list[ground_truth.Box]
     ) -> DetectionResult:
         start = time.perf_counter()
-        results = cast(list[Results], model(image_path, device="cuda", verbose=False))
+        # `stream=False` (the default) always returns a `list[Results]`, never
+        # the `Iterator` variant `__call__`'s general signature also allows.
+        results = cast(list[Results], model(image_path, device=device, verbose=False))
         latency_ms = (time.perf_counter() - start) * 1000.0
 
         predicted_boxes = _to_boxes(results[0])

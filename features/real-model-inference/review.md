@@ -79,7 +79,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `database/common/models.py:92-104`
 - **Issue:** `model_path` records only LOCAL or OFFLOAD. If the weights are ever changed (e.g. to YOLOv8s, or different confidence settings), the old rows are silently reused as if the new model had produced them. The `simulation_runs` config snapshot does not record the model either. That goes against the guideline "every simulation run logs enough to reproduce it".
 - **Fix:** Add a `model_name` column (e.g. `"yolov8n"`) to the row, or to `RunConfig`, and filter on it when reading the cache.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the weights are hardcoded and not expected to change this semester. Revisit if the model choice becomes a variable.
 
 ## Nitpicks
 
@@ -88,7 +88,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/simulate/inference.py:64-112`
 - **Issue:** `build_local_inference_fn` and `build_offload_inference_fn` differ only in the weights file and the device. Each also sets the device twice: `model.to(device)` and `device=` on every call.
 - **Fix:** Factor out a `_build_inference_fn(weights: str, device: str)` and have both public builders delegate to it. This is also the single place to add the B1 warmup.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: de-duplicate the two YOLO builder functions"
 
 #### N2 — Multi-line comments go against the comment guideline
 

@@ -483,3 +483,32 @@
   the existing suite doesn't exercise against real weight files; verified
   by hand instead, per the task instructions), `ruff check .` → all checks
   passed, `mypy .` → success on all 43 source files.
+
+## Review fix — N1
+
+- Consolidated `build_local_inference_fn`/`build_offload_inference_fn` into
+  thin one-line wrappers around a new `_build_inference_fn(weights_path:
+  Path, device: str) -> RunInferenceFn` private helper, which owns the
+  `_require_weights_file` check, `YOLO(weights_path)`, `model.to(device)`,
+  the B1 warmup call, and the `run_inference` closure definition — collapsing
+  what was ~2 copies of ~20 duplicated lines each down to one.
+- Empirically verified (rather than assumed) that the per-call `device=`
+  kwarg on `model(image_path, device=device, ...)` is *not* purely redundant
+  with the earlier `model.to(device)`: `model.to(device)` sets
+  `model.overrides["device"]`, which only acts as a *fallback* default for
+  later calls that omit `device=`. When `device=` **is** passed at call time
+  (as every call in this module does, including the warmup), it wins
+  outright — confirmed by loading a model with `.to("cuda")` then calling it
+  with `device="cpu"` and observing `model.predictor.device` resolve to
+  `cpu`, not `cuda:0`. So the current code's belief (that both calls matter)
+  holds; both were kept as-is in the consolidated helper, per the finding's
+  explicit instruction not to remove either without confirming.
+- Hand-verified both builders end-to-end against a real COCO val2017 image
+  (`000000289343.jpg`, 4 ground-truth boxes) with real weights and a real
+  GPU: `build_local_inference_fn()` → `DetectionResult(latency_ms≈29.5,
+  accuracy=0.75)`, `build_offload_inference_fn()` → `DetectionResult(
+  latency_ms≈47.6, accuracy=1.0)` — both positive latency, both accuracy in
+  `[0, 1]`, same ballpark as pre-refactor runs (this is a pure refactor, so
+  exact numbers aren't expected to match run-to-run).
+- Full gate: `pytest -q` → 96 passed, `ruff check .` → all checks passed,
+  `mypy .` → success on all 43 source files.
