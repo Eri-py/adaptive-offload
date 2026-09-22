@@ -60,7 +60,7 @@ from datagen.persistence import (
 from datagen.sampling.complexity import scene_complexity
 from datagen.sampling.conditions import sample_condition_vectors
 from datagen.sampling.sampling import stratified_sample
-from datagen.simulate import ground_truth, inference
+from datagen.simulate import ground_truth, inference, yolo_inference
 from datagen.simulate.inference import DetectionResult
 from datagen.simulate.labeling import compute_label
 from datagen.sourcing import image_source
@@ -393,8 +393,8 @@ def main() -> None:
     resolve_image = functools.partial(image_source.resolve_image_path, images_dir=args.images)
 
     # Each builder loads its YOLO model exactly once per CLI invocation.
-    run_local_inference = inference.build_local_inference_fn()
-    run_offload_inference = inference.build_offload_inference_fn()
+    run_local_inference = yolo_inference.build_local_inference_fn()
+    run_offload_inference = yolo_inference.build_offload_inference_fn()
 
     engine = get_engine()
     run_id = run_simulation(

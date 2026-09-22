@@ -58,7 +58,7 @@ Task 4's success criterion `grep -rn "stub_inference" training/` returns nothing
 - **File:** `training/datagen/persistence.py:17`, `training/datagen/simulate/inference.py:32-33`
 - **Issue:** `persistence` imports `DetectionResult` from `inference`, which imports `ultralytics` at module level. Importing `datagen.persistence` now takes about 0.9 s (measured with `-X importtime`; `ultralytics` alone is 0.73 s). It also ties `relabel_run`, `preview_sample` and every DB test to the heavy CV stack. `inference.py` also mixes three concerns: pure scoring, the overhead formula, and the YOLO builders. That goes against the guideline "one file, one concern".
 - **Fix:** Move the YOLO builders and `_to_boxes` into their own module (e.g. `simulate/yolo_inference.py`), leaving `DetectionResult`, `RunInferenceFn`, `score_accuracy` and `apply_condition_overhead` free of `ultralytics`. The simpler option is to move the `ultralytics` imports inside the builder functions.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: split real YOLO builders out of inference.py"
 
 #### S4 — No test checks that ground truth reaches the inference functions keyed by `image_id`
 

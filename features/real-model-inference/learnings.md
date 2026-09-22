@@ -351,3 +351,48 @@
 - Full gate after the fix: `pytest -q` → 95 passed (was 94; +1 for the new
   test), `ruff check .` → all checks passed, `mypy .` → success on all 42
   source files.
+
+## Review fix — S3
+
+- Finding: `persistence.py` transitively imported `ultralytics`/`torch` via
+  `from datagen.simulate.inference import DetectionResult` (`inference.py`
+  itself imported `ultralytics` at module level for the YOLO builders),
+  making `import datagen.persistence` cost ~0.9s and tying every DB test /
+  `relabel_run` / `preview_sample` invocation to the heavy CV stack.
+- Fix: split `training/datagen/simulate/inference.py` by concern. Created
+  `training/datagen/simulate/yolo_inference.py` holding
+  `build_local_inference_fn`, `build_offload_inference_fn`, and `_to_boxes`
+  (moved verbatim — no dedup of the two near-identical builders, that's a
+  separate finding N1). `inference.py` now keeps only `DetectionResult`,
+  `RunInferenceFn`, `score_accuracy`, `_iou`, and `apply_condition_overhead`
+  — no `ultralytics`/`torch` import anywhere in it. `_to_boxes` and the
+  builders import `score_accuracy`/`DetectionResult`/`RunInferenceFn` back
+  from `inference`, and `ground_truth`/`Box` from
+  `datagen.simulate.ground_truth`, same as before the split. The mypy
+  `# type: ignore[attr-defined]` comment on `from ultralytics import YOLO`
+  moved with the import into the new module.
+- `training/datagen/cli/run_simulation.py` updated: imports
+  `yolo_inference` alongside `ground_truth`/`inference`
+  (`from datagen.simulate import ground_truth, inference, yolo_inference`),
+  and `main()`'s two builder call sites now read
+  `yolo_inference.build_local_inference_fn()` /
+  `yolo_inference.build_offload_inference_fn()`. `RunInferenceFn`/
+  `DetectionResult` type references stayed on `inference` — they didn't
+  move.
+- `training/tests/datagen/simulate/test_inference.py` needed no changes —
+  it only ever tested `score_accuracy`/`apply_condition_overhead`, never
+  the builders (confirmed by reading the file; matches Task 5's original
+  plan that the real builders are hand-smoke-tested, not pytest-covered).
+- Verified: `import datagen.persistence` import time dropped from the
+  finding's measured ~0.9s to ~0.15s; `python -X importtime -c "import
+  datagen.persistence" 2>&1 | grep -i ultralytics` now returns nothing
+  (empty match, confirmed via grep's exit code 1). `from datagen.simulate
+  import yolo_inference` imports cleanly on its own. Hand-smoke-tested both
+  builders against a real val2017 image
+  (`000000000139.jpg`, 20 ground-truth boxes after crowd-filtering) with
+  CUDA available: local (YOLOv8n/CPU) latency_ms=39.09, accuracy=0.4;
+  offload (YOLOv8x/CUDA) latency_ms=56.79, accuracy=0.7 — both positive
+  latency, both accuracy in [0,1], same shape as before the split.
+- Full gate: `pytest -q` → 95 passed (unchanged — no test added/removed),
+  `ruff check .` → all checks passed, `mypy .` → success on all 43 source
+  files (was 42; +1 for the new module).
