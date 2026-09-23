@@ -21,8 +21,9 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from datagen import config, presets
-from datagen.cli import run_simulation as run_simulation_module
 from datagen.cli.run_simulation import _require_images_dir, run_simulation
+from datagen.persistence import store_complexity_scores
+from datagen.sampling.complexity import scene_complexity
 from datagen.simulate.ground_truth import Box
 from datagen.simulate.inference import DetectionResult, RunInferenceFn
 from datagen.sourcing.image_source import ImageRecord
@@ -65,6 +66,26 @@ def _make_resolve_image(tmp_path: Path, call_count: dict[str, int]) -> Callable[
         return tmp_path / file_name
 
     return resolve_image
+
+
+def _seed_complexity_scores(
+    engine: Engine, dataset: str, image_records: list[ImageRecord], tmp_path: Path
+) -> None:
+    """Persist real `scene_complexity` scores for `image_records` under `dataset`.
+
+    `run_simulation()` no longer computes complexity itself -- that's
+    `score-complexity`'s job exclusively -- so tests must seed it directly to
+    get real sampling instead of an empty pool. Scores each image via the
+    real `scene_complexity()` against the synthetic file `_write_fake_pool`
+    already wrote to `tmp_path`, mirroring what `score-complexity` would
+    persist, rather than maintaining a second, synthetic definition of
+    complexity in this test file.
+    """
+    scores = {
+        record.file_name: scene_complexity(tmp_path / record.file_name)
+        for record in image_records
+    }
+    store_complexity_scores(engine, dataset, scores)
 
 
 def _make_fake_inference_fn(call_count: dict[str, int] | None = None) -> RunInferenceFn:
@@ -144,6 +165,7 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
     call_count = {"n": 0}
     resolve_image = _make_resolve_image(tmp_path, call_count)
 
@@ -163,10 +185,10 @@ def test_run_simulation_creates_expected_rows_with_full_linkage(
     )
 
     assert run_id
-    # Every pool image is new the first time, so every one gets resolved
-    # twice: once by the complexity-scoring loop, once by the
-    # model-inference loop (`_compute_missing_model_inference`).
-    assert call_count["n"] == POOL_SIZE * 2
+    # Complexity is pre-seeded (not computed by `run_simulation()` anymore),
+    # so every pool image is only resolved once, by the model-inference loop
+    # (`_compute_missing_model_inference`).
+    assert call_count["n"] == POOL_SIZE
 
     with Session(postgres_engine) as session:
         run = session.get(SimulationRun, run_id)
@@ -219,6 +241,7 @@ def test_run_simulation_stores_rows_under_caller_supplied_dataset(
     """
     custom_dataset = "test_dataset_xyz"
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, custom_dataset, image_records, tmp_path)
 
     run_id = run_simulation(
         postgres_engine,
@@ -250,10 +273,20 @@ def test_run_simulation_stores_rows_under_caller_supplied_dataset(
         )
 
 
-def test_run_simulation_is_reproducible_and_reuses_known_complexity(
+def test_run_simulation_reads_seeded_complexity_consistently_across_calls(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:
+    """`run_simulation()` no longer computes or persists complexity itself --
+    that's `score-complexity`'s job exclusively -- so this test's original
+    premise (a second call skips recomputing already-known complexity)
+    no longer applies; there's nothing left for it to recompute. What's
+    still meaningful and worth guarding: two calls against the same
+    pre-seeded dataset both read the same `scene_complexity` rows via
+    `get_known_complexity` and produce identical sampling/results, and
+    neither call writes any additional `scene_complexity` rows.
+    """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
 
     first_call_count = {"n": 0}
     first_run_id = run_simulation(
@@ -288,8 +321,8 @@ def test_run_simulation_is_reproducible_and_reuses_known_complexity(
     )
 
     assert first_run_id != second_run_id
-    # The second run must not recompute complexity for any already-known
-    # image — no image should be resolved at all.
+    # The second run must not recompute model inference for any
+    # already-known image either -- no image should be resolved at all.
     assert second_call_count["n"] == 0
 
     with Session(postgres_engine) as session:
@@ -315,119 +348,6 @@ def test_run_simulation_is_reproducible_and_reuses_known_complexity(
         assert first_row.label == second_row.label
 
 
-def test_complexity_scoring_flushes_to_postgres_in_batches(
-    postgres_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """New complexity scores land in Postgres progressively during the scoring
-    loop, not only once after every image in the pool has been scored (review
-    finding S2) — a small batch size makes intermediate flushes observable
-    within a single test run against the `POOL_SIZE`-image fake pool.
-    """
-    batch_size = 6
-    monkeypatch.setattr(run_simulation_module, "COMPLEXITY_SCORE_FLUSH_BATCH_SIZE", batch_size)
-
-    image_records = _write_fake_pool(tmp_path)
-    # `store_complexity_scores` is imported (not defined) in run_simulation.py,
-    # so mypy's `no_implicit_reexport` (part of `strict`) treats accessing it
-    # as an attribute of that module from here as unexported.
-    real_store_complexity_scores = (
-        run_simulation_module.store_complexity_scores  # type: ignore[attr-defined]
-    )
-    call_sizes: list[int] = []
-    row_counts_after_call: list[int] = []
-
-    def spy_store_complexity_scores(
-        engine: Engine, dataset: str, scores: dict[str, float]
-    ) -> None:
-        real_store_complexity_scores(engine, dataset, scores)
-        call_sizes.append(len(scores))
-        with Session(engine) as session:
-            row_counts_after_call.append(
-                session.query(SceneComplexity).filter_by(dataset=dataset).count()
-            )
-
-    monkeypatch.setattr(
-        run_simulation_module, "store_complexity_scores", spy_store_complexity_scores
-    )
-
-    run_simulation(
-        postgres_engine,
-        PRESET_NAME,
-        image_records=image_records,
-        resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
-        run_local_inference=_make_fake_inference_fn(),
-        run_offload_inference=_make_fake_inference_fn(),
-        ground_truth={},
-        frame_count=FRAME_COUNT,
-        condition_vector_count=CONDITION_VECTOR_COUNT,
-        bucket_count=BUCKET_COUNT,
-        seed=SEED,
-        lambda_value=LAMBDA_VALUE,
-    )
-
-    # POOL_SIZE=20 at batch_size=6 flushes as 6, 6, 6, 2 — more than one call,
-    # proving the loop flushes incrementally rather than accumulating
-    # everything and calling `store_complexity_scores` exactly once at the end.
-    assert call_sizes == [6, 6, 6, 2]
-    # Each flush's resulting row count is visible in Postgres immediately
-    # (not just after the whole loop finishes), confirming partial progress
-    # is durable mid-run.
-    assert row_counts_after_call == [6, 12, 18, 20]
-
-
-def test_complexity_scoring_logs_progress_every_batch(
-    postgres_engine: Engine,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Review finding N5: the scoring loop must log a progress line every
-    flush batch, not stay silent for the whole first-run pass over the
-    image pool (previously the only output was the final `Created run <id>`
-    print at the very end -- indistinguishable from a hung process).
-    """
-    batch_size = 6
-    monkeypatch.setattr(run_simulation_module, "COMPLEXITY_SCORE_FLUSH_BATCH_SIZE", batch_size)
-
-    image_records = _write_fake_pool(tmp_path)
-
-    with caplog.at_level(logging.INFO, logger="datagen.cli.run_simulation"):
-        run_simulation(
-            postgres_engine,
-            PRESET_NAME,
-            image_records=image_records,
-            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
-            run_local_inference=_make_fake_inference_fn(),
-            run_offload_inference=_make_fake_inference_fn(),
-            ground_truth={},
-            frame_count=FRAME_COUNT,
-            condition_vector_count=CONDITION_VECTOR_COUNT,
-            bucket_count=BUCKET_COUNT,
-            seed=SEED,
-            lambda_value=LAMBDA_VALUE,
-        )
-
-    # Filtered to the complexity-scoring loop's own "Scored ..." messages --
-    # the model-inference loop (`_compute_missing_model_inference`) logs its
-    # own "Computed inference for ..." progress lines at the same batch
-    # cadence (it reuses the same monkeypatched constant), which is this
-    # test's own module-level concern, not this one's.
-    progress_messages = [
-        record.getMessage()
-        for record in caplog.records
-        if record.levelno == logging.INFO and record.getMessage().startswith("Scored")
-    ]
-    # POOL_SIZE=20 at batch_size=6 flushes as 6, 6, 6, 2 (same cadence as the
-    # S2 flush-batching test above), so progress is reported 4 times, each
-    # against the fixed POOL_SIZE denominator (nothing was previously known).
-    assert progress_messages == [
-        f"Scored 6/{POOL_SIZE} images.",
-        f"Scored 12/{POOL_SIZE} images.",
-        f"Scored 18/{POOL_SIZE} images.",
-        f"Scored 20/{POOL_SIZE} images.",
-    ]
-
-
 def test_run_simulation_excludes_out_of_pool_frames_from_sampling(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:
@@ -442,6 +362,7 @@ def test_run_simulation_excludes_out_of_pool_frames_from_sampling(
     `simulation_results`.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
     out_of_pool_file_name = "not_in_pool.jpg"
 
     with Session(postgres_engine) as session:
@@ -498,6 +419,7 @@ def test_run_simulation_never_conflates_two_different_preset_runs(
     not the other run's.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
     baseline_preset = "baseline"
     stress_preset = "network-stress"
 
@@ -584,6 +506,7 @@ def test_run_simulation_warns_when_sample_comes_back_short(
     rather than quietly persisting the short count as if it were correct.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
     # POOL_SIZE=20 split into BUCKET_COUNT=5 buckets gives 4 items per
     # bucket; requesting far more than 5x that per bucket (i.e. more than
     # POOL_SIZE total) guarantees every bucket comes up short.
@@ -620,6 +543,7 @@ def test_run_simulation_does_not_warn_when_sample_meets_target(
     short-sample warning -- the negative counterpart to the test above.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
 
     with caplog.at_level(logging.WARNING, logger="datagen.cli.run_simulation"):
         run_simulation(
@@ -641,6 +565,91 @@ def test_run_simulation_does_not_warn_when_sample_meets_target(
     assert warnings == []
 
 
+def test_run_simulation_excludes_unscored_pool_images_and_warns(
+    postgres_engine: Engine, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`run_simulation()` no longer auto-scores unscored pool images -- it
+    excludes them from sampling and logs a loud (not hard-failing) warning
+    instead. Seeds `scene_complexity` for only half the pool, confirms the
+    run still completes, confirms no unscored image ever appears as a
+    `frame_id` in the persisted results, and confirms the warning names the
+    correct missing/total counts and dataset.
+    """
+    image_records = _write_fake_pool(tmp_path)
+    scored_records = image_records[: POOL_SIZE // 2]
+    unscored_records = image_records[POOL_SIZE // 2 :]
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, scored_records, tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="datagen.cli.run_simulation"):
+        run_id = run_simulation(
+            postgres_engine,
+            PRESET_NAME,
+            image_records=image_records,
+            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            run_local_inference=_make_fake_inference_fn(),
+            run_offload_inference=_make_fake_inference_fn(),
+            ground_truth={},
+            frame_count=FRAME_COUNT,
+            condition_vector_count=CONDITION_VECTOR_COUNT,
+            bucket_count=BUCKET_COUNT,
+            seed=SEED,
+            lambda_value=LAMBDA_VALUE,
+        )
+
+    unscored_file_names = {record.file_name for record in unscored_records}
+    results = _fetch_results(postgres_engine, run_id)
+    sampled_frame_ids = {row.frame_id for row in results}
+    assert sampled_frame_ids, "expected the scored half of the pool to still yield frames"
+    assert sampled_frame_ids.isdisjoint(unscored_file_names)
+
+    coverage_warnings = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "have no scene_complexity score" in record.getMessage()
+    ]
+    assert len(coverage_warnings) == 1
+    message = coverage_warnings[0].getMessage()
+    assert str(len(unscored_records)) in message
+    assert str(POOL_SIZE) in message
+    assert config.DATASET_NAME in message
+    assert "score-complexity" in message
+
+
+def test_run_simulation_does_not_warn_about_pool_coverage_when_fully_scored(
+    postgres_engine: Engine, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Negative counterpart: when every pool image already has a
+    `scene_complexity` score, no pool-coverage warning is logged.
+    """
+    image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="datagen.cli.run_simulation"):
+        run_simulation(
+            postgres_engine,
+            PRESET_NAME,
+            image_records=image_records,
+            resolve_image=_make_resolve_image(tmp_path, {"n": 0}),
+            run_local_inference=_make_fake_inference_fn(),
+            run_offload_inference=_make_fake_inference_fn(),
+            ground_truth={},
+            frame_count=FRAME_COUNT,
+            condition_vector_count=CONDITION_VECTOR_COUNT,
+            bucket_count=BUCKET_COUNT,
+            seed=SEED,
+            lambda_value=LAMBDA_VALUE,
+        )
+
+    coverage_warnings = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING
+        and "have no scene_complexity score" in record.getMessage()
+    ]
+    assert coverage_warnings == []
+
+
 def test_condition_never_changes_accuracy_for_a_given_frame(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:
@@ -653,6 +662,7 @@ def test_condition_never_changes_accuracy_for_a_given_frame(
     differ across conditions.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
 
     run_id = run_simulation(
         postgres_engine,
@@ -704,6 +714,7 @@ def test_run_simulation_reuses_known_model_inference_on_second_call(
     already covered by both `Label.LOCAL` and `Label.OFFLOAD` in Postgres.
     """
     image_records = _write_fake_pool(tmp_path)
+    _seed_complexity_scores(postgres_engine, config.DATASET_NAME, image_records, tmp_path)
 
     first_local_call_count = {"n": 0}
     first_offload_call_count = {"n": 0}

@@ -16,15 +16,17 @@ names the dataset scene-complexity/model-inference scores get stored under
 anything over the network — both the annotations file and every image must
 already be present at the given paths; it runs the simulation against
 exactly what it's given, rather than trying to top up missing data. Builds
-the real Postgres engine from `DATABASE_URL`, scores any pool images not
-yet covered by the `scene_complexity` table for that dataset, runs real
-local/offload YOLO inference (cached per file name in `model_inference`,
-IoU-scored against real ground truth) for any pool images not yet fully
-covered, stratified-samples frames, space-fills condition vectors for the
-selected preset, crosses every frame with every condition vector (cached
-real inference plus synthetic condition-driven latency overhead + win/loss
-label), and persists one `simulation_runs` row plus one `simulation_results`
-row per (frame, condition) pair.
+the real Postgres engine from `DATABASE_URL`, reads whatever `scene_complexity`
+rows already exist for that dataset (populated separately by
+`score-complexity` — this tool no longer computes them; any pool image with
+no score is excluded from sampling and logged as a warning, not a hard
+failure), runs real local/offload YOLO inference (cached per file name in
+`model_inference`, IoU-scored against real ground truth) for any pool
+images not yet fully covered, stratified-samples frames, space-fills
+condition vectors for the selected preset, crosses every frame with every
+condition vector (cached real inference plus synthetic condition-driven
+latency overhead + win/loss label), and persists one `simulation_runs` row
+plus one `simulation_results` row per (frame, condition) pair.
 
 The CLI (`main`) is a thin wrapper around `run_simulation`, the directly
 callable core function — every real dependency (`image_records`,
@@ -53,11 +55,9 @@ from datagen.persistence import (
     create_run,
     get_known_complexity,
     get_known_model_inference,
-    store_complexity_scores,
     store_model_inference,
     store_results,
 )
-from datagen.sampling.complexity import scene_complexity
 from datagen.sampling.conditions import sample_condition_vectors
 from datagen.sampling.sampling import stratified_sample
 from datagen.simulate import ground_truth, inference, yolo_inference
@@ -107,7 +107,10 @@ def run_simulation(
     `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` default to
     `datagen.config`'s tunables when omitted, so a reduced-scale test run
     doesn't have to exercise the real 500 x 50 defaults against a tiny fake
-    pool.
+    pool. This function reads `scene_complexity` rows for `dataset` but never
+    computes them — that's `score-complexity`'s job exclusively; any pool
+    image with no existing score is excluded from sampling and logged as a
+    warning, not a hard failure.
     """
     if preset_name not in presets.PRESETS:
         raise ValueError(
@@ -128,36 +131,10 @@ def run_simulation(
     resolved_seed = seed if seed is not None else config.SEED
     resolved_lambda = lambda_value if lambda_value is not None else config.DEFAULT_LAMBDA
 
+    # `run_simulation` only reads `scene_complexity` -- it never computes or
+    # persists scores itself; that's `score-complexity`'s job exclusively.
     known_complexity = get_known_complexity(engine, resolved_dataset)
-
-    # Flushed in batches (not once at the end) so a network error, corrupt
-    # file, or interrupted run loses at most one batch's worth of scoring
-    # work instead of the whole pool — `store_complexity_scores` re-checks
-    # already-persisted file names on every call, so a resumed run picks up
-    # exactly where it left off rather than double-inserting.
     all_complexity = dict(known_complexity)
-    pending_batch: dict[str, float] = {}
-    # Total images this invocation actually needs to score (excludes ones
-    # already persisted from a prior run) -- the denominator for the
-    # progress log below, so resumed runs report progress against the
-    # remaining work, not the full pool size.
-    total_to_score = len(image_records) - len(known_complexity)
-    scored_count = 0
-    for record in image_records:
-        if record.file_name in known_complexity:
-            continue
-        image_path = resolve_image(record.file_name)
-        score = scene_complexity(image_path)
-        all_complexity[record.file_name] = score
-        pending_batch[record.file_name] = score
-        scored_count += 1
-        if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
-            store_complexity_scores(engine, resolved_dataset, pending_batch)
-            pending_batch = {}
-            logger.info("Scored %d/%d images.", scored_count, total_to_score)
-    if pending_batch:
-        store_complexity_scores(engine, resolved_dataset, pending_batch)
-        logger.info("Scored %d/%d images.", scored_count, total_to_score)
 
     all_model_inference = _compute_missing_model_inference(
         engine,
@@ -183,6 +160,23 @@ def run_simulation(
         for file_name, score in all_complexity.items()
         if file_name in pool_file_names
     }
+
+    # Nothing auto-scores an unscored pool image anymore (that's
+    # `score-complexity`'s job) -- surface the gap loudly rather than
+    # silently sampling around it, per the user's explicit direction.
+    unscored_file_names = pool_file_names - pool_complexity.keys()
+    if unscored_file_names:
+        logger.warning(
+            "\033[91m%d of %d pool images have no scene_complexity score for "
+            "dataset %r and will be excluded from sampling — run "
+            "`score-complexity --folder <images> --dataset %s` first to "
+            "cover them.\033[0m",
+            len(unscored_file_names),
+            len(pool_file_names),
+            resolved_dataset,
+            resolved_dataset,
+        )
+
     sampled_frames = stratified_sample(
         pool_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
     )
@@ -341,8 +335,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Run the data-gen simulator for one preset against a COCO-format "
-            "annotations file and images folder, storing scene-complexity "
-            "scores under the given dataset name."
+            "annotations file and images folder. Requires scene-complexity "
+            "scores to already exist under the given dataset name (see "
+            "score-complexity); any pool image missing one is excluded from "
+            "sampling and logged as a warning, not a hard failure."
         )
     )
     parser.add_argument(

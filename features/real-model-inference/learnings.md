@@ -574,3 +574,96 @@
 - Pure comment-text changes; no behavior touched. Full gate: `pytest -q` → 96
   passed, `ruff check .` → all checks passed, `mypy .` → success on all 43
   source files.
+
+## `run_simulation` no longer auto-scores complexity (step 2 of 2, after `score-complexity` got real persistence in step 1)
+
+- Removed the entire inline complexity-scoring loop from `run_simulation()`
+  in `training/datagen/cli/run_simulation.py` — it now only reads
+  `scene_complexity` via `get_known_complexity` and never writes to it;
+  `score-complexity` is the sole writer. Removed the now-unused
+  `scene_complexity`/`store_complexity_scores` imports (kept
+  `get_known_complexity`). `_compute_missing_model_inference` (the
+  model-inference loop, explicitly out of scope) still uses
+  `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE` for its own batching, so that constant
+  and its comment were left completely untouched, including the now
+  slightly-stale "complexity/inference" wording in its comment — the task's
+  explicit instruction was to keep the constant and its comment as-is if
+  still referenced elsewhere, which it is.
+- Added a red-ANSI (`\033[91m…\033[0m`) `logger.warning(...)` right after the
+  pool-filtering step (`pool_file_names - pool_complexity.keys()`), before
+  `stratified_sample` runs — states the missing/total counts, the dataset
+  name, and points at `score-complexity` as the fix. This is a *pool
+  coverage* warning, distinct from the pre-existing *short-sample* warning
+  (`"Stratified sample came back short..."`) that fires when
+  `stratified_sample` itself can't fill every bucket's share — both can fire
+  in the same run for different reasons, so new tests filter `caplog`
+  records by substring (`"have no scene_complexity score"`) rather than
+  asserting on the full warning list, to stay independent of whichever other
+  warning also fires.
+- In `training/tests/datagen/cli/test_run_simulation.py`, added a
+  `_seed_complexity_scores(engine, dataset, image_records, tmp_path)` test
+  helper that computes real `scene_complexity()` scores against the
+  synthetic images `_write_fake_pool` already writes to `tmp_path` and
+  persists them via `store_complexity_scores` — reusing the real scoring
+  function (rather than inventing a second synthetic "complexity" notion in
+  the test file) so seeded scores still vary realistically across the pool.
+  Called this helper at the top of every existing test that needs real
+  sampled frames — 9 of the file's pre-existing tests needed it (creates/
+  full-linkage, stores-under-caller-dataset, excludes-out-of-pool-frames,
+  never-conflates-two-runs, warns-when-sample-short,
+  does-not-warn-when-sample-meets-target, condition-never-changes-accuracy,
+  reuses-known-model-inference, passes-correct-ground-truth) — the last of
+  these (ground-truth plumbing) turned out not to *strictly* need it, since
+  `_compute_missing_model_inference` runs over the full `image_records` pool
+  regardless of complexity coverage and that test only asserts on
+  `model_inference` rows, not on sampled `simulation_results` — added it
+  anyway for consistency with the rest of the file.
+- Deleted `test_complexity_scoring_flushes_to_postgres_in_batches` and
+  `test_complexity_scoring_logs_progress_every_batch` outright rather than
+  adapting them — both directly exercised the now-removed inline loop
+  (monkeypatching `run_simulation_module.store_complexity_scores`, which no
+  longer exists as an attribute of that module once the import was removed,
+  and asserting on now-never-emitted `"Scored X/Y images."` log lines).
+  Their premise is gone, not just their assertions; this coverage now lives
+  entirely in `score_complexity.py`'s own tests (untouched, step 1).
+- Renamed/rewrote
+  `test_run_simulation_is_reproducible_and_reuses_known_complexity` →
+  `test_run_simulation_reads_seeded_complexity_consistently_across_calls`
+  rather than deleting it: its original premise (second call skips
+  recomputing already-known complexity) no longer applies since there's
+  nothing left to recompute, but it still meaningfully guards that two calls
+  against a pre-seeded dataset read the same `scene_complexity` rows via
+  `get_known_complexity` and produce identical results, and that neither
+  call writes additional `scene_complexity` rows (row count stays at
+  `POOL_SIZE` across both calls).
+- Added two new tests for the new behavior:
+  `test_run_simulation_excludes_unscored_pool_images_and_warns` (seeds only
+  half the pool, confirms the run completes, confirms no unscored file name
+  ever appears as a `frame_id` in `simulation_results`, confirms the
+  coverage warning's counts/dataset/`score-complexity` mention) and
+  `test_run_simulation_does_not_warn_about_pool_coverage_when_fully_scored`
+  (seeds the whole pool, confirms no coverage warning fires) — mirrors this
+  file's existing positive/negative pattern for the short-sample warning.
+- Hand-smoke-tested the real CLI: built a 5-image scratch COCO annotations
+  file (first 5 entries of the real `instances_val2017.json`, empty
+  `annotations`/`categories` lists — still points `--images` at the real
+  `training/data/coco/val2017/` folder, just trimmed the annotations list so
+  the real-YOLO model-inference pass — unrelated to this change, but always
+  runs regardless of complexity coverage — stays fast) against a
+  zero-`scene_complexity` throwaway dataset name. Confirmed: the red-ANSI
+  coverage warning fired with the correct "5 of 5" / dataset name /
+  `score-complexity` pointer, the pre-existing short-sample warning also
+  fired (0 sampled frames vs. 500 requested — expected, unrelated to this
+  change), and the CLI completed cleanly (`Created run <id>`), no crash.
+  Cleaned up afterward: deleted the 1 `simulation_runs` row and 10
+  `model_inference` rows (2 per image, LOCAL+OFFLOAD) the smoke test wrote
+  to the real database under that throwaway dataset name (0
+  `simulation_results`/`scene_complexity` rows were written, since 0 frames
+  were sampled and nothing writes complexity anymore); verified 0 rows
+  remain under that dataset name afterward.
+- `run-simulation --help` confirmed still working after the docstring/
+  argparse description rewrite.
+- Full gate: `pytest -q` → 86 passed (14 in
+  `test_run_simulation.py` — 12 pre-existing minus 2 deleted plus 2 new),
+  nothing skipped; `ruff check .` → all checks passed; `mypy .` → success on
+  37 source files.
