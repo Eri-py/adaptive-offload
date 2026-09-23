@@ -13,6 +13,45 @@
 - `alembic upgrade head --sql` from `database/` is a reliable, fully offline way to verify
   a new migration's DDL (including confirming it does *not* reissue `CREATE TYPE`) without
   touching Postgres at all — same pattern migration `0001` used.
+
+## `score-complexity` gains real Postgres persistence (prep for a later `run_simulation.py` cleanup)
+
+- `score_complexity.py`'s `main()` now mirrors `run_simulation.py`'s `main()`
+  exactly: `load_dotenv` on `Path(__file__).resolve().parent.parent.parent /
+  ".env"`, `get_engine()` from `common.db`, and reuse of
+  `persistence.get_known_complexity`/`store_complexity_scores` — no new
+  persistence logic needed, both functions already had exactly the right
+  shape. `score_folder()` itself stayed untouched and DB-free; the
+  skip-already-known filtering (`{name: score for name, score in
+  scores.items() if name not in known}`) lives entirely in `main()`, as a
+  plain dict comprehension against `score_folder`'s full return value.
+- **Testing `main()`'s DB path when the DB logic lives inline in `main()`
+  (no injectable core function, unlike `run_simulation`)**: monkeypatch the
+  module-level `get_engine` name (`datagen.cli.score_complexity.get_engine`)
+  to return the `postgres_engine` fixture, and monkeypatch `sys.argv` to
+  the CLI's actual arg list, then call `main()` directly. This exercises the
+  real argparse + real `main()` code path end-to-end against a real
+  ephemeral Postgres DB, without needing to refactor `main()` into a
+  separate testable core (the task's spec explicitly kept the DB steps
+  inline in `main()`, unlike `run_simulation.py`'s core/CLI split).
+- Confirmed the `import pytest`-avoidance note at the top of
+  `test_score_complexity.py` (inherited from `test_complexity.py`) is
+  stale — the underlying mypy/`_pytest`/numpy stub mismatch was already
+  fixed by correcting `pyproject.toml`'s `[tool.mypy] python_version` to
+  `"3.12"` (see `features/data-gen-router-loop/01-datagen-simulator/
+  learnings.md`, Task 5). `test_run_simulation.py` and `test_persistence.py`
+  already import `pytest` freely. Added `import pytest` for the new
+  DB-backed tests (`monkeypatch`, `capsys.CaptureFixture[str]`) while
+  leaving the four pre-existing pure `score_folder` tests as plain
+  `def test_...()` functions, unchanged.
+- Hand-smoke-tested the real CLI end-to-end against 3 real
+  `training/data/coco/val2017/` images copied to a scratch dir, under a
+  throwaway `--dataset test_score_complexity_smoke`: first run persisted
+  all 3 rows, an identical second run printed the same 3 lines and left the
+  row count at 3 (no duplicates), confirmed directly via a `SceneComplexity`
+  query against the real DB. Deleted all 3 rows afterward and re-queried to
+  confirm 0 remain — no smoke-test data left in the real `scene_complexity`
+  table.
 - Composite PKs with an enum member as one of the parts round-trip fine through
   `session.get(Model, (a, b, Label.X))`.
 
