@@ -35,8 +35,8 @@ DATASET_NAME = "coco_val2017"
 # --- Model weight locations --------------------------------------------------
 # Resolved relative to this file, not cwd, so a missing file fails clearly
 # instead of `YOLO(...)` silently downloading to wherever the CLI was run from.
-LOCAL_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "yolov8n.pt"
-OFFLOAD_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "yolov8x.pt"
+LOCAL_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "models" / "yolov8n.pt"
+OFFLOAD_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "models" / "yolov8x.pt"
 
 # --- Condition-driven latency-overhead coefficients -------------------------
 # Illustrative only (no real network/device measurements yet, per the spec's
