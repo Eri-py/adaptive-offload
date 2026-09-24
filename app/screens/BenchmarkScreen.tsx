@@ -49,37 +49,47 @@ export default function BenchmarkScreen(): ReactElement {
         <Text style={styles.statusText}>Idle — tap to run {BUNDLED_IMAGE_COUNT} inferences</Text>
       ) : null}
 
-      {status === 'error' ? (
+      {status === 'error' && results == null ? (
         <Text style={[styles.statusText, styles.errorText]}>
           Error: {error ?? 'Unknown error'}
         </Text>
       ) : null}
 
-      {status === 'done' && results != null ? (
-        <View style={styles.card}>
-          <Text style={styles.cardHeading}>Last result</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Mean</Text>
-            <Text style={styles.value}>{results.mean.toFixed(2)} ms</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Median</Text>
-            <Text style={styles.value}>{results.median.toFixed(2)} ms</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Min</Text>
-            <Text style={styles.value}>{results.min.toFixed(2)} ms</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Max</Text>
-            <Text style={styles.value}>{results.max.toFixed(2)} ms</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Std dev</Text>
-            <Text style={styles.value}>{results.stdev.toFixed(2)} ms</Text>
-          </View>
-        </View>
-      ) : null}
+      {results != null
+        ? results.map((delegateResult) => (
+            <View key={delegateResult.id} style={styles.card}>
+              <Text style={styles.cardHeading}>Delegate: {delegateResult.label}</Text>
+              {delegateResult.stats != null ? (
+                <>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Mean</Text>
+                    <Text style={styles.value}>{delegateResult.stats.mean.toFixed(2)} ms</Text>
+                  </View>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Median</Text>
+                    <Text style={styles.value}>{delegateResult.stats.median.toFixed(2)} ms</Text>
+                  </View>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Min</Text>
+                    <Text style={styles.value}>{delegateResult.stats.min.toFixed(2)} ms</Text>
+                  </View>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Max</Text>
+                    <Text style={styles.value}>{delegateResult.stats.max.toFixed(2)} ms</Text>
+                  </View>
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Std dev</Text>
+                    <Text style={styles.value}>{delegateResult.stats.stdev.toFixed(2)} ms</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={[styles.statusText, styles.errorText]}>
+                  Error: {delegateResult.error ?? 'Unknown error'}
+                </Text>
+              )}
+            </View>
+          ))
+        : null}
     </ScrollView>
   );
 }

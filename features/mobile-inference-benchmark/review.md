@@ -52,7 +52,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/hooks/useBenchmark.ts:72`
 - **Issue:** `loadTensorflowModel(..., [])` selects the default CPU delegate (per `Tflite.nitro.d.ts`: "If delegates is empty, the default CPU delegate will be used"). Meanwhile `app.json:14-19` sets `enableCoreMLDelegate: true`, which the plan chose "for iOS GPU acceleration". Nothing records whether CPU-only was a deliberate choice, and the screen does not say which delegate the numbers came from.
 - **Fix:** Make the delegate an explicit named constant and show it on screen (for example "Delegate: CPU"). Better still, run the benchmark once per delegate (`[]` and `['core-ml']`, each with a warm-up) and report both rows: CPU-vs-CPU is the fair comparison with the desktop, and Core ML is what a real local path would use.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: benchmark both CPU and Core ML delegates explicitly"
 
 #### S2 — The timed scope differs from the Python side, but the docstring claims they match
 

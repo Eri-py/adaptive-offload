@@ -2,7 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import { decode as decodeJpeg } from 'jpeg-js';
-import { loadTensorflowModel, type TfliteModel } from 'react-native-fast-tflite';
+import {
+  loadTensorflowModel,
+  type TfliteModel,
+  type TensorflowModelDelegate,
+} from 'react-native-fast-tflite';
 
 // YOLOv8n's exported TFLite input tensor is [1, 640, 640, 3] float32 NHWC
 // (verified against the real exported model in Task 1).
@@ -41,25 +45,45 @@ export interface BenchmarkStats {
   stdev: number;
 }
 
+export type DelegateId = 'cpu' | 'core-ml';
+
+export interface DelegateResult {
+  id: DelegateId;
+  label: string;
+  stats: BenchmarkStats | null;
+  error: string | null;
+}
+
 export interface UseBenchmarkResult {
   status: BenchmarkStatus;
-  results: BenchmarkStats | null;
+  results: DelegateResult[] | null;
   error: string | null;
   runBenchmark: () => Promise<void>;
 }
 
+// The two delegates the review (finding S1) asked to compare: CPU is the
+// fair baseline against the desktop numbers, Core ML is what a real
+// on-device path would use. `[]` and `['core-ml']` are
+// `loadTensorflowModel`'s own delegate-selection values (see
+// `Tflite.nitro.d.ts`).
+const DELEGATE_SPECS: { id: DelegateId; label: string; delegates: TensorflowModelDelegate[] }[] = [
+  { id: 'cpu', label: 'CPU', delegates: [] },
+  { id: 'core-ml', label: 'Core ML', delegates: ['core-ml'] },
+];
+
 /**
- * Loads the bundled YOLOv8n TFLite model once, then runs on-device inference
- * over all 15 bundled COCO images, timing each `model.run()` call with
+ * Loads the bundled YOLOv8n TFLite model once per delegate (Task 3/S1: CPU
+ * and Core ML), then runs on-device inference over all 15 bundled COCO
+ * images per delegate, timing each `model.run()` call with
  * `performance.now()` (matching the wall-clock-around-inference approach
  * `training/datagen/simulate/yolo_inference.py` uses on the Python side, so
  * "latency" means the same thing on both sides of this project).
  */
 export function useBenchmark(): UseBenchmarkResult {
   const [status, setStatus] = useState<BenchmarkStatus>('idle');
-  const [results, setResults] = useState<BenchmarkStats | null>(null);
+  const [results, setResults] = useState<DelegateResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const modelRef = useRef<TfliteModel | null>(null);
+  const modelsRef = useRef<Partial<Record<DelegateId, TfliteModel>>>({});
 
   const runBenchmark = useCallback(async () => {
     setStatus('running');
@@ -67,35 +91,62 @@ export function useBenchmark(): UseBenchmarkResult {
     setResults(null);
 
     try {
-      let model = modelRef.current;
-      if (model == null) {
-        model = await loadTensorflowModel(require('../assets/models/yolov8n.tflite'), []);
-        // Discard a warmup inference: the first real call otherwise pays for
-        // one-off weight packing/allocation (and Core ML compilation, if that
-        // delegate is on) on top of actual inference, inflating the stats
-        // (see review finding B1, matching the Python-side fix).
-        const warmupInput = new Float32Array(
-          MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS
-        );
-        await model.run([warmupInput.buffer as ArrayBuffer]);
-        modelRef.current = model;
+      const delegateResults: DelegateResult[] = [];
+
+      for (const spec of DELEGATE_SPECS) {
+        try {
+          let model = modelsRef.current[spec.id];
+          if (model == null) {
+            model = await loadTensorflowModel(
+              require('../assets/models/yolov8n.tflite'),
+              spec.delegates
+            );
+            // Discard a warmup inference: the first real call otherwise pays
+            // for one-off weight packing/allocation (and Core ML
+            // compilation, if that delegate is on) on top of actual
+            // inference, inflating the stats (see review finding B1,
+            // matching the Python-side fix).
+            const warmupInput = new Float32Array(
+              MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS
+            );
+            await model.run([warmupInput.buffer as ArrayBuffer]);
+            modelsRef.current[spec.id] = model;
+          }
+
+          const latenciesMs: number[] = [];
+          for (const moduleId of BUNDLED_IMAGE_MODULES) {
+            const input = await preprocessImage(moduleId);
+            const startedAt = performance.now();
+            // `Float32Array.prototype.buffer` is typed as `ArrayBufferLike`
+            // (it could theoretically back onto a `SharedArrayBuffer`), but
+            // this array is always freshly allocated by
+            // `resizeAndNormalize` above, so it's always backed by a plain
+            // `ArrayBuffer`.
+            await model.run([input.buffer as ArrayBuffer]);
+            const finishedAt = performance.now();
+            latenciesMs.push(finishedAt - startedAt);
+          }
+
+          delegateResults.push({
+            id: spec.id,
+            label: spec.label,
+            stats: computeStats(latenciesMs),
+            error: null,
+          });
+        } catch (err) {
+          // A delegate that fails to load or run (e.g. Core ML unavailable
+          // on this device) shouldn't lose the other delegate's results.
+          delegateResults.push({
+            id: spec.id,
+            label: spec.label,
+            stats: null,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
 
-      const latenciesMs: number[] = [];
-      for (const moduleId of BUNDLED_IMAGE_MODULES) {
-        const input = await preprocessImage(moduleId);
-        const startedAt = performance.now();
-        // `Float32Array.prototype.buffer` is typed as `ArrayBufferLike`
-        // (it could theoretically back onto a `SharedArrayBuffer`), but this
-        // array is always freshly allocated by `resizeAndNormalize` above,
-        // so it's always backed by a plain `ArrayBuffer`.
-        await model.run([input.buffer as ArrayBuffer]);
-        const finishedAt = performance.now();
-        latenciesMs.push(finishedAt - startedAt);
-      }
-
-      setResults(computeStats(latenciesMs));
-      setStatus('done');
+      setResults(delegateResults);
+      setStatus(delegateResults.some((result) => result.stats != null) ? 'done' : 'error');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus('error');

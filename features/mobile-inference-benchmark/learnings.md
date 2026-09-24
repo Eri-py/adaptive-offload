@@ -554,3 +554,32 @@ actually returns without throwing for this specific model/input shape.
   since `modelRef` persists the loaded model across repeated
   `runBenchmark()` calls — only the very first call after a fresh load
   pays the one-off packing/compilation cost the finding describes.
+
+## Review finding S1 (per-delegate benchmark: CPU vs Core ML)
+
+- `TensorflowModelDelegate` (exported from
+  `react-native-fast-tflite`'s `specs/Tflite.nitro.d.ts`) is
+  `'metal' | 'core-ml' | 'nnapi' | 'android-gpu'` — `'core-ml'` (verified
+  against the installed package's own `.d.ts`, not assumed from memory) is
+  the correct string for `loadTensorflowModel(source, ['core-ml'])`.
+- `useBenchmark.ts` now loads the model twice — once with `delegates: []`
+  (CPU) and once with `['core-ml']` — each cached in its own slot of a
+  `Record<DelegateId, TfliteModel>` ref (`modelsRef`, replacing the old
+  single `modelRef`) and each given its own discarded warm-up run (the B1
+  fix, now looped per delegate instead of hardcoded to one model). Each
+  delegate's 15-image loop is wrapped in its own `try/catch` so a Core ML
+  load/run failure (e.g. unavailable on a given device) is recorded as that
+  delegate's `error` without aborting the CPU delegate's run — `results` is
+  now `DelegateResult[]` (`{ id, label, stats, error }` per delegate)
+  instead of a single `BenchmarkStats`.
+- Deliberately re-runs `preprocessImage` per delegate per image (same cost
+  as calling it twice) rather than precomputing the 15 input tensors once
+  and reusing the same `ArrayBuffer`s across both delegates' `model.run()`
+  calls. Nothing in `Tflite.nitro.d.ts` documents whether the native side
+  takes ownership of/detaches an input `ArrayBuffer`; re-preprocessing per
+  delegate avoids relying on an unverified assumption about buffer
+  lifetime, at the cost of one extra JPEG-decode pass per image (this is a
+  benchmark screen, not a hot path).
+- `BenchmarkScreen.tsx` now renders one card per `DelegateResult` (labelled
+  "Delegate: CPU" / "Delegate: Core ML") instead of a single "Last result"
+  card, showing that delegate's stats or its own error text inline.
