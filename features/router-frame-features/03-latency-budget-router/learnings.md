@@ -32,3 +32,33 @@
   `ci_low == ci_high == 0.1` exactly — a real assertion on an exact number,
   not a property check, without needing to reimplement the resampling math
   in the test to predict it.
+
+## Task 2 — Policies, oracle and metrics
+
+- Action arrays need an explicit fixed-width string dtype up front, sized to
+  the *longest* label ("ESCALATE", 8 chars). `np.full(shape, "LOCAL",
+  dtype=np.str_)` infers a `<U5` dtype from the fill value alone, so a later
+  `actions[mask] = "ESCALATE"` silently truncates to `"ESCALAT"` — the same
+  gotcha spec 02's learnings flagged for `np.full`. Fixed by a module-level
+  `_ACTION_DTYPE = "<U8"` constant used in every `np.full(..., dtype=...)`
+  call that builds an action array.
+- `oracle_actions`' three-way tie-break (highest accuracy, then lowest
+  latency, then LOCAL/OFFLOAD/ESCALATE order) vectorises as a single pass
+  over the 3 options in that exact order, tracking a running
+  `best_accuracy`/`best_latency` per row and overwriting only on a *strict*
+  improvement (`accuracy > best` or `accuracy == best and latency < best`).
+  Because ties never trigger the overwrite, the first-seen option in
+  LOCAL/OFFLOAD/ESCALATE order naturally wins every remaining tie — no
+  separate order tie-break pass needed. The "nothing fits" fallback is free
+  too: `actions` starts pre-filled with `LOCAL` and a row where no option's
+  `fits` mask is true never triggers an overwrite, so it keeps that default.
+- The property test (oracle's per-row on-time accuracy dominates
+  budget-only's and the cascade's at several thresholds) holds by
+  construction, not just empirically: the oracle picks the best-accuracy
+  option among the row's *true*-latency fits, so any other policy's actual
+  chosen action either also fits (accuracy <= oracle's best-fitting
+  accuracy) or misses the budget (on-time accuracy 0 <= oracle's, which is
+  never negative). Worth noting in case a future change makes this look
+  like it needs a looser tolerance — it doesn't; the seeded random-row test
+  uses a tiny `1e-9` slack only for float comparison, not because the
+  property is approximate.
