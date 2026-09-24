@@ -115,3 +115,26 @@
   invoked in either case — proving the predictor itself is never built, not
   just that `predict()` is never called per-frame (the two are different
   now that building and calling are separate steps).
+
+## Review fix — N4 (drop duplicate nothing-pending test, add timing-print test)
+
+- `test_nothing_pending_returns_none`'s only real coverage (the S2
+  "factory never called" assertion) was folded into
+  `test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged`'s
+  second `extract_features()` call — that call *is* the nothing-pending
+  case, so the standalone test added nothing beyond it. Wrapped that
+  second call's `_predict_that_must_not_be_called` in
+  `_make_predict_factory_spy` and asserted `factory_calls["n"] == 0`
+  alongside the pre-existing `call_count["n"] == 0`, then deleted
+  `test_nothing_pending_returns_none` outright.
+- Replaced it with `test_prints_timing_summary_with_both_group_costs`,
+  which runs a real (pending-frames) extraction and uses `capsys` to
+  assert the printed line contains both group labels
+  (`"image_features="` and `"confidence_features (model+derive)="`) —
+  matching the exact strings `extract_features()` prints (see the S1
+  learning above for why those are the labels). Asserts on the labels
+  only, not the formatted numeric values, since timings are
+  nondeterministic.
+- Net test count in `test_extract_features.py` unchanged (6 tests before
+  and after: one removed, one added); repo-wide `training/` count stayed
+  at 109.

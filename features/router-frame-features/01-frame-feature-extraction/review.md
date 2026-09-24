@@ -93,7 +93,7 @@ None.
 - **File:** `training/tests/router/test_extract_features.py:159-167`
 - **Issue:** `test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged` already asserts `summary is None` on a fully-populated re-run, so this test adds no coverage.
 - **Fix:** Remove it, or turn it into a test of the printed timing summary (see Tests).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N4: replace the duplicate test with a timing-output test"
 
 #### N5 — `store_features` re-queries the known names that the caller already has
 

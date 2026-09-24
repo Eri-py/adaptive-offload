@@ -140,12 +140,18 @@ def test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged(
         call_count["n"] += 1
         raise AssertionError(f"predict() should not be called again for {path.name}")
 
+    factory_calls: dict[str, int] = {"n": 0}
     summary = extract_features(
-        postgres_engine, DATASET, tmp_path, lambda: _predict_that_must_not_be_called
+        postgres_engine,
+        DATASET,
+        tmp_path,
+        _make_predict_factory_spy(_predict_that_must_not_be_called, factory_calls),
     )
 
     assert summary is None
     assert call_count["n"] == 0
+    # The predictor must never be built when nothing is pending (S2).
+    assert factory_calls["n"] == 0
     assert get_known_feature_file_names(postgres_engine, DATASET) == set(file_names)
 
 
@@ -200,20 +206,15 @@ def test_many_missing_images_truncates_message_to_first_ten(
         assert file_name not in message
 
 
-def test_nothing_pending_returns_none(postgres_engine: Engine, tmp_path: Path) -> None:
-    file_names = ["a.jpg"]
+def test_prints_timing_summary_with_both_group_costs(
+    postgres_engine: Engine, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    file_names = ["a.jpg", "b.jpg"]
     _write_images(tmp_path, file_names)
     _seed_scene_complexity(postgres_engine, DATASET, file_names)
+
     extract_features(postgres_engine, DATASET, tmp_path, lambda: _make_stub_predict({}))
 
-    factory_calls: dict[str, int] = {"n": 0}
-    summary = extract_features(
-        postgres_engine,
-        DATASET,
-        tmp_path,
-        _make_predict_factory_spy(_make_stub_predict({}), factory_calls),
-    )
-
-    assert summary is None
-    # The predictor must never be built when nothing is pending (S2).
-    assert factory_calls["n"] == 0
+    output = capsys.readouterr().out
+    assert "image_features=" in output
+    assert "confidence_features (model+derive)=" in output
