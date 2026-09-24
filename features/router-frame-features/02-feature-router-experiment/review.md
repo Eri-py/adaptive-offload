@@ -162,7 +162,7 @@ artifacts are ignored per the rules.
   future "useful" verdict near the boundary would rest on one split.
 - **Fix:** Mention it in `findings.md` as a caveat. Optionally, repeat over a few split seeds
   and report the spread.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — It doesn't change any current verdict, and spec 03 supersedes this experiment.
 
 ## Nitpicks
 
@@ -182,7 +182,7 @@ artifacts are ignored per the rules.
 - **Issue:** Several docstrings restate implementation details (for example "Vectorised: each frame's
   sum …", or which test inspects a field). That goes against the "why, not what" and brevity guidelines.
 - **Fix:** Cut each one down to the one-line purpose plus any non-obvious reason.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — Style only, in research code that spec 03 will largely replace.
 
 #### N3 — The frame table is loaded twice per run
 
@@ -190,7 +190,7 @@ artifacts are ignored per the rules.
 - **Issue:** `load_simulated_rows` calls `load_frame_table` again after
   `run_experiment` has already loaded it. The result is correct, just a redundant query.
 - **Fix:** Optionally let `load_simulated_rows` accept an already-loaded frame table.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — A redundant read-only query with no correctness impact.
 
 ## Tests
 
