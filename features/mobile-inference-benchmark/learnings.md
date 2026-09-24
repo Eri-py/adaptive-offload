@@ -38,3 +38,140 @@ Root cause: the venv has an unresolvable version conflict, not a script bug —
 Image bundling (`bundle_sample_images()`) is independent of this and completed
 successfully — 15 real `app/assets/images/*.jpg` files, verified with PIL
 `Image.verify()` plus a full re-decode.
+
+## Task 1 follow-up — ultralytics pin fixed the litert/torch conflict, but export now blocked by a second, unrelated conflict (tensorflow vs. scipy/numpy)
+
+Applied the chosen fix: pinned `training/pyproject.toml`'s dependency to
+`ultralytics>=8.0,<8.4.83` (below the 8.4.83 litert cutover). Reinstalling
+(`pip install -e ./training` in the shared venv) resolved to
+`ultralytics==8.4.82`. As a side effect of pip's resolver satisfying
+`torchvision==0.29.0`'s exact `torch==2.14.0` requirement, `torch` was bumped
+2.13.0 → 2.14.0 (not touched directly — this is what actually fixed the
+original torch/torchvision self-inconsistency noted in the entry above,
+incidentally). `litert-torch` is still installed but is no longer imported by
+this export path at all, so its now-unsatisfied `torch<2.14.0` requirement
+(visible in `pip check`) is inert for this script.
+
+This confirmed the original diagnosis: with `format="tflite"` no longer
+silently redirected to the litert path, ultralytics 8.4.82 uses its legacy
+ONNX→TensorFlow SavedModel→TFLite exporter instead, and no longer touches
+`litert_torch`/torch-version-sensitive code at all.
+
+However, the export still does not succeed, for a second and completely
+unrelated reason discovered only now: the legacy exporter auto-installs
+`tensorflow` on first use (ultralytics' own `check_requirements` mechanism)
+since it wasn't already present in the venv. It installed `tensorflow==2.19.0`
+(taking ~9-10 minutes). Importing it then fails:
+
+```
+AttributeError: module 'numpy' has no attribute '_no_nep50_warning'
+```
+
+raised from inside numpy's own bundled `numpy/testing/_private/utils.py`
+(installed numpy is 2.1.3), reached via TensorFlow's legacy Keras
+`feature_column` compat layer importing `scipy.sparse` (installed scipy is
+1.18.1), which pulls in `scipy._external.array_api_compat`, which clones
+`numpy.testing` and trips over this. Confirmed `tensorflow==2.19.0`'s own
+declared numpy constraint (`numpy<2.2.0,>=1.26.0`) is *not* violated by
+2.1.3 — this isn't a version-bound mismatch pip could have caught; it looks
+like a real incompatibility between this specific scipy release's
+`array_api_compat` shim and this specific numpy release's `numpy.testing`
+internals, surfaced only through TensorFlow's legacy-Keras import chain.
+Neither `numpy` nor `scipy` was touched or changed by this task; both are
+exactly the same versions the rest of `training/` (datagen, router) already
+depends on and passes 86/86 tests against — this failure is isolated to the
+`tensorflow` import path, not a defect in the shared numpy/scipy install.
+
+Did not attempt a fix (e.g. pinning `tensorflow`/`numpy`/`scipy`) — that's a
+second cross-cutting shared-venv change, out of scope for the "smallest,
+isolated fix" this corrective task was scoped to, and it isn't yet clear
+which package's pin would need to move without risking the rest of
+`training/`'s numpy/scipy-dependent code. Flagged to the orchestrator instead.
+`app/assets/models/yolov8n.tflite` was not created; `app/assets/models/`
+doesn't exist yet.
+
+## Task 1 follow-up 2 — isolation (throwaway venv) was the fix; shared venv left untouched
+
+Per orchestrator decision, stopped trying to make the shared venv's stack
+work for this one-off conversion and isolated the export into a throwaway
+virtualenv outside `.venv/` instead. `training/pyproject.toml`'s ultralytics
+pin was reverted to unpinned `ultralytics>=8.0` by the orchestrator before
+this task, since it was only ever needed for the (abandoned) shared-venv
+approach.
+
+Environment: `python3 -m venv` failed outright (`ensurepip` not available,
+`python3.12-venv` apt package missing, no passwordless sudo available to
+install it). Used `uv venv /tmp/tflite-export-venv` instead (uv was already
+on PATH) — bundles its own resolver/installer so it never needed
+`ensurepip`. `uv pip install --python /tmp/tflite-export-venv/bin/python
+<pkgs>` stood in for `pip install` throughout.
+
+Even in this completely clean venv, plain `pip install ultralytics` (latest,
+8.4.161) reproduced the *original* attempt-1 conflict, not a fresh
+resolution: ultralytics' own `check_requirements` AutoUpdate mechanism,
+triggered at export time (not at install time), pulled in `litert-torch`
+which demands `torch<2.14`, and downgraded the venv's torch from 2.14.0 to
+2.13.0 to satisfy it — leaving the already-installed `torchvision==0.29.0`
+(which demands exactly `torch==2.14.0`) inconsistent, reproducing the same
+`AttributeError: '_OpNamespace' 'aten' object has no attribute 'cholesky'`
+as the very first attempt. So a clean pip resolve at *install* time doesn't
+help when the conflict is introduced by an *export-time* auto-install
+ultralytics does internally — isolation alone wasn't sufficient here, the
+version pin from attempt 2 was still necessary.
+
+Applying that pin (`ultralytics<8.4.83`) in the isolated venv resolved to
+`ultralytics==8.4.82` with a clean, mutually consistent `torch==2.13.0` /
+`torchvision==0.28.0` pair (no conflict this time, since nothing else in
+this venv forced `torch==2.14.0`). This unlocked the legacy TF exporter path
+as expected, but three *more* issues surfaced in sequence, all fixed by
+pinning within the isolated venv (never touching the shared one):
+
+1. Same numpy/scipy incompatibility as before
+   (`AttributeError: module 'numpy' has no attribute '_no_nep50_warning'`,
+   surfaced via TensorFlow's legacy Keras → `scipy.sparse` → vendored
+   `array_api_compat` import chain) — this reproduced even in a from-scratch
+   venv once `tensorflow==2.19.0` auto-installed and forced numpy down to
+   2.1.3, confirming this is a genuine numpy 2.1.3 / scipy 1.18.1
+   incompatibility (numpy's own `numpy/testing/_private/utils.py` references
+   `np._no_nep50_warning`, which numpy 2.1.3's `__init__.py` no longer
+   exposes), not a symptom of the shared venv's other pins. Fixed by pinning
+   `numpy==2.0.2` and `scipy==1.13.1` explicitly (still inside tensorflow's
+   own declared `numpy<2.2,>=1.26` range) — this pair does not hit the bug.
+2. A protobuf gencode/runtime mismatch
+   (`google.protobuf.runtime_version.VersionError`): the freshly-installed
+   `onnx` (latest, 1.23.0) was built against protobuf ≥6.31.1, but
+   `tensorflow==2.19.0`'s own auto-install had already forced the venv's
+   `protobuf` down to 5.29.6 (tensorflow 2.19 caps protobuf below 6). Fixed
+   by pinning `onnx<1.18` (resolved to 1.17.0, built against protobuf 5.x)
+   rather than touching protobuf/tensorflow.
+3. `onnx2tf` (ultralytics' ONNX→TensorFlow bridge, also auto-installed) needs
+   `tf_keras`, `sng4onnx`, and `onnx_graphsurgeon`, and ultralytics'
+   auto-install for these specifically queried an NVIDIA package mirror
+   (`https://pypi.ngc.nvidia.com`) that returned a DNS failure in this
+   environment. Worked around by installing the same three packages
+   directly (`pip install "tf_keras<=2.19.0" "sng4onnx>=1.0.1"
+   "onnx_graphsurgeon>=0.3.26"`) from the default index instead, which
+   resolved fine and didn't disturb numpy/scipy/protobuf.
+
+With all of the above pinned, `export_tflite_model()` completed cleanly:
+`app/assets/models/yolov8n.tflite` (12,865,855 bytes, ~12.3 MB) was created.
+Verified it's a real, loadable TFLite model (loaded via
+`tf.lite.Interpreter` from the isolated venv's own `tensorflow==2.19.0`):
+input `images` is `[1, 640, 640, 3]` float32 (NHWC image), output
+`Identity` is `[1, 84, 8400]` float32 — exactly matching the PyTorch model's
+own reported output shape from the export log (4 bbox coords + 80 COCO
+classes × 8400 anchors). Also cleaned up one stray side-effect file
+(`calibration_image_sample_data_20x128x128x3_float32.npy`, downloaded by
+ultralytics into the cwd during export, unrelated to any of the three
+issues above and not a deliverable) from the repo root after verifying the
+export.
+
+Final versions that worked together in the isolated venv (`/tmp/tflite-export-venv`,
+Python 3.12.14): `torch==2.13.0`, `torchvision==0.28.0`, `ultralytics==8.4.82`,
+`onnx==1.17.0`, `onnxruntime==1.30.0`, `onnxslim==0.1.96`, `onnx2tf==1.28.8`,
+`tf-keras==2.19.0`, `tensorflow==2.19.0`, `numpy==2.0.2`, `scipy==1.13.1`,
+`protobuf==5.29.6`, `sng4onnx==2.0.1`, `onnx-graphsurgeon==0.6.1`.
+
+Confirmed the shared venv was never touched: `training`'s
+`ruff check . && mypy . && pytest -q` re-run from the shared `.venv/` after
+this task is still clean, same 86/86 passing as before.
