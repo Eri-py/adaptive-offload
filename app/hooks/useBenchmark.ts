@@ -13,10 +13,7 @@ import {
 const MODEL_INPUT_SIZE = 640;
 const MODEL_INPUT_CHANNELS = 3;
 
-// Metro's bundler needs static, literal `require(...)` calls -- it can't
-// resolve a dynamically constructed path string -- so the 15 bundled COCO
-// images (Task 1) are listed explicitly here, matching the exact filenames
-// present in `app/assets/images/`.
+// Metro needs literal require() paths, so images are listed explicitly.
 const BUNDLED_IMAGE_MODULES: number[] = [
   require('../assets/images/000000000139.jpg'),
   require('../assets/images/000000000285.jpg'),
@@ -61,27 +58,14 @@ export interface UseBenchmarkResult {
   runBenchmark: () => Promise<void>;
 }
 
-// The two delegates the review (finding S1) asked to compare: CPU is the
-// fair baseline against the desktop numbers, Core ML is what a real
-// on-device path would use. `[]` and `['core-ml']` are
-// `loadTensorflowModel`'s own delegate-selection values (see
-// `Tflite.nitro.d.ts`).
+// CPU is the baseline vs. desktop numbers; Core ML is the real on-device path.
 const DELEGATE_SPECS: { id: DelegateId; label: string; delegates: TensorflowModelDelegate[] }[] = [
   { id: 'cpu', label: 'CPU', delegates: [] },
   { id: 'core-ml', label: 'Core ML', delegates: ['core-ml'] },
 ];
 
-/**
- * Loads the bundled YOLOv8n TFLite model once per delegate (Task 3/S1: CPU
- * and Core ML), then runs on-device inference over all 15 bundled COCO
- * images per delegate, timing each `model.run()` call with
- * `performance.now()`. This is the raw forward pass only, on an
- * already-preprocessed tensor — narrower than
- * `training/datagen/simulate/yolo_inference.py`'s `model(image_path)`,
- * which also includes JPEG decode, letterbox, and NMS (review finding S2;
- * see `features/mobile-inference-benchmark/learnings.md` for a
- * like-for-like comparison method).
- */
+// Times only the raw model.run() forward pass on a preprocessed tensor —
+// narrower than yolo_inference.py's model(image_path), which also decodes, letterboxes, and runs NMS.
 export function useBenchmark(): UseBenchmarkResult {
   const [status, setStatus] = useState<BenchmarkStatus>('idle');
   const [results, setResults] = useState<DelegateResult[] | null>(null);
@@ -104,11 +88,7 @@ export function useBenchmark(): UseBenchmarkResult {
               require('../assets/models/yolov8n.tflite'),
               spec.delegates
             );
-            // Discard a warmup inference: the first real call otherwise pays
-            // for one-off weight packing/allocation (and Core ML
-            // compilation, if that delegate is on) on top of actual
-            // inference, inflating the stats (see review finding B1,
-            // matching the Python-side fix).
+            // Discard the warmup run — it pays for weight packing/Core ML compile that would inflate stats.
             const warmupInput = new Float32Array(
               MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS
             );
@@ -120,11 +100,7 @@ export function useBenchmark(): UseBenchmarkResult {
           for (const moduleId of BUNDLED_IMAGE_MODULES) {
             const input = await preprocessImage(moduleId);
             const startedAt = performance.now();
-            // `Float32Array.prototype.buffer` is typed as `ArrayBufferLike`
-            // (it could theoretically back onto a `SharedArrayBuffer`), but
-            // this array is always freshly allocated by
-            // `resizeAndNormalize` above, so it's always backed by a plain
-            // `ArrayBuffer`.
+            // Cast is safe: this array is always freshly allocated, never a SharedArrayBuffer.
             await model.run([input.buffer as ArrayBuffer]);
             const finishedAt = performance.now();
             latenciesMs.push(finishedAt - startedAt);
@@ -159,14 +135,7 @@ export function useBenchmark(): UseBenchmarkResult {
   return { status, results, error, runBenchmark };
 }
 
-/**
- * Resolves a bundled image asset to a correctly-shaped, correctly-normalized
- * Float32Array ready to feed to the model: decodes the JPEG, resizes
- * (nearest-neighbor) to 640x640, drops the alpha channel, and normalizes
- * RGB values to [0, 1]. This benchmark only measures latency (never compares
- * model output), so exact resize/normalization parity with the Python-side
- * preprocessing isn't required -- only a correct input shape and dtype.
- */
+// Decodes/resizes to model input shape — only latency is measured, not parity with Python.
 async function preprocessImage(moduleId: number): Promise<Float32Array> {
   const asset = Asset.fromModule(moduleId);
   await asset.downloadAsync();

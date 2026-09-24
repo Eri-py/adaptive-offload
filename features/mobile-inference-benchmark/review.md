@@ -82,7 +82,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/hooks/useBenchmark.ts:12-15`, `:51-57`, `:80-83`, `:100-107`; `app/screens/BenchmarkScreen.tsx:5-6`; `app/metro.config.js:6-9`
 - **Issue:** `.claude/coding-guidelines.md` "Comments" says one line under ~100 chars, two only when truly needed. Several of these blocks run 4-7 lines and partly restate the code.
 - **Fix:** Trim each to a single "why" line. For example, `// Metro needs literal require() paths, so images are listed explicitly.`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: trim comments to the one-line guideline"
 
 #### N2 — Image count is hard-coded in two places
 

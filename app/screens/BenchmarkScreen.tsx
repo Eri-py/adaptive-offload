@@ -2,8 +2,7 @@ import type { ReactElement } from 'react';
 import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useBenchmark } from '../hooks/useBenchmark';
 
-// Describes the fixed bundled test set (Task 1's 15 COCO images + exported
-// model) -- not derived from useBenchmark, which only reports run results.
+// Static description of the bundled test set, not derived from useBenchmark's run results.
 const BUNDLED_IMAGE_COUNT = 15;
 const RUNS_PER_IMAGE = 1;
 const MODEL_NAME = 'yolov8n.tflite';
