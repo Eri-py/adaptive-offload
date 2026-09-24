@@ -1,6 +1,7 @@
 """Utility-based win/loss label for one (frame, condition) pair.
 
-Consumes the four `stub_inference` outputs (Task 9) and a lambda weight, and
+Consumes the four per-row latency/accuracy values from
+`inference.apply_condition_overhead` and a lambda weight, and
 scores each path as `utility = accuracy - lambda_value * (latency_ms / 1000)`
 — see the spec's "Each (frame, condition) pair gets a computed win/loss
 label" requirement. Pure function: no I/O, no database access.

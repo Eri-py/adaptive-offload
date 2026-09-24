@@ -13,3 +13,10 @@ venv/
 
 # Downloaded/cached datasets — large binary data, not source
 training/data/
+
+# Downloaded pretrained model weights — large binary data, not source
+*.pt
+
+# Trained router model artifacts — build output, not source
+*.joblib
+*.pkl

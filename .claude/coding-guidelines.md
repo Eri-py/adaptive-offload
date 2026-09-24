@@ -125,13 +125,15 @@ config applies where.
   locally (`--annotations`/`--images`), and fails clearly rather than trying
   to top up anything missing. Acquiring/downloading a dataset, if ever
   needed again, is a separate, explicitly-run concern outside this pipeline.
-- `training/datagen/cli/`'s standalone entry points (`run_simulation`,
-  `score_complexity`, `preview_sample`, `preview_conditions`, `relabel_run`)
-  are registered as `[project.scripts]` in
-  `training/pyproject.toml` — once the shared venv is activated, run them by
-  name (e.g. `run-simulation --preset baseline`), not
-  `python -m datagen.cli.<name>`. Add new standalone tools to both places:
-  the module under `training/datagen/cli/` and an entry in
+- `training/datagen/cli/`'s standalone entry points are registered as
+  `[project.scripts]` in `training/pyproject.toml` — once the shared venv is
+  activated, run them by name (e.g. `run-simulation --preset baseline`), not
+  `python -m datagen.cli.<name>`. The CLI surface is deliberately kept to
+  just two tools — `run-simulation` (the actual simulation run) and
+  `score-complexity` (scores images for scene complexity) — rather than
+  accumulating preview/debug/one-off tools; don't add a third without a real
+  need. If a new one is genuinely warranted, it goes in both places: the
+  module under `training/datagen/cli/` and an entry in
   `training/pyproject.toml`'s `[project.scripts]` (then `pip install -e
   ./training` again to regenerate the installed script).
 - Seed all randomness (condition sampling, train/test split) for

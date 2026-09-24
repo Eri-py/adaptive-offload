@@ -7,6 +7,8 @@ condition-scenario presets live separately in `datagen.presets`, since a
 preset is a scenario definition rather than a single tunable knob.
 """
 
+from pathlib import Path
+
 # --- Sampling / run-shape tunables -----------------------------------------
 
 # Frames sampled (stratified by scene complexity) from the run's image pool.
@@ -30,36 +32,28 @@ DEFAULT_LAMBDA = 0.3
 
 DATASET_NAME = "coco_val2017"
 
-# --- Stub-model coefficients -------------------------------------------------
-# Illustrative only (no real models yet, per the spec's Out of Scope) — picked
-# to produce plausible-shaped latency/accuracy curves, not measured from a
-# real device or network.
+# --- Model weight locations --------------------------------------------------
+# Resolved relative to this file, not cwd, so a missing file fails clearly
+# instead of `YOLO(...)` silently downloading to wherever the CLI was run from.
+LOCAL_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "models" / "yolov8n.pt"
+OFFLOAD_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "models" / "yolov8x.pt"
 
-# Local path: latency scales with device load; accuracy has a smaller base
-# rate than the offload path (a smaller on-device model).
-LOCAL_BASE_LATENCY_MS = 45.0
+# --- Condition-driven latency-overhead coefficients -------------------------
+# Illustrative only (no real network/device measurements yet, per the spec's
+# Out of Scope) — picked to produce plausible-shaped latency overhead curves
+# on top of a real measured base latency, not measured from a real device or
+# network. Accuracy is no longer condition-modeled: `DetectionResult.accuracy`
+# comes from real IoU-based scoring against a real model's predictions
+# (`score_accuracy`), so no synthetic accuracy coefficients live here anymore.
+
+# Local path: latency overhead scales with device load (a smaller on-device
+# model degrading under contention).
 LOCAL_LATENCY_DEVICE_LOAD_COEFFICIENT_MS = 1.2  # added ms per device-load pct point
 LOCAL_LATENCY_NOISE_STD_MS = 5.0
-LOCAL_BASE_ACCURACY = 0.78
-LOCAL_ACCURACY_NOISE_STD = 0.03
 
-# Offload path: latency scales with bandwidth (inverse), round-trip network
-# latency (~1:1 passthrough), and packet loss (retransmit penalty); accuracy
-# has a higher base rate (a larger server-side model).
-OFFLOAD_BASE_LATENCY_MS = 60.0
+# Offload path: latency overhead scales with bandwidth (inverse), round-trip
+# network latency (~1:1 passthrough), and packet loss (retransmit penalty).
 OFFLOAD_LATENCY_BANDWIDTH_COEFFICIENT_MS = 40.0  # scales as 1/bandwidth_mbps
 OFFLOAD_LATENCY_NETWORK_LATENCY_COEFFICIENT = 1.0  # ms added per ms of RTT
 OFFLOAD_LATENCY_PACKET_LOSS_PENALTY_COEFFICIENT_MS = 3.0  # ms added per pct point
 OFFLOAD_LATENCY_NOISE_STD_MS = 8.0
-OFFLOAD_BASE_ACCURACY = 0.85
-OFFLOAD_ACCURACY_NOISE_STD = 0.03
-
-# Both paths' accuracy drops as the frame's scene-complexity proxy rises.
-SCENE_COMPLEXITY_ACCURACY_PENALTY_COEFFICIENT = 0.15
-
-# Small additional per-path accuracy penalties (Task 9): a heavily-loaded
-# device is modeled as falling back to a lighter/faster on-device model, and
-# a lossy link is modeled as losing detail to dropped/retransmitted frames —
-# both illustrative, same as every other stub-model coefficient above.
-LOCAL_ACCURACY_DEVICE_LOAD_PENALTY_COEFFICIENT = 0.001  # per device-load pct point
-OFFLOAD_ACCURACY_PACKET_LOSS_PENALTY_COEFFICIENT = 0.005  # per packet-loss pct point

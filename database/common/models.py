@@ -1,10 +1,11 @@
 """Shared ORM models for the data-gen simulator and (later) the offload API.
 
-Three tables, all owned here per `.claude/coding-guidelines.md`'s Database
+Four tables, all owned here per `.claude/coding-guidelines.md`'s Database
 section: `simulation_runs` (one row per simulator invocation, holding the
 resolved config snapshot), `simulation_results` (one row per frame ×
-condition pair, FK'd to its run), and `scene_complexity` (one row per frame,
-computed once and reused across runs).
+condition pair, FK'd to its run), `scene_complexity` (one row per frame,
+computed once and reused across runs), and `model_inference` (one row per
+(dataset, frame, model) triple, caching real inference results).
 """
 
 import enum
@@ -83,6 +84,21 @@ class SceneComplexity(Base):
     dataset: Mapped[str] = mapped_column(String, primary_key=True)
     file_name: Mapped[str] = mapped_column(String, primary_key=True)
     scene_complexity: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class ModelInference(Base):
+    """One row per (dataset, frame, model) triple, caching real inference results."""
+
+    __tablename__ = "model_inference"
+
+    dataset: Mapped[str] = mapped_column(String, primary_key=True)
+    file_name: Mapped[str] = mapped_column(String, primary_key=True)
+    model_path: Mapped[Label] = mapped_column(Enum(Label), primary_key=True)
+    latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy: Mapped[float] = mapped_column(Float, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

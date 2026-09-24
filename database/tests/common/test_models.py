@@ -1,4 +1,4 @@
-"""Round-trip test for the three shared ORM models against real Postgres.
+"""Round-trip test for the shared ORM models against real Postgres.
 
 Runs against a fresh, disposable database per test (see `tests/conftest.py`'s
 `postgres_engine` fixture) rather than SQLite — SQLite's dialect differs
@@ -9,10 +9,16 @@ trustworthy here.
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from common.models import Label, SceneComplexity, SimulationResult, SimulationRun
+from common.models import (
+    Label,
+    ModelInference,
+    SceneComplexity,
+    SimulationResult,
+    SimulationRun,
+)
 
 
-def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
+def test_round_trips_all_four_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
@@ -42,6 +48,13 @@ def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
             file_name="000000000139.jpg",
             scene_complexity=0.37,
         )
+        inference = ModelInference(
+            dataset="coco_val2017",
+            file_name="000000000139.jpg",
+            model_path=Label.LOCAL,
+            latency_ms=45.0,
+            accuracy=0.88,
+        )
 
         # No ORM `relationship()` links these two mappers, so the unit of work
         # won't infer insert order from the `run_id` FK on its own — flush the
@@ -49,7 +62,7 @@ def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
         # silently didn't, which is exactly the dialect gap this switch closes.
         session.add(run)
         session.flush()
-        session.add_all([result, complexity])
+        session.add_all([result, complexity, inference])
         session.commit()
 
     with Session(postgres_engine) as session:
@@ -87,3 +100,11 @@ def test_round_trips_all_three_tables(postgres_engine: Engine) -> None:
         assert fetched_complexity is not None
         assert fetched_complexity.scene_complexity == 0.37
         assert fetched_complexity.computed_at is not None
+
+        fetched_inference = session.get(
+            ModelInference, ("coco_val2017", "000000000139.jpg", Label.LOCAL)
+        )
+        assert fetched_inference is not None
+        assert fetched_inference.latency_ms == 45.0
+        assert fetched_inference.accuracy == 0.88
+        assert fetched_inference.computed_at is not None

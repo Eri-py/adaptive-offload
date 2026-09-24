@@ -8,19 +8,25 @@ itself is the import root, the same way `server/` is for `common`):
         --dataset <name>
 
 `--annotations` is a COCO-format annotations file (JSON with an `"images"`
-list), `--images` is the local folder to resolve those images' file names
-from, and `--dataset` names the dataset scene-complexity scores get stored
-under (so different image pools never share/collide on the same
-`scene_complexity` rows). This tool never fetches anything over the network
-— both the annotations file and every image must already be present at the
-given paths; it runs the simulation against exactly what it's given, rather
-than trying to top up missing data. Builds the real Postgres engine from
-`DATABASE_URL`, scores any pool images not yet covered by the
-`scene_complexity` table for that dataset, stratified-samples frames,
-space-fills condition vectors for the selected preset, crosses every frame
-with every condition vector (stub inference + win/loss label), and
-persists one `simulation_runs` row plus one `simulation_results` row per
-(frame, condition) pair.
+list plus `"annotations"`/`"categories"` for ground truth), `--images` is
+the local folder to resolve those images' file names from, and `--dataset`
+names the dataset scene-complexity/model-inference scores get stored under
+(so different image pools never share/collide on the same
+`scene_complexity`/`model_inference` rows). This tool never fetches
+anything over the network — both the annotations file and every image must
+already be present at the given paths; it runs the simulation against
+exactly what it's given, rather than trying to top up missing data. Builds
+the real Postgres engine from `DATABASE_URL`, reads whatever `scene_complexity`
+rows already exist for that dataset (populated separately by
+`score-complexity` — this tool no longer computes them; any pool image with
+no score is excluded from sampling and logged as a warning, not a hard
+failure), runs real local/offload YOLO inference (cached per file name in
+`model_inference`, IoU-scored against real ground truth) for any pool
+images not yet fully covered, stratified-samples frames, space-fills
+condition vectors for the selected preset, crosses every frame with every
+condition vector (cached real inference plus synthetic condition-driven
+latency overhead + win/loss label), and persists one `simulation_runs` row
+plus one `simulation_results` row per (frame, condition) pair.
 
 The CLI (`main`) is a thin wrapper around `run_simulation`, the directly
 callable core function — every real dependency (`image_records`,
@@ -38,6 +44,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from common.db import get_engine
+from common.models import Label
 from dotenv import load_dotenv
 from sqlalchemy import Engine
 
@@ -47,28 +54,22 @@ from datagen.persistence import (
     RunConfig,
     create_run,
     get_known_complexity,
-    store_complexity_scores,
+    get_known_model_inference,
+    store_model_inference,
     store_results,
 )
-from datagen.sampling.complexity import scene_complexity
 from datagen.sampling.conditions import sample_condition_vectors
 from datagen.sampling.sampling import stratified_sample
+from datagen.simulate import ground_truth, inference, yolo_inference
+from datagen.simulate.inference import DetectionResult
 from datagen.simulate.labeling import compute_label
-from datagen.simulate.stub_inference import stub_inference
 from datagen.sourcing import image_source
 from datagen.sourcing.image_source import ImageRecord
 
 logger = logging.getLogger(__name__)
 
-# How many newly-scored images to accumulate before flushing to Postgres in
-# the complexity-scoring loop below. This is a crash-resilience/robustness
-# knob, not a research-relevant tunable (it never changes what gets computed
-# or persisted, only how often) — kept local here rather than in
-# `config.py`, whose tunables all affect the simulation's actual behavior/
-# output. 200 keeps a worst-case loss (a crash right before a flush) to a
-# small fraction of a real-sized (thousands-of-images) image pool while still
-# batching most of the network/DB round-trip savings a straight per-image
-# commit would give up.
+# Crash-resilience batch size for flushing new complexity/inference results to
+# Postgres — bounds work lost to a crash without losing per-image commit batching.
 COMPLEXITY_SCORE_FLUSH_BATCH_SIZE = 200
 
 
@@ -78,6 +79,9 @@ def run_simulation(
     *,
     image_records: list[ImageRecord],
     resolve_image: Callable[[str], Path],
+    run_local_inference: inference.RunInferenceFn,
+    run_offload_inference: inference.RunInferenceFn,
+    ground_truth: dict[int, list[ground_truth.Box]],
     dataset: str | None = None,
     frame_count: int | None = None,
     condition_vector_count: int | None = None,
@@ -92,11 +96,21 @@ def run_simulation(
     `--annotations`/`--images` (`image_source.load_image_index()` /
     `image_source.resolve_image_path`), and tests inject a small fake pool
     and a resolver pointed at synthetic temp-directory images instead.
-    `dataset`/`frame_count`/
+    `run_local_inference`/`run_offload_inference` are likewise required —
+    the real CLI builds them once per invocation via
+    `inference.build_local_inference_fn()`/`build_offload_inference_fn()`
+    (each loads its YOLO model exactly once), and tests inject small, fast,
+    deterministic fakes instead of loading a real model. `ground_truth` maps
+    `image_id` to that image's ground-truth boxes (`ground_truth.load_ground_truth()`
+    on the same annotations file `image_records` came from); an image with no
+    entry is treated as having zero ground-truth boxes. `dataset`/`frame_count`/
     `condition_vector_count`/`bucket_count`/`seed`/`lambda_value` default to
     `datagen.config`'s tunables when omitted, so a reduced-scale test run
     doesn't have to exercise the real 500 x 50 defaults against a tiny fake
-    pool.
+    pool. This function reads `scene_complexity` rows for `dataset` but never
+    computes them — that's `score-complexity`'s job exclusively; any pool
+    image with no existing score is excluded from sampling and logged as a
+    warning, not a hard failure.
     """
     if preset_name not in presets.PRESETS:
         raise ValueError(
@@ -117,39 +131,54 @@ def run_simulation(
     resolved_seed = seed if seed is not None else config.SEED
     resolved_lambda = lambda_value if lambda_value is not None else config.DEFAULT_LAMBDA
 
+    # `run_simulation` only reads `scene_complexity` -- it never computes or
+    # persists scores itself; that's `score-complexity`'s job exclusively.
     known_complexity = get_known_complexity(engine, resolved_dataset)
-
-    # Flushed in batches (not once at the end) so a network error, corrupt
-    # file, or interrupted run loses at most one batch's worth of scoring
-    # work instead of the whole pool — `store_complexity_scores` re-checks
-    # already-persisted file names on every call, so a resumed run picks up
-    # exactly where it left off rather than double-inserting.
     all_complexity = dict(known_complexity)
-    pending_batch: dict[str, float] = {}
-    # Total images this invocation actually needs to score (excludes ones
-    # already persisted from a prior run) -- the denominator for the
-    # progress log below, so resumed runs report progress against the
-    # remaining work, not the full pool size.
-    total_to_score = len(image_records) - len(known_complexity)
-    scored_count = 0
-    for record in image_records:
-        if record.file_name in known_complexity:
-            continue
-        image_path = resolve_image(record.file_name)
-        score = scene_complexity(image_path)
-        all_complexity[record.file_name] = score
-        pending_batch[record.file_name] = score
-        scored_count += 1
-        if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
-            store_complexity_scores(engine, resolved_dataset, pending_batch)
-            pending_batch = {}
-            logger.info("Scored %d/%d images.", scored_count, total_to_score)
-    if pending_batch:
-        store_complexity_scores(engine, resolved_dataset, pending_batch)
-        logger.info("Scored %d/%d images.", scored_count, total_to_score)
+
+    all_model_inference = _compute_missing_model_inference(
+        engine,
+        resolved_dataset,
+        image_records,
+        resolve_image,
+        ground_truth,
+        run_local_inference,
+        run_offload_inference,
+    )
+
+    # `all_complexity` can hold `scene_complexity` rows for frames outside
+    # this invocation's pool — e.g. an earlier `score-complexity`/
+    # `run-simulation` run over a larger or different image set stored under
+    # the same `--dataset` name. Sampling must never draw one of those: it
+    # has no corresponding `all_model_inference` entry, which would raise a
+    # bare `KeyError` below once the run row already exists. Restrict to the
+    # current pool's file names before sampling so this can't happen,
+    # regardless of what else `scene_complexity` holds for this dataset.
+    pool_file_names = {record.file_name for record in image_records}
+    pool_complexity = {
+        file_name: score
+        for file_name, score in all_complexity.items()
+        if file_name in pool_file_names
+    }
+
+    # Nothing auto-scores an unscored pool image anymore (that's
+    # `score-complexity`'s job) -- surface the gap loudly rather than
+    # silently sampling around it, per the user's explicit direction.
+    unscored_file_names = pool_file_names - pool_complexity.keys()
+    if unscored_file_names:
+        logger.warning(
+            "\033[91m%d of %d pool images have no scene_complexity score for "
+            "dataset %r and will be excluded from sampling — run "
+            "`score-complexity --folder <images> --dataset %s` first to "
+            "cover them.\033[0m",
+            len(unscored_file_names),
+            len(pool_file_names),
+            resolved_dataset,
+            resolved_dataset,
+        )
 
     sampled_frames = stratified_sample(
-        all_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
+        pool_complexity, resolved_frame_count, resolved_bucket_count, resolved_seed
     )
     if len(sampled_frames) < resolved_frame_count:
         logger.warning(
@@ -185,18 +214,18 @@ def run_simulation(
 
     rows: list[ResultRow] = []
     for frame_index, frame_id in enumerate(sampled_frames):
-        frame_complexity = all_complexity[frame_id]
+        local_base = all_model_inference[frame_id][Label.LOCAL]
+        offload_base = all_model_inference[frame_id][Label.OFFLOAD]
         for condition_index, condition in enumerate(condition_vectors):
-            # A distinct-but-deterministic seed per (frame, condition) pair —
-            # stub_inference's own contract only guarantees determinism for a
-            # fixed seed, so reusing one seed for every row would make every
-            # row draw identical noise. Index-derived offsets from the run's
-            # seed keep this reproducible across two runs of the same
-            # preset/config/seed/pool without needing per-row random state.
+            # Distinct-but-deterministic seed per row so rows don't draw identical
+            # noise, while staying reproducible across runs of the same seed/pool.
             row_seed = resolved_seed + frame_index * len(condition_vectors) + condition_index
-            local_latency_ms, local_accuracy, offload_latency_ms, offload_accuracy = stub_inference(
-                condition, frame_complexity, row_seed
-            )
+            (
+                local_latency_ms,
+                local_accuracy,
+                offload_latency_ms,
+                offload_accuracy,
+            ) = inference.apply_condition_overhead(condition, local_base, offload_base, row_seed)
             label = compute_label(
                 local_latency_ms,
                 local_accuracy,
@@ -223,6 +252,67 @@ def run_simulation(
     return run_id
 
 
+def _compute_missing_model_inference(
+    engine: Engine,
+    dataset: str,
+    image_records: list[ImageRecord],
+    resolve_image: Callable[[str], Path],
+    ground_truth: dict[int, list[ground_truth.Box]],
+    run_local_inference: inference.RunInferenceFn,
+    run_offload_inference: inference.RunInferenceFn,
+) -> dict[str, dict[Label, DetectionResult]]:
+    """Compute and persist any `model_inference` rows missing for `image_records`.
+
+    Reads the known-cache via `persistence.get_known_model_inference`, then
+    for every `ImageRecord` not yet covered by *both* `Label.LOCAL` and
+    `Label.OFFLOAD` (a file may already have just one of the two paths
+    cached, per `store_model_inference`'s per-pair dedup), resolves its
+    image path, looks up its ground-truth boxes (`ground_truth.get(record.image_id,
+    [])` — an image with no annotations entries simply scores against zero
+    ground-truth boxes), and runs both `run_local_inference`/
+    `run_offload_inference` on it. New results are flushed to Postgres in
+    batches of `COMPLEXITY_SCORE_FLUSH_BATCH_SIZE` (same crash-resilience
+    reasoning as the complexity-scoring loop in `run_simulation` above),
+    with the same per-batch progress logging. Returns the full per-file-name
+    inference dict (known plus newly computed), keyed the same way
+    `get_known_model_inference` is.
+    """
+    known_model_inference = get_known_model_inference(engine, dataset)
+    all_model_inference = dict(known_model_inference)
+
+    missing_records = [
+        record
+        for record in image_records
+        if Label.LOCAL not in known_model_inference.get(record.file_name, {})
+        or Label.OFFLOAD not in known_model_inference.get(record.file_name, {})
+    ]
+
+    pending_batch: dict[str, dict[Label, DetectionResult]] = {}
+    total_to_compute = len(missing_records)
+    computed_count = 0
+    for record in missing_records:
+        image_path = resolve_image(record.file_name)
+        frame_ground_truth = ground_truth.get(record.image_id, [])
+        by_model = {
+            Label.LOCAL: run_local_inference(image_path, frame_ground_truth),
+            Label.OFFLOAD: run_offload_inference(image_path, frame_ground_truth),
+        }
+        all_model_inference[record.file_name] = by_model
+        pending_batch[record.file_name] = by_model
+        computed_count += 1
+        if len(pending_batch) >= COMPLEXITY_SCORE_FLUSH_BATCH_SIZE:
+            store_model_inference(engine, dataset, pending_batch)
+            pending_batch = {}
+            logger.info(
+                "Computed inference for %d/%d images.", computed_count, total_to_compute
+            )
+    if pending_batch:
+        store_model_inference(engine, dataset, pending_batch)
+        logger.info("Computed inference for %d/%d images.", computed_count, total_to_compute)
+
+    return all_model_inference
+
+
 def _require_images_dir(images_dir: Path) -> None:
     """Fail fast with a clear error if `images_dir` isn't an existing folder.
 
@@ -245,8 +335,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Run the data-gen simulator for one preset against a COCO-format "
-            "annotations file and images folder, storing scene-complexity "
-            "scores under the given dataset name."
+            "annotations file and images folder. Requires scene-complexity "
+            "scores to already exist under the given dataset name (see "
+            "score-complexity); any pool image missing one is excluded from "
+            "sampling and logged as a warning, not a hard failure."
         )
     )
     parser.add_argument(
@@ -277,7 +369,14 @@ def main() -> None:
 
     _require_images_dir(args.images)
     image_records = image_source.load_image_index(args.annotations)
+    # Same annotations file as `image_records`, different array within it —
+    # both loaded once here rather than re-reading the file per frame.
+    frame_ground_truth = ground_truth.load_ground_truth(args.annotations)
     resolve_image = functools.partial(image_source.resolve_image_path, images_dir=args.images)
+
+    # Each builder loads its YOLO model exactly once per CLI invocation.
+    run_local_inference = yolo_inference.build_local_inference_fn()
+    run_offload_inference = yolo_inference.build_offload_inference_fn()
 
     engine = get_engine()
     run_id = run_simulation(
@@ -285,6 +384,9 @@ def main() -> None:
         args.preset,
         image_records=image_records,
         resolve_image=resolve_image,
+        run_local_inference=run_local_inference,
+        run_offload_inference=run_offload_inference,
+        ground_truth=frame_ground_truth,
         dataset=args.dataset,
     )
     print(f"Created run {run_id}")

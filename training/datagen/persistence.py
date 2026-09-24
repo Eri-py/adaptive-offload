@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from common.models import Label, SceneComplexity, SimulationResult, SimulationRun
+from common.models import Label, ModelInference, SceneComplexity, SimulationResult, SimulationRun
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
+
+from datagen.simulate.inference import DetectionResult
 
 
 @dataclass(frozen=True)
@@ -86,41 +88,63 @@ def store_complexity_scores(engine: Engine, dataset: str, scores: dict[str, floa
         session.commit()
 
 
-def get_run_results(engine: Engine, run_id: str) -> list[ResultRow]:
-    """Read every `SimulationResult` row for `run_id` as `ResultRow`s.
+def get_known_model_inference(
+    engine: Engine, dataset: str
+) -> dict[str, dict[Label, DetectionResult]]:
+    """Read all cached `model_inference` rows for `dataset`.
 
-    Ordered by `(frame_id, id)` — `frame_id` alone isn't a total order here:
-    a real run has one row per (frame, condition) pair, so up to
-    `condition_vector_count` rows share each `frame_id`, and Postgres may
-    return those in any order between calls. `id` (the surrogate primary
-    key, autoincrement) breaks that tie deterministically and, since rows
-    are inserted in condition order, also restores per-frame insertion
-    order. Returns an empty list if `run_id` has no result rows — including
-    a nonexistent `run_id`, which this function doesn't distinguish from "a
-    real run with zero results"; callers that need to tell those apart
-    (e.g. a re-labeling CLI) handle that themselves.
+    Returns `{file_name: {model_path: DetectionResult(...)}}` — a
+    `file_name` key is present only for whichever `Label` values actually
+    have a persisted row for it, so a file may map to just one of the two
+    paths rather than necessarily both. Ordered by `file_name` — same
+    determinism reasoning as `get_known_complexity`.
     """
     with Session(engine) as session:
         rows = session.execute(
-            select(SimulationResult)
-            .where(SimulationResult.run_id == run_id)
-            .order_by(SimulationResult.frame_id, SimulationResult.id)
+            select(ModelInference)
+            .where(ModelInference.dataset == dataset)
+            .order_by(ModelInference.file_name)
         ).scalars()
-        return [
-            ResultRow(
-                frame_id=row.frame_id,
-                network_bandwidth_mbps=row.network_bandwidth_mbps,
-                network_latency_ms=row.network_latency_ms,
-                network_packet_loss_pct=row.network_packet_loss_pct,
-                device_load_pct=row.device_load_pct,
-                local_latency_ms=row.local_latency_ms,
-                local_accuracy=row.local_accuracy,
-                offload_latency_ms=row.offload_latency_ms,
-                offload_accuracy=row.offload_accuracy,
-                label=row.label,
+        results: dict[str, dict[Label, DetectionResult]] = {}
+        for row in rows:
+            results.setdefault(row.file_name, {})[row.model_path] = DetectionResult(
+                latency_ms=row.latency_ms, accuracy=row.accuracy
             )
-            for row in rows
+        return results
+
+
+def store_model_inference(
+    engine: Engine, dataset: str, results: dict[str, dict[Label, DetectionResult]]
+) -> None:
+    """Insert new `model_inference` rows, skipping `(file_name, model_path)` pairs already present.
+
+    Mirrors `store_complexity_scores`'s already-known-check shape, but keyed
+    on the two-column `(file_name, model_path)` pair rather than a single
+    column, since a `model_inference` row's identity within a dataset also
+    depends on which model produced it.
+    """
+    with Session(engine) as session:
+        known_pairs = set(
+            session.execute(
+                select(ModelInference.file_name, ModelInference.model_path).where(
+                    ModelInference.dataset == dataset
+                )
+            ).all()
+        )
+        new_rows = [
+            ModelInference(
+                dataset=dataset,
+                file_name=file_name,
+                model_path=model_path,
+                latency_ms=result.latency_ms,
+                accuracy=result.accuracy,
+            )
+            for file_name, by_model in results.items()
+            for model_path, result in by_model.items()
+            if (file_name, model_path) not in known_pairs
         ]
+        session.add_all(new_rows)
+        session.commit()
 
 
 def create_run(engine: Engine, config: RunConfig) -> str:
