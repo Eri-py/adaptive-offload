@@ -140,3 +140,48 @@
   chosen so the escalate threshold (`gap > 0.036` at `DEFAULT_LAMBDA =
   0.3`) lines up with the sign, for the cascade label too — avoids flaky
   single-class failures without re-seeding until a mix happens to appear.
+
+## Task 5 — Experiment script (integration)
+
+- **Row-order alignment between `picks` and the scoring DataFrame is not
+  automatic**, and got it wrong on the first pass. `router.dataset
+  .frame_level_split`'s `test_split` is `simulated_rows.iloc[test_idx]`
+  re-indexed 0..n-1, where `test_idx` comes from `GroupShuffleSplit` and is
+  *not* guaranteed to preserve `simulated_rows`'s original row order.
+  Meanwhile `run_router` internally computes its own test subset as
+  `rows[rows["frame_id"].isin(test_frame_ids)].reset_index(drop=True)` —
+  i.e. filtered in `simulated_rows`'s *original* order. If the orchestrator
+  scores `result.picks` against `frame_level_split`'s `test_split` directly,
+  the two can have different row orders while both having the same length,
+  so `score_decide_first`/`score_cascade`'s `np.where(picks == ...)` (a
+  positional NumPy array, no index) silently pairs each pick with the wrong
+  row — no exception, just wrong numbers. Fixed by having the orchestrator
+  re-derive its scoring DataFrame the same way `run_router` derives its test
+  rows (`simulated_rows[simulated_rows["frame_id"].isin(test_frame_ids)]
+  .reset_index(drop=True)`) instead of reusing `frame_level_split`'s
+  `test_split`, so both are built by the identical filter over the identical
+  source ordering. Only used `frame_level_split` itself to obtain the
+  train/test `frame_id` *sets* (which don't care about row order).
+- Reused `test_two_stage.py`'s alternating-gap-sign fixture strategy for the
+  integration test's Postgres-seeded synthetic dataset (10 frames outside
+  `simulation_results` for stage 1's pool, 20 simulated frames — split
+  roughly 16 train / 4 test at `test_size=0.2` — with 2 simulation rows
+  each). Same reasoning applies unchanged when seeding through
+  `datagen.persistence`/`router.feature_store` instead of building
+  DataFrames directly: alternating sign by absolute frame index keeps both
+  the decide-first label and the (separately, internally computed) cascade
+  label balanced across any 80/20 split, so stage 2 exercises its real
+  classifier rather than the single-class constant-pick fallback.
+- `ExperimentResult` (the orchestration function's return value) is a frozen
+  dataclass with a `pd.DataFrame` field (`diagnostics`). Comparing two
+  instances with plain `==` blows up with pandas's "truth value of a
+  DataFrame is ambiguous" `ValueError`, because a dataclass's generated
+  `__eq__` tuple-compares all fields and `bool()`s each pairwise result.
+  The determinism test instead compares `diagnostics` via `.equals()` and
+  compares everything else (`train_frame_count`/`test_frame_count`, and the
+  `routers` list — whose `RouterEvaluation`/`RouterSummary`/`BootstrapResult`
+  fields are all `str`/`float`/`bool`, no DataFrame) with ordinary `==`.
+- `f"{value:.2%}"` on `float("nan")` (the `headroom_share` formatting in
+  `_print_report`) does not raise — it prints `nan%` — so no special-casing
+  was needed in the report formatter for the zero-headroom case Task 3
+  already produces as `nan`.

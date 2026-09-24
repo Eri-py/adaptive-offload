@@ -25,10 +25,10 @@
 - Notes: two_stage.py (train/predict stage1+2, cascade_label, run_router -> RouterResult with .picks plus trained-frame sets for leakage tests); single-class stage-2 label -> constant pick; 6 new tests, 135 pass.
 
 ## Task 5 — Experiment script (integration)
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 13:58:36
+- Completed: 2026-09-24 14:05:14
+- Notes: feature_experiment.py (run_experiment -> ExperimentResult, main, report); fixed a silent row-order misalignment by deriving the scoring rows the same way run_router does; 1 integration test, 136 pass.
 
 ## Task 6 — Run the experiment and write findings
 - Status: not started
