@@ -41,16 +41,13 @@ from router.feature_store import (
 from router.frame_features.confidence import confidence_features, sequences_from_results
 from router.frame_features.image_stats import image_stats
 
-# Rows are flushed in batches so an interrupted long run keeps its progress
-# (see the implementation plan's "Rows are flushed in batches of 100").
+# Batched so an interrupted long run keeps its progress (implementation plan).
 BATCH_SIZE = 100
 
-# Returns (confidences, normalised box areas) for one image's detections —
-# not `Results` directly, so tests can stub this without a real model/torch.
+# Per-image (confidences, normalised box areas), not `Results`, so tests can stub it.
 Predict = Callable[[Path], tuple[Sequence[float], Sequence[float]]]
 
-# Builds a `Predict`, e.g. loading model weights — deferred to a factory so
-# `extract_features` can call it only once pending/missing-image checks pass.
+# Deferred factory so `extract_features` builds a `Predict` only after pending/missing checks pass.
 PredictFactory = Callable[[], Predict]
 
 
@@ -170,8 +167,7 @@ def _make_real_predictor(weights_path: Path, device: str) -> Predict:
 
 
 def main() -> None:
-    # CLI-only convenience: load DATABASE_URL from training/.env if it isn't
-    # already in the environment. Mirrors `score_complexity.main()`.
+    # CLI-only: load DATABASE_URL from training/.env if unset (mirrors score_complexity.main()).
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
     parser = argparse.ArgumentParser(

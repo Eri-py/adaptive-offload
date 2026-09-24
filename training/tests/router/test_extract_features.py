@@ -135,8 +135,7 @@ def test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged(
     extract_features(postgres_engine, DATASET, tmp_path, lambda: _make_stub_predict({}))
 
     call_count = {"n": 0}
-    # A predict that would raise if ever called proves the second run
-    # doesn't recompute anything, not just that it leaves rows unchanged.
+    # Would raise if called, proving the second run recomputes nothing (not just unchanged rows).
     def _predict_that_must_not_be_called(path: Path) -> tuple[Sequence[float], Sequence[float]]:
         call_count["n"] += 1
         raise AssertionError(f"predict() should not be called again for {path.name}")

@@ -86,7 +86,7 @@ None.
 - **File:** `training/tests/router/test_feature_store.py:103-105`, also `training/tests/router/test_extract_features.py:126-127` and `training/router/extract_features.py:44-45`, `:48-49`
 - **Issue:** `.claude/coding-guidelines.md` "Comments" allows one line, and two only when truly needed. The `stale_row` comment runs to three lines, and the others are two lines that could be one.
 - **Fix:** Shorten each to one line, e.g. `# Same file name, different values: must be skipped, not overwritten or raise.`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: shorten multi-line comments"
 
 #### N4 — `test_nothing_pending_returns_none` duplicates the second-run test
 

@@ -68,8 +68,7 @@ def test_from_results_extracts_known_confidences_and_normalized_box_areas() -> N
     )
     features = from_results(_results_with_boxes(boxes))
     assert features.detection_count == 2
-    # `torch.tensor` defaults to float32, so compare rounded (its ~1e-7 rounding
-    # error, not this adapter, is what would make an exact `==` flaky here).
+    # float32's ~1e-7 rounding, not this adapter, would make an exact `==` flaky here.
     assert round(features.max_confidence, 3) == 0.9
     assert round(features.min_confidence, 3) == 0.3
     assert round(features.mean_box_area, 3) == 0.135

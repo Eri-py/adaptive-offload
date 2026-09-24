@@ -64,10 +64,7 @@ def load_model(weights_path: Path, device: str) -> YOLO:
     _require_weights_file(weights_path)
     model = YOLO(weights_path)
     model.to(device)
-    # Discard a warmup inference: the first real call otherwise pays for lazy
-    # initialisation (and, on GPU, CUDA context setup) on top of actual
-    # inference, inflating the first frame's measured latency by roughly two
-    # orders of magnitude (see review finding B1).
+    # Warmup: discards lazy-init/CUDA-setup cost that would otherwise inflate frame 1 (B1).
     model(np.zeros((640, 640, 3), dtype=np.uint8), device=device, verbose=False)
     return model
 

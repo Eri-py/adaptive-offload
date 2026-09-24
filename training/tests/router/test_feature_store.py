@@ -100,9 +100,7 @@ def test_store_and_get_known_feature_file_names_round_trips(postgres_engine: Eng
 def test_store_features_skips_already_present_file_names(postgres_engine: Engine) -> None:
     store_features(postgres_engine, DATASET, [_make_row("000000000139.jpg")])
 
-    # Re-storing the same file name with different values must not overwrite
-    # it (and must not raise on the primary-key collision) — only a genuinely
-    # new file name gets inserted.
+    # Same file name, different values: must be skipped, not overwritten or raise.
     stale_row = FeatureRow(
         file_name="000000000139.jpg",
         image_stats=ImageStats(
