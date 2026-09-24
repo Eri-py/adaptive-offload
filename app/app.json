@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "mobile-inference-benchmark",
+    "slug": "mobile-inference-benchmark",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eriol.adaptiveoffload.bench"
+    },
+    "plugins": [
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true
+        }
+      ],
+      "expo-asset"
+    ]
+  }
+}
