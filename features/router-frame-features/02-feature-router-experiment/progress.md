@@ -37,7 +37,7 @@
 - Notes: Real run x2 identical. All four routers below always-offload with 95% CIs entirely < 0. router.baseline reproduces 0.6812 / 0.6811. findings.md section appended.
 
 ## Task 7 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 14:08:45
+- Completed: 2026-09-24 14:09:07
+- Notes: training: ruff clean, mypy 9 known only, 136 passed; database: 1 passed. No files changed.
