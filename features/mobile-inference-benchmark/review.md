@@ -96,7 +96,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/metro.config.js:1`
 - **Issue:** `// eslint-disable-next-line @typescript-eslint/no-var-requires` does nothing: `app/` has no ESLint setup, and a `.js` file would not hit that rule anyway.
 - **Fix:** Delete the line.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: drop the dead eslint-disable comment"
 
 #### N4 — Export-script docstring is inaccurate on two points
 
