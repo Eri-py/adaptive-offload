@@ -8,13 +8,22 @@ the full research design; this repo is the implementation.
 ## Infrastructure — never start or stop it yourself
 
 - Never start, stop, or restart the Postgres instance, the FastAPI server,
-  the data-gen harness, or any other long-running process on your own
+  the data-gen simulator, or any other long-running process on your own
   initiative — always ask the user to do it.
 - Never run database migrations or create/drop a database yourself; the user
   runs the migration script and manages the database themselves.
 - This applies even mid-task: if a task would be easier to verify with
   infrastructure running (e.g. hitting a live endpoint, querying the DB),
   stop and ask the user to start it rather than starting it yourself.
+- **Scoped exception (granted 2026-09-07):** automated test suites may
+  create and drop their own ephemeral Postgres test database as part of a
+  test fixture's setup/teardown (e.g. `CREATE DATABASE test_xyz` before a
+  run, `DROP DATABASE test_xyz` after) — this is what makes it possible to
+  test against real Postgres instead of a SQLite stand-in. This exception
+  is narrow: it covers only test-fixture-driven create/drop of disposable,
+  uniquely-named test databases. It never extends to the real/shared
+  database, never covers running a migration against the real instance, and
+  doesn't authorize any other create/drop/start/stop action.
 
 ## Git workflow
 
