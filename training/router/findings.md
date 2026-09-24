@@ -14,7 +14,7 @@ utility per path. All three trained and evaluated on the same 5 input features:
 | Approach | Avg utility (held-out) |
 |---|---|
 | Always offload (static baseline) | 0.6812 |
-| Logistic classifier | ~0.68 (comparable, no clear win) |
+| Logistic classifier | 0.6574 (comparable, no clear win) |
 | HistGB non-linear classifier | did not outperform logistic |
 | Linear utility regression | 0.6811 — a statistical tie with always-offload |
 
@@ -98,11 +98,16 @@ just inputs, so the numbers aren't directly comparable row-for-row:
   classifier trained on the existing frame-level split's 400 train photos,
   combining stage 1's two outputs with the network/device features; it is
   evaluated on the split's 100 held-out test photos.
-- **Four routers**, one per design × model family: `decide_first_linear`,
-  `decide_first_gbt`, `cascade_linear`, `cascade_gbt`. Decide-first picks
-  LOCAL/OFFLOAD before any inference; the cascade always runs local first and
-  decides whether to also escalate to offload, charged local+offload latency
-  when it does.
+- **Eight routers**, one per design × model family × stage-2 objective:
+  `decide_first_linear`, `decide_first_gbt`, `cascade_linear`, `cascade_gbt`
+  (stage 2 is an unweighted 0/1 classifier on the stored/cascade label — the
+  original four), plus the same four design/family combinations again with
+  `_costaware` appended (stage 2 instead regresses the per-row utility
+  margin, `local_utility − alternative_utility`, and picks LOCAL/ACCEPT where
+  the predicted margin is positive — discussed after the results table
+  below). Decide-first picks LOCAL/OFFLOAD before any inference; the cascade always
+  runs local first and decides whether to also escalate to offload, charged
+  local+offload latency when it does.
 - Evaluation is on the held-out photos' simulated rows only (100 photos, not
   the earlier baselines' 500), with a bootstrap CI over those held-out photos.
 
@@ -141,20 +146,53 @@ reports about a frame, not in the frame's raw image statistics.
 | decide_first_gbt | 0.6459 | 0.6022 | 0.6812 | 0.7208 | -89.15% | [-0.0661, -0.0085] | False |
 | cascade_linear | 0.6289 | 0.6022 | 0.6812 | 0.7208 | -132.12% | [-0.0898, -0.0169] | False |
 | cascade_gbt | 0.6282 | 0.6022 | 0.6812 | 0.7208 | -133.86% | [-0.0868, -0.0214] | False |
+| decide_first_linear_costaware | 0.6810 | 0.6022 | 0.6812 | 0.7208 | -0.41% | [-0.0020, 0.0014] | False |
+| decide_first_gbt_costaware | 0.6591 | 0.6022 | 0.6812 | 0.7208 | -55.76% | [-0.0448, -0.0028] | False |
+| cascade_linear_costaware | 0.6611 | 0.6022 | 0.6812 | 0.7208 | -50.89% | [-0.0302, -0.0104] | False |
+| cascade_gbt_costaware | 0.6504 | 0.6022 | 0.6812 | 0.7208 | -77.83% | [-0.0513, -0.0086] | False |
 
 Held-out split: 400 train photos / 100 test photos (`router.dataset
-.frame_level_split`, seed 42).
+.frame_level_split`, seed 42). Two runs of `python -m router.feature_experiment`
+on the real database produced byte-identical output for all eight rows.
 
-**None of the four routers meets the usefulness bar.** All four 95%
-bootstrap CIs for (router utility − always-offload utility) lie entirely
-*below* zero — this is a stronger, more negative result than the three
-baseline routers above, which were statistical ties with always-offload.
-Every one of these four routers is worse than always-offload with 95%
-confidence, on held-out photos the frame features gave it real (if weak)
-signal about. `decide_first_linear` is the least bad of the four; both
-`cascade` variants and `decide_first_gbt` do markedly worse, consistent with
-stage 2 overfitting a 400-photo training set rather than finding real
-structure.
+**The classifier objective's negative result is mostly a cost-blind
+threshold, not feature starvation or overfitting — except for GBT, which
+does overfit.** Stage 2's classifier is fit on 0/1 labels and picks
+LOCAL/ACCEPT wherever its predicted probability exceeds 0.5. But the two
+kinds of mistake it can make cost very different amounts: on the train
+photos, a correct LOCAL pick gains 0.088 utility on average, while a wrong
+LOCAL pick loses 0.220 — so the break-even predicted probability is about
+0.71, not 0.5. A classifier thresholded at 0.5 picks LOCAL far more often
+than that asymmetry justifies. `decide_first_linear`'s 0.6575 is not a
+*stronger*, more negative result than the three baseline routers above — it
+reproduces `router.baseline`'s logistic classifier almost exactly (0.6574,
+corrected above), the same classifier-loss artifact under a different
+feature set.
+
+**Cost-aware stage 2 (margin regression) changes the linear verdict.**
+Retraining stage 2 as a regressor on the per-row utility margin
+(`local_utility − alternative_utility`), picking LOCAL/ACCEPT wherever the
+predicted margin is positive, raises `decide_first_linear` to
+`decide_first_linear_costaware`'s 0.6810 with 95% CI [-0.0020, 0.0014] — a
+statistical tie with always-offload, not a loss. `cascade_linear_costaware`
+also improves, to 0.6611, but its CI ([-0.0302, -0.0104]) stays entirely
+below zero: cost-awareness helps the cascade design without clearing the
+bar. Both GBT cost-aware variants improve over their classifier counterparts
+too (`decide_first_gbt_costaware` 0.6591, `cascade_gbt_costaware` 0.6504)
+but remain significantly negative.
+
+**The overfitting claim only holds for the GBT variants, and its cause is
+identifiable: `predicted_gap` acting as a photo ID.** Linear stage 2's
+train/test accuracy is close (0.570/0.560 for decide-first, 0.644/0.604 for
+cascade) — not overfitting. GBT stage 2's train/test accuracy is 0.982/0.555
+(decide-first) and 0.992/0.526 (cascade) — a large train/test gap, because
+`predicted_gap` (stage 1's own regression output, one of stage 2's five
+inputs) takes ~400 distinct values across the 400 train photos, essentially
+one per photo. A gradient-boosted stage 2 can split on that near-unique value
+per training row instead of learning a generalizable relationship — it
+memorizes which photo each row belongs to rather than the actual gap. (This
+is the mechanism S1 fixes; the GBT numbers above are expected to change once
+that lands, not addressed here.)
 
 The `oracle` column above is the same unconstrained per-row max of local and
 offload utility used throughout this file (0.7208), which the spec directs
@@ -162,10 +200,10 @@ both designs to be compared against. The cascade design's own ceiling — the
 best any ACCEPT/ESCALATE assignment could do once escalated rows are charged
 local **and** offload latency — is strictly below that shown oracle, since an
 accepted row can never earn the (uncharged) offload latency the oracle
-implicitly assumes when it prefers offload. The cascade rows' -132%/-134%
-headroom-share figures are measured against a ceiling neither cascade router
-could reach even with perfect decisions; they should not be read as "still
-this far from a reachable 0%."
+implicitly assumes when it prefers offload. Every cascade row's headroom
+share (both classifier and cost-aware) is measured against a ceiling no
+cascade router could reach even with perfect decisions; these percentages
+should not be read as "still this far from a reachable 0%."
 
 ### Feature compute cost (from spec 01)
 
@@ -179,25 +217,31 @@ decide-first router is trying to avoid running at all.
 ### Recommendation
 
 Do not resume the parked phone/server work
-(`features/server-served-benchmark/`) yet. All four routers this experiment
-built — spanning both a decide-first and a cascade design, a linear and a
-gradient-boosted model family, and access to every stored frame feature —
-are worse than always-offload with 95% confidence, not merely tied with it.
-The oracle headroom above always-offload is real (~0.0396 utility, matching
-the earlier section), but nothing built here shows a way to capture any of
-it reliably from 400 training photos and 100 held-out test photos. Building
-phone-side feature extraction and a server-side serving path only pays off
-once there is a router worth deploying, and none of these four qualify.
+(`features/server-served-benchmark/`) yet. Of the eight routers this
+experiment built — spanning both a decide-first and a cascade design, a
+linear and a gradient-boosted model family, and both a classifier and a
+cost-aware stage-2 objective — only `decide_first_linear_costaware` reaches
+a statistical tie with always-offload; the other seven, including every
+cascade variant, remain worse with 95% confidence. A tie is not a router
+worth deploying either. The oracle headroom above always-offload is real
+(~0.0396 utility, matching the earlier section), but nothing built here
+shows a way to capture it reliably. Building phone-side feature extraction
+and a server-side serving path only pays off once there is a router that
+beats always-offload, and none of these eight do.
 
 If the router idea is revisited before touching phone/server infrastructure,
-the more promising next steps are on the data/modeling side, not the
-infrastructure side: more than 400 train photos for stage 2 (a small set for
-a classifier combining a prior probability with four network/device
-features), and possibly dropping the image statistics entirely in favor of
-the confidence features alone, since the diagnostics above show almost all
-of the frame-level signal comes from running the local model, not from its
-raw image statistics — which also undercuts the decide-first design's
-premise of avoiding that inference pass.
+cost-aware stage 2 (margin regression, not more train photos) was the first
+candidate next step, and this experiment already tried it — see the
+`_costaware` rows above. It closed the gap for `decide_first_linear` (a tie)
+but not for the cascade design or either GBT variant. Two next steps remain
+untried: (1) resolve the GBT variants' `predicted_gap`-as-photo-ID
+overfitting (S1) before judging whether a cost-aware GBT stage 2 can also
+close its gap, since the GBT numbers above aren't trustworthy yet either
+way; and (2) possibly dropping the image statistics entirely in favor of the
+confidence features alone, since the diagnostics above show almost all of
+the frame-level signal comes from running the local model, not from its raw
+image statistics — which also undercuts the decide-first design's premise
+of avoiding that inference pass.
 
 If a future rerun does clear the usefulness bar — particularly for the
 cascade, whose local-first design is the one that would actually save
@@ -208,3 +252,12 @@ baselines) uses the stored desktop latencies; the cascade's premise is
 skipping the network round trip on accepted frames, and that premise's value
 depends on the local model's actual on-phone inference time, which nothing
 in this repo has measured yet.
+
+**Superseded by spec 03.** `features/router-frame-features/03-latency-budget-router`
+reframes the router's objective away from the soft weighted-utility score
+this whole file uses (under which "always offload" is nearly unbeatable
+because latency is cheap) toward a hard per-request latency budget with
+accuracy maximized inside it. That reframing supersedes the recommendation
+above, not just its next-steps list — the "does any router beat
+always-offload on this utility" question this file answers stops being the
+relevant question once the objective changes.

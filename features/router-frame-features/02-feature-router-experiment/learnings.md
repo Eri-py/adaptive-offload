@@ -219,3 +219,59 @@
   `git status --short --ignored training/router/` shows them as `!!`
   (ignored), so running both scripts leaves `git status` showing only the
   intended `training/router/findings.md` edit.
+
+## Review finding B1 — cost-aware stage 2 (margin regression)
+
+- Threaded a new `Objective = Literal["classifier", "cost_aware"]` through
+  `train_stage2`/`predict_stage2`/`run_router` rather than adding a parallel
+  set of functions. `train_stage2`'s signature changed from
+  `(df_train, label_column, family)` to `(df_train, design, family, *,
+  objective="classifier", label_column="label")` — `design` became required
+  because the cost-aware path needs it for two things the old signature
+  never had to express: which utility is the "alternative" in
+  `stage2_margin` (offload for decide-first, escalated for cascade), and
+  which pick string (`LOCAL`/`ACCEPT` vs `OFFLOAD`/`ESCALATE`) a positive
+  predicted margin means. Both are now table lookups
+  (`STAGE2_POSITIVE_PICK`/`STAGE2_NEGATIVE_PICK`) keyed by `Design`, computed
+  once at train time and stored on `Stage2Model` so `predict_stage2` never
+  needs `design` again. The `objective="classifier"` path's actual fit calls
+  are byte-for-byte unchanged, confirmed by the two full experiment runs
+  reproducing the original four rows' numbers exactly.
+- `stage2_margin(design, df)` reuses `local_utility`/`offload_utility`/
+  `escalated_utility` from `router.evaluation` directly — no new utility
+  formula. It needs `df` to carry the raw `local_accuracy`/`local_latency_ms`
+  /`offload_accuracy`/`offload_latency_ms` columns, which `run_router`'s
+  `train_rows` already has (unchanged from `simulated_rows`), so no extra
+  join was needed, matching how `cascade_label` already relies on the same
+  columns being present.
+- A regressor (`LinearRegression`/`HistGradientBoostingRegressor`) never
+  raises on single-valued targets the way `LogisticRegression`/
+  `HistGradientBoostingClassifier` do on single-class labels, so the
+  cost-aware path has no constant-pick fallback — simpler than the
+  classifier path, not more complex.
+- Verified the review finding's cited numbers independently (read-only
+  against real Postgres) before writing them into `findings.md`, rather than
+  copying them from the review text on trust: cost asymmetry (mean margin
+  0.0880 when LOCAL is correct on train rows, -0.2199 when wrong, implied
+  break-even 0.7141 ≈ "about 0.71") and the classifier train/test accuracies
+  (linear 0.570/0.560 decide-first, 0.644/0.604 cascade; GBT 0.982/0.555,
+  0.992/0.526) all reproduced to the same precision the finding quoted —
+  confirms the finding's checks, and confirms `predicted_gap` really does
+  take ~400 distinct values on the 400 train photos (`nunique()` check),
+  i.e. one per photo. The GBT accuracy figures only reproduced once stage
+  1's family was matched to stage 2's family per router config (`gbt` stage
+  2 needs `gbt` stage 1) — an all-linear-stage-1 first pass gave different
+  (and wrong) GBT numbers.
+- For the hand-checkable cost-aware unit test
+  (`test_stage2_cost_aware_picks_follow_sign_of_predicted_margin`), holding
+  every stage-2 feature constant except `predicted_gap` (two distinct
+  values, one per synthetic frame) makes `StandardScaler` degenerate
+  gracefully on the constant columns (sklearn sets `scale_ = 1` instead of
+  0 for zero-variance columns, so they just center to 0 rather than
+  dividing by zero) and reduces the fit to an exact line through two
+  points — deterministic, hand-verifiable margin values without needing the
+  fitted coefficients.
+- Two full runs of `../.venv/bin/python -m router.feature_experiment` (all
+  eight rows, four classifier + four cost-aware) produced byte-identical
+  stdout again, same as Task 6's four-row run — the new cost-aware path is
+  just as deterministic given the fixed `random_state=42`/split seed 42.

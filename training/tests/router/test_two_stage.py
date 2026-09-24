@@ -28,6 +28,7 @@ from router.two_stage import (
     DESIGN_FEATURE_COLUMNS,
     Design,
     Family,
+    Objective,
     cascade_label,
     predict_stage2,
     run_router,
@@ -153,6 +154,24 @@ def test_stage2_training_rows_exclude_every_test_photo() -> None:
     assert result.stage2_trained_frame_ids == train_frame_ids
 
 
+def test_stage2_cost_aware_training_rows_exclude_every_test_photo() -> None:
+    """Same leakage guard as the classifier objective above, for the
+    cost-aware objective's regressor path through `run_router`."""
+    frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids = _fixture()
+    result = run_router(
+        frame_table,
+        simulated_rows,
+        train_frame_ids,
+        test_frame_ids,
+        simulated_frame_ids,
+        "cascade",
+        "gbt",
+        "cost_aware",
+    )
+    assert result.stage2_trained_frame_ids.isdisjoint(test_frame_ids)
+    assert result.stage2_trained_frame_ids == train_frame_ids
+
+
 def test_picks_are_identical_across_two_runs() -> None:
     frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids = _fixture()
     args = (frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids)
@@ -184,7 +203,7 @@ def test_cascade_label_matches_hand_computed_cases() -> None:
     assert list(labels) == ["ESCALATE", "ACCEPT"]
 
 
-def test_all_four_design_family_combinations_return_one_pick_per_test_row() -> None:
+def test_all_design_family_objective_combinations_return_one_pick_per_test_row() -> None:
     frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids = _fixture()
     n_test_rows = len(simulated_rows[simulated_rows["frame_id"].isin(test_frame_ids)])
     assert n_test_rows > 0
@@ -195,19 +214,30 @@ def test_all_four_design_family_combinations_return_one_pick_per_test_row() -> N
     }
     designs: list[Design] = ["decide_first", "cascade"]
     families: list[Family] = ["linear", "gbt"]
+    objectives: list[Objective] = ["classifier", "cost_aware"]
     for design in designs:
         for family in families:
-            result = run_router(
-                frame_table,
-                simulated_rows,
-                train_frame_ids,
-                test_frame_ids,
-                simulated_frame_ids,
-                design,
-                family,
-            )
-            assert len(result.picks) == n_test_rows
-            assert set(result.picks) <= valid_picks[design]
+            for objective in objectives:
+                result = run_router(
+                    frame_table,
+                    simulated_rows,
+                    train_frame_ids,
+                    test_frame_ids,
+                    simulated_frame_ids,
+                    design,
+                    family,
+                    objective,
+                )
+                assert len(result.picks) == n_test_rows
+                assert set(result.picks) <= valid_picks[design]
+
+
+def test_cost_aware_picks_are_identical_across_two_runs() -> None:
+    frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids = _fixture()
+    args = (frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids)
+    first = run_router(*args, "cascade", "gbt", "cost_aware")
+    second = run_router(*args, "cascade", "gbt", "cost_aware")
+    assert np.array_equal(first.picks, second.picks)
 
 
 def test_stage2_single_class_label_returns_that_constant_for_every_row() -> None:
@@ -234,10 +264,61 @@ def test_stage2_single_class_label_returns_that_constant_for_every_row() -> None
         }
     )
 
-    model = train_stage2(df_train, "label", "linear")
+    model = train_stage2(df_train, "cascade", "linear", label_column="label")
+    assert model.objective == "classifier"
     assert model.classifier is None
+    assert model.regressor is None
     assert model.constant_pick == "ACCEPT"
+    assert model.positive_pick == "ACCEPT"
+    assert model.negative_pick == "ESCALATE"
     assert model.trained_frame_ids == {"frame_a.jpg", "frame_b.jpg"}
 
     picks = predict_stage2(model, df_test)
     assert list(picks) == ["ACCEPT", "ACCEPT"]
+
+
+def test_stage2_cost_aware_picks_follow_sign_of_predicted_margin() -> None:
+    """Cost-aware stage 2 regresses the utility margin (local minus the
+    alternative path) instead of a 0/1 label, then picks LOCAL/OFFLOAD by the
+    sign of the predicted margin. `predicted_gap` is the only feature that
+    varies between the two training frames, and is set to fully determine the
+    margin's sign (frame_a: local wins big; frame_b: offload wins big), so a
+    linear regressor fits an exact line through the two (predicted_gap,
+    margin) points and its test-time prediction is hand-verifiable without
+    needing the fitted coefficients."""
+    constant_columns = {
+        "network_bandwidth_mbps": [10.0, 10.0, 10.0, 10.0],
+        "network_latency_ms": [30.0, 30.0, 30.0, 30.0],
+        "network_packet_loss_pct": [0.0, 0.0, 0.0, 0.0],
+        "device_load_pct": [10.0, 10.0, 10.0, 10.0],
+        "p_local_good_enough": [0.5, 0.5, 0.5, 0.5],
+    }
+    df_train = pd.DataFrame(
+        {
+            "frame_id": ["frame_a.jpg", "frame_a.jpg", "frame_b.jpg", "frame_b.jpg"],
+            "predicted_gap": [-1.0, -1.0, 1.0, 1.0],
+            # local_utility - offload_utility: frame_a's local pass is fast
+            # and accurate (margin ~= +1.0), frame_b's is slow and inaccurate
+            # (margin ~= -1.0) — offload wins there instead.
+            "local_accuracy": [0.95, 0.95, 0.10, 0.10],
+            "local_latency_ms": [10.0, 10.0, 500.0, 500.0],
+            "offload_accuracy": [0.10, 0.10, 0.95, 0.95],
+            "offload_latency_ms": [500.0, 500.0, 10.0, 10.0],
+            **constant_columns,
+        }
+    )
+    df_test = pd.DataFrame(
+        {"predicted_gap": [-1.0, 1.0], **{k: v[:2] for k, v in constant_columns.items()}}
+    )
+
+    model = train_stage2(df_train, "decide_first", "linear", objective="cost_aware")
+    assert model.objective == "cost_aware"
+    assert model.classifier is None
+    assert model.regressor is not None
+    assert model.constant_pick is None
+    assert model.positive_pick == "LOCAL"
+    assert model.negative_pick == "OFFLOAD"
+    assert model.trained_frame_ids == {"frame_a.jpg", "frame_b.jpg"}
+
+    picks = predict_stage2(model, df_test)
+    assert list(picks) == ["LOCAL", "OFFLOAD"]

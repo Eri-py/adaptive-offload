@@ -154,9 +154,18 @@ def test_run_experiment_is_deterministic_with_all_routers_finite(postgres_engine
     assert first.train_frame_count > 0
     assert first.test_frame_count > 0
 
-    expected_names = {"decide_first_linear", "decide_first_gbt", "cascade_linear", "cascade_gbt"}
+    expected_names = {
+        "decide_first_linear",
+        "decide_first_gbt",
+        "cascade_linear",
+        "cascade_gbt",
+        "decide_first_linear_costaware",
+        "decide_first_gbt_costaware",
+        "cascade_linear_costaware",
+        "cascade_gbt_costaware",
+    }
     assert {router.name for router in first.routers} == expected_names
-    assert len(first.routers) == 4
+    assert len(first.routers) == 8
 
     for value in first.diagnostics["spearman_rho"]:
         assert math.isfinite(value)

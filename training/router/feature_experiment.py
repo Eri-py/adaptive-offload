@@ -1,7 +1,8 @@
 """Wires Tasks 1-4 together: loads the frame/simulated data, reports feature
-diagnostics, trains and evaluates all four routers on the frame-level
-held-out split, and prints the results. Read-only against the database — no
-model files are saved (unlike `router/baseline.py`).
+diagnostics, trains and evaluates all eight routers (four design/family
+combinations, each under the classifier and cost-aware stage-2 objectives)
+on the frame-level held-out split, and prints the results. Read-only against
+the database — no model files are saved (unlike `router/baseline.py`).
 
 Run as `python -m router.feature_experiment` from `training/`.
 """
@@ -34,25 +35,39 @@ from router.frame_dataset import (
     load_simulated_frame_ids,
     load_simulated_rows,
 )
-from router.two_stage import Design, Family, run_router
+from router.two_stage import Design, Family, Objective, run_router
 
-# Every router this experiment trains and evaluates: one per design/family
-# combination, matching `router/baseline.py`'s model families.
-ROUTER_CONFIGS: list[tuple[Design, Family]] = [
-    ("decide_first", "linear"),
-    ("decide_first", "gbt"),
-    ("cascade", "linear"),
-    ("cascade", "gbt"),
+# Every router this experiment trains and evaluates: the four classifier
+# design/family combinations (matching `router/baseline.py`'s model
+# families), plus the same four combinations again under the cost-aware
+# objective (regresses the utility margin instead of a 0/1 label — see
+# `router.two_stage.stage2_margin`).
+ROUTER_CONFIGS: list[tuple[Design, Family, Objective]] = [
+    ("decide_first", "linear", "classifier"),
+    ("decide_first", "gbt", "classifier"),
+    ("cascade", "linear", "classifier"),
+    ("cascade", "gbt", "classifier"),
+    ("decide_first", "linear", "cost_aware"),
+    ("decide_first", "gbt", "cost_aware"),
+    ("cascade", "linear", "cost_aware"),
+    ("cascade", "gbt", "cost_aware"),
 ]
+
+
+def _router_name(design: Design, family: Family, objective: Objective) -> str:
+    suffix = "" if objective == "classifier" else "_costaware"
+    return f"{design}_{family}{suffix}"
 
 
 @dataclass(frozen=True)
 class RouterEvaluation:
-    """One design/family combination's evaluation against the held-out test rows."""
+    """One design/family/objective combination's evaluation against the
+    held-out test rows."""
 
     name: str
     design: Design
     family: Family
+    objective: Objective
     summary: RouterSummary
     bootstrap: BootstrapResult
 
@@ -70,7 +85,7 @@ class ExperimentResult:
 
 def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
     """Loads the data, computes diagnostics, splits by photo, trains and
-    evaluates all four routers on the held-out test rows.
+    evaluates all eight routers on the held-out test rows.
     """
     frame_table = load_frame_table(engine, dataset)
     simulated_frame_ids = load_simulated_frame_ids(engine, dataset)
@@ -94,7 +109,7 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
     )
 
     routers = []
-    for design, family in ROUTER_CONFIGS:
+    for design, family, objective in ROUTER_CONFIGS:
         result = run_router(
             frame_table,
             simulated_rows,
@@ -103,14 +118,16 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
             simulated_frame_ids,
             design,
             family,
+            objective,
         )
         score = score_decide_first if design == "decide_first" else score_cascade
         router_utility = score(test_df, result.picks)
         routers.append(
             RouterEvaluation(
-                name=f"{design}_{family}",
+                name=_router_name(design, family, objective),
                 design=design,
                 family=family,
+                objective=objective,
                 summary=summarize(test_df, router_utility),
                 bootstrap=bootstrap_router_vs_offload(test_df, router_utility, seed=42),
             )
@@ -135,8 +152,9 @@ def _print_report(result: ExperimentResult) -> None:
     )
 
     print("--- Router results (held-out photos) ---")
+    # 29-char width fits the longest router name ("decide_first_linear_costaware").
     header = (
-        f"{'router':<20} {'avg util':>10} {'local':>10} {'offload':>10} {'oracle':>10} "
+        f"{'router':<29} {'avg util':>10} {'local':>10} {'offload':>10} {'oracle':>10} "
         f"{'headroom':>10} {'95% CI':>22} {'useful':>8}"
     )
     print(header)
@@ -145,7 +163,7 @@ def _print_report(result: ExperimentResult) -> None:
         b = router.bootstrap
         ci = f"[{b.ci_low:.4f}, {b.ci_high:.4f}]"
         print(
-            f"{router.name:<20} {s.avg_utility_router:>10.4f} {s.avg_utility_always_local:>10.4f} "
+            f"{router.name:<29} {s.avg_utility_router:>10.4f} {s.avg_utility_always_local:>10.4f} "
             f"{s.avg_utility_always_offload:>10.4f} {s.avg_utility_oracle:>10.4f} "
             f"{s.headroom_share:>10.2%} {ci:>22} {str(b.useful):>8}"
         )

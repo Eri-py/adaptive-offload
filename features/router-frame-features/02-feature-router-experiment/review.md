@@ -103,7 +103,7 @@ artifacts are ignored per the rules.
   (`03-latency-budget-router`) reframes the objective and supersedes this
   recommendation. Ideally, make the cost-aware stage 2 a fifth/sixth row in
   `feature_experiment.py` rather than only prose, so the claim can be reproduced.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1: cost-aware stage-2 routers and a corrected explanation"
 
 ## Suggestions
 
