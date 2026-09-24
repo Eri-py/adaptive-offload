@@ -62,3 +62,42 @@
   like it needs a looser tolerance — it doesn't; the seeded random-row test
   uses a tiny `1e-9` slack only for float comparison, not because the
   property is approximate.
+
+## Task 3 — Offload-latency predictor and confidence scores
+
+- The offload-latency `HistGradientBoostingRegressor` is trained on
+  condition columns only (`network_bandwidth_mbps`, `network_latency_ms`,
+  `network_packet_loss_pct`, `device_load_pct`) — no per-photo stage-1
+  output ever reaches it, unlike stage 2's GBT. That's *why* spec 02's S1
+  photo-memorisation fix (`STAGE2_MIN_LEAF_PHOTOS` /
+  `min_samples_leaf`) doesn't apply here: memorisation there came from a
+  leaf splitting on `predicted_gap`/`p_local_good_enough`, which are
+  constant per photo; there's no such column in this model's feature set
+  for a leaf to isolate a single training photo with, so an unconstrained
+  `HistGradientBoostingRegressor(random_state=42)` (matching the plan's
+  literal spec) is correct as-is. Documented this reasoning directly in
+  `train_offload_latency_model`'s docstring so it isn't mistaken for an
+  oversight in a later review pass.
+- `learned_score_model`/`learned_score` are thin wrappers around
+  `router.two_stage.train_stage1`/`predict_stage1` with
+  `CONFIDENCE_COLUMNS` and family `"gbt"` fixed — no new leakage logic to
+  write or test beyond what spec 02 already covers; the test here only
+  checks the wrapper wires `simulated_frame_ids` through to
+  `Stage1Models.trained_frame_ids` correctly, reusing spec 02's
+  alternating-gap-sign fixture trick (`test_two_stage.py`'s learnings) so
+  any contiguous train/simulated split still has both classes for the
+  `gap <= 0` classifier.
+- `predict_offload_latency`/`raw_score`/`learned_score` all return plain
+  `npt.NDArray[np.float64]` (via `np.asarray(..., dtype=np.float64)`)
+  rather than a `pd.Series`, per the task — this lets Task 2's
+  `budget_only_actions`/`cascade_actions` (which already accept
+  `pd.Series | npt.NDArray[np.float64]`) take these outputs directly
+  without a caller-side conversion.
+- Correlation test for the latency model: generated `offload_latency_ms =
+  1000/bandwidth + N(0, 2)` on `network_bandwidth_mbps ~ Uniform(1, 100)`,
+  with the other three condition columns as unrelated noise, fit on 400
+  synthetic rows and predicted on 150 held-out synthetic rows (not the
+  training rows — a real holdout, not a memorisation check) — comfortably
+  clears the required `> 0.9` `np.corrcoef` threshold with
+  `HistGradientBoostingRegressor`'s defaults, no hyperparameter tuning
+  needed for a two-variable synthetic relationship this smooth.

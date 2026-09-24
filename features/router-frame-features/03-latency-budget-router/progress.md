@@ -13,10 +13,10 @@
 - Notes: latency_policies.py (budget_only/cascade/oracle actions, outcomes, on-time accuracy, RouterMetrics); budget boundary inclusive; 12 new tests, 157 pass.
 
 ## Task 3 — Offload-latency predictor and confidence scores
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 17:28:51
+- Completed: 2026-09-24 17:32:16
+- Notes: Offload-latency GBT regressor, raw_score (mean_confidence), learned_score (stage-1 p_local_good_enough on CONFIDENCE_COLUMNS). 6 new tests, 163 pass.
 
 ## Task 4 — Figure
 - Status: not started

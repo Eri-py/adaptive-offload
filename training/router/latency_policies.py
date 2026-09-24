@@ -1,6 +1,6 @@
 """Per-row policies for the latency-budget router: budget-only, budget +
 cascade, and a within-budget oracle, plus the outcomes and metrics they
-share.
+share, the offload-latency predictor, and the two cascade confidence scores.
 
 Everything here is computed per row, vectorised, from stored/predicted
 values — see `router.frame_dataset.load_simulated_rows` for the row columns
@@ -16,10 +16,75 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+from router.frame_dataset import CONFIDENCE_COLUMNS
+from router.two_stage import Stage1Models, predict_stage1, train_stage1
 
 LOCAL = "LOCAL"
 OFFLOAD = "OFFLOAD"
 ESCALATE = "ESCALATE"
+
+# The network/device condition columns the offload-latency model is trained
+# on. The router never sees a request's *true* latency when it decides — only
+# these conditions, predicted ahead of time.
+_OFFLOAD_LATENCY_FEATURE_COLUMNS = [
+    "network_bandwidth_mbps",
+    "network_latency_ms",
+    "network_packet_loss_pct",
+    "device_load_pct",
+]
+
+
+def train_offload_latency_model(train_rows: pd.DataFrame) -> HistGradientBoostingRegressor:
+    """Fit a `HistGradientBoostingRegressor(random_state=42)` predicting
+    `offload_latency_ms` from `_OFFLOAD_LATENCY_FEATURE_COLUMNS` alone.
+    Gradient-boosted because the simulated offload latency scales with
+    1/bandwidth, which a linear model misfits.
+
+    Unlike stage 2's GBT (`two_stage.STAGE2_MIN_LEAF_PHOTOS`), this model's
+    inputs are only condition columns, never a per-photo stage-1 output —
+    there's nothing here a leaf could split on to isolate one training
+    photo, so the photo-memorisation guard that fix needed doesn't apply.
+    """
+    model = HistGradientBoostingRegressor(random_state=42)
+    model.fit(train_rows[_OFFLOAD_LATENCY_FEATURE_COLUMNS], train_rows["offload_latency_ms"])
+    return model
+
+
+def predict_offload_latency(
+    model: HistGradientBoostingRegressor, rows: pd.DataFrame
+) -> npt.NDArray[np.float64]:
+    """Predicted offload latency (ms) for each row of `rows`."""
+    return np.asarray(model.predict(rows[_OFFLOAD_LATENCY_FEATURE_COLUMNS]), dtype=np.float64)
+
+
+def raw_score(rows: pd.DataFrame) -> npt.NDArray[np.float64]:
+    """The raw cascade confidence score: YOLOv8n's stored mean detection
+    confidence for the frame (0 when there are no detections, so those
+    frames always escalate if the budget allows)."""
+    return np.asarray(rows["mean_confidence"], dtype=np.float64)
+
+
+def learned_score_model(
+    frame_table: pd.DataFrame, simulated_frame_ids: set[str]
+) -> Stage1Models:
+    """Fit the learned cascade score: stage 1's gap classifier
+    (`router.two_stage.train_stage1`) on `CONFIDENCE_COLUMNS`, family
+    `"gbt"`, trained on every frame in `frame_table` except the simulated
+    ones — it never sees a simulated photo, train or test
+    (`Stage1Models.trained_frame_ids` is what a test checks this against).
+    """
+    return train_stage1(frame_table, CONFIDENCE_COLUMNS, "gbt", simulated_frame_ids)
+
+
+def learned_score(model: Stage1Models, rows: pd.DataFrame) -> npt.NDArray[np.float64]:
+    """The learned cascade confidence score for each row of `rows`: the
+    predicted probability that the local result is at least as accurate as
+    the offload result (`p_local_good_enough`, from
+    `router.two_stage.predict_stage1`)."""
+    predicted = predict_stage1(model, rows)
+    return np.asarray(predicted["p_local_good_enough"], dtype=np.float64)
 
 # Sized to the longest label ("ESCALATE") so every action array holds all
 # three labels without truncation — `np.full(..., dtype=np.str_)` sizes the

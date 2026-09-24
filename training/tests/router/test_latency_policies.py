@@ -18,10 +18,15 @@ import pandas as pd
 from router.latency_policies import (
     budget_only_actions,
     cascade_actions,
+    learned_score,
+    learned_score_model,
     metrics,
     on_time_accuracy_per_row,
     oracle_actions,
     outcomes,
+    predict_offload_latency,
+    raw_score,
+    train_offload_latency_model,
 )
 
 
@@ -195,3 +200,107 @@ def test_oracle_on_time_accuracy_dominates_budget_only_and_cascade_per_row() -> 
         cascade_latency, cascade_accuracy = outcomes(rows, cascade)
         cascade_on_time = on_time_accuracy_per_row(cascade_latency, cascade_accuracy, budget_ms)
         assert (oracle_on_time >= cascade_on_time - 1e-9).all()
+
+
+def _offload_latency_rows(rng: np.random.Generator, n: int) -> pd.DataFrame:
+    """`n` rows with a synthetic 1/bandwidth offload-latency relationship —
+    the other three condition columns are unrelated noise, matching how the
+    simulated offload latency actually scales with bandwidth alone."""
+    bandwidth = rng.uniform(1.0, 100.0, n)
+    noise = rng.normal(0.0, 2.0, n)
+    return pd.DataFrame(
+        {
+            "network_bandwidth_mbps": bandwidth,
+            "network_latency_ms": rng.uniform(5.0, 80.0, n),
+            "network_packet_loss_pct": rng.uniform(0.0, 5.0, n),
+            "device_load_pct": rng.uniform(0.0, 100.0, n),
+            "offload_latency_ms": 1000.0 / bandwidth + noise,
+        }
+    )
+
+
+def test_offload_latency_model_tracks_synthetic_inverse_bandwidth_relationship() -> None:
+    rng = np.random.default_rng(11)
+    train_rows = _offload_latency_rows(rng, 400)
+    test_rows = _offload_latency_rows(rng, 150)
+
+    model = train_offload_latency_model(train_rows)
+    predicted = predict_offload_latency(model, test_rows)
+
+    assert predicted.shape == (150,)
+    truth = test_rows["offload_latency_ms"].to_numpy()
+    correlation = np.corrcoef(predicted, truth)[0, 1]
+    assert correlation > 0.9
+
+
+def test_offload_latency_model_is_deterministic_across_two_runs() -> None:
+    rng = np.random.default_rng(12)
+    train_rows = _offload_latency_rows(rng, 200)
+    test_rows = _offload_latency_rows(rng, 50)
+
+    first = predict_offload_latency(train_offload_latency_model(train_rows), test_rows)
+    second = predict_offload_latency(train_offload_latency_model(train_rows), test_rows)
+    assert np.array_equal(first, second)
+
+
+def test_raw_score_returns_mean_confidence_per_row() -> None:
+    rows = pd.DataFrame({"mean_confidence": [0.0, 0.42, 1.0]})
+    score = raw_score(rows)
+    assert list(score) == [0.0, 0.42, 1.0]
+    assert bool(((score >= 0.0) & (score <= 1.0)).all())
+
+
+def _confidence_frame_table(rng: np.random.Generator, n: int) -> pd.DataFrame:
+    """`n` frames with `CONFIDENCE_COLUMNS` and an alternating-sign `gap`
+    (even index -> offload better, odd -> local better), so any contiguous
+    slice used as a training pool contains both classes for stage 1's
+    `gap <= 0` classifier — same fixture strategy as
+    `test_two_stage.py`/sibling spec 02's learnings."""
+    gap = np.where(np.arange(n) % 2 == 0, 1.0, -1.0)
+    return pd.DataFrame(
+        {
+            "file_name": [f"frame_{i:03d}" for i in range(n)],
+            "detection_count": rng.integers(0, 10, n).astype(float),
+            "max_confidence": rng.uniform(0.0, 1.0, n),
+            "mean_confidence": rng.uniform(0.0, 1.0, n),
+            "min_confidence": rng.uniform(0.0, 1.0, n),
+            "mean_box_area": rng.uniform(0.0, 1.0, n),
+            "min_box_area": rng.uniform(0.0, 1.0, n),
+            "gap": gap,
+        }
+    )
+
+
+def test_learned_score_model_excludes_every_simulated_frame() -> None:
+    rng = np.random.default_rng(13)
+    frame_table = _confidence_frame_table(rng, 40)
+    simulated_frame_ids = set(frame_table["file_name"].iloc[:10])
+
+    model = learned_score_model(frame_table, simulated_frame_ids)
+
+    assert model.trained_frame_ids.isdisjoint(simulated_frame_ids)
+    assert model.trained_frame_ids == set(frame_table["file_name"]) - simulated_frame_ids
+
+
+def test_learned_score_returns_one_value_per_row_within_unit_interval() -> None:
+    rng = np.random.default_rng(14)
+    frame_table = _confidence_frame_table(rng, 40)
+    simulated_frame_ids = set(frame_table["file_name"].iloc[:10])
+    model = learned_score_model(frame_table, simulated_frame_ids)
+
+    simulated_rows = frame_table[frame_table["file_name"].isin(simulated_frame_ids)]
+    score = learned_score(model, simulated_rows)
+
+    assert score.shape == (len(simulated_rows),)
+    assert bool(((score >= 0.0) & (score <= 1.0)).all())
+
+
+def test_learned_score_is_deterministic_across_two_runs() -> None:
+    rng = np.random.default_rng(15)
+    frame_table = _confidence_frame_table(rng, 40)
+    simulated_frame_ids = set(frame_table["file_name"].iloc[:10])
+    simulated_rows = frame_table[frame_table["file_name"].isin(simulated_frame_ids)]
+
+    first = learned_score(learned_score_model(frame_table, simulated_frame_ids), simulated_rows)
+    second = learned_score(learned_score_model(frame_table, simulated_frame_ids), simulated_rows)
+    assert np.array_equal(first, second)
