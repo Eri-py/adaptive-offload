@@ -79,7 +79,7 @@ None.
 - **File:** `training/router/extract_features.py:68-73`
 - **Issue:** The docstring cites the spec's "never leaves partial/missing values" as the reason for the up-front image check. The spec says "never skipped or left with missing values" about zero-detection frames, which is unrelated. The right citation is the "fails with a clear message if an image ... is missing" requirement.
 - **Fix:** Drop the misattributed quote and keep the "fails clearly on a missing image" reference.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: fix the misquoted spec reference in the docstring"
 
 #### N3 — Multi-line comments break the comment guideline
 

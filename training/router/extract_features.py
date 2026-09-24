@@ -79,9 +79,9 @@ def extract_features(
     `frame_features` row yet — a re-run only fills in the gap, like
     `score-complexity`. Every pending frame's image is checked for existence
     up front, so a missing image fails before any (possibly slow)
-    computation runs, per the spec's "never leaves partial/missing values"
-    and "fails clearly on a missing image" requirements. Returns `None` when
-    there's nothing to compute.
+    computation runs, per the spec's "fails with a clear message if an
+    image ... is missing" requirement. Returns `None` when there's nothing
+    to compute.
 
     `predict_factory` is only called once those checks pass, so a real
     predictor's model load (weights + warm-up inference) is never paid on a
