@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from common.models import (
+    FrameFeatures,
     Label,
     ModelInference,
     SceneComplexity,
@@ -18,7 +19,7 @@ from common.models import (
 )
 
 
-def test_round_trips_all_four_tables(postgres_engine: Engine) -> None:
+def test_round_trips_all_five_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
@@ -55,6 +56,21 @@ def test_round_trips_all_four_tables(postgres_engine: Engine) -> None:
             latency_ms=45.0,
             accuracy=0.88,
         )
+        features = FrameFeatures(
+            dataset="coco_val2017",
+            file_name="000000000139.jpg",
+            sharpness=120.5,
+            brightness=0.42,
+            contrast=0.18,
+            colorfulness=35.7,
+            entropy=6.9,
+            detection_count=3,
+            max_confidence=0.91,
+            mean_confidence=0.74,
+            min_confidence=0.55,
+            mean_box_area=0.12,
+            min_box_area=0.03,
+        )
 
         # No ORM `relationship()` links these two mappers, so the unit of work
         # won't infer insert order from the `run_id` FK on its own — flush the
@@ -62,7 +78,7 @@ def test_round_trips_all_four_tables(postgres_engine: Engine) -> None:
         # silently didn't, which is exactly the dialect gap this switch closes.
         session.add(run)
         session.flush()
-        session.add_all([result, complexity, inference])
+        session.add_all([result, complexity, inference, features])
         session.commit()
 
     with Session(postgres_engine) as session:
@@ -108,3 +124,18 @@ def test_round_trips_all_four_tables(postgres_engine: Engine) -> None:
         assert fetched_inference.latency_ms == 45.0
         assert fetched_inference.accuracy == 0.88
         assert fetched_inference.computed_at is not None
+
+        fetched_features = session.get(FrameFeatures, ("coco_val2017", "000000000139.jpg"))
+        assert fetched_features is not None
+        assert fetched_features.sharpness == 120.5
+        assert fetched_features.brightness == 0.42
+        assert fetched_features.contrast == 0.18
+        assert fetched_features.colorfulness == 35.7
+        assert fetched_features.entropy == 6.9
+        assert fetched_features.detection_count == 3
+        assert fetched_features.max_confidence == 0.91
+        assert fetched_features.mean_confidence == 0.74
+        assert fetched_features.min_confidence == 0.55
+        assert fetched_features.mean_box_area == 0.12
+        assert fetched_features.min_box_area == 0.03
+        assert fetched_features.computed_at is not None

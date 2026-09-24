@@ -1,0 +1,37 @@
+# Progress — frame-feature-extraction
+
+## Task 1 — frame_features table and migration
+- Status: completed
+- Started: 2026-09-24 12:34:13
+- Completed: 2026-09-24 12:35:42
+- Notes: FrameFeatures model + migration 0003 (offline render verified, not applied); round-trip test extended. database: ruff/mypy clean, 1 passed.
+
+## Task 2 — Shared YOLO loader
+- Status: not started
+- Started: —
+- Completed: —
+- Notes: —
+
+## Task 3 — Feature functions
+- Status: not started
+- Started: —
+- Completed: —
+- Notes: —
+
+## Task 4 — Feature persistence
+- Status: not started
+- Started: —
+- Completed: —
+- Notes: —
+
+## Task 5 — Extraction step (integration)
+- Status: not started
+- Started: —
+- Completed: —
+- Notes: —
+
+## Task 6 — Regression test run
+- Status: not started
+- Started: —
+- Completed: —
+- Notes: —
