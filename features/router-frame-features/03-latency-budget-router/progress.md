@@ -19,10 +19,10 @@
 - Notes: Offload-latency GBT regressor, raw_score (mean_confidence), learned_score (stage-1 p_local_good_enough on CONFIDENCE_COLUMNS). 6 new tests, 163 pass.
 
 ## Task 4 — Figure
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 17:32:16
+- Completed: 2026-09-24 17:36:54
+- Notes: budget_plot.py (BudgetPoint, BudgetPanelData, plot_budget_curves; Agg; bbox_inches=tight fixed a clipped legend); matplotlib declared in pyproject; 3 new tests, 166 pass.
 
 ## Task 5 — Experiment script (integration)
 - Status: not started

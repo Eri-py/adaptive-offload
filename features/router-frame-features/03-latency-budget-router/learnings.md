@@ -101,3 +101,39 @@
   clears the required `> 0.9` `np.corrcoef` threshold with
   `HistGradientBoostingRegressor`'s defaults, no hyperparameter tuning
   needed for a two-variable synthetic relationship this smooth.
+
+## Task 4 — Figure
+
+- `budget_plot.py` takes only plain dataclasses (`BudgetPoint` = (mean
+  latency ms, on-time accuracy); `BudgetPanelData` = budget_ms +
+  `sweep_curves`/`tuned_points` keyed by score name + `single_points` keyed
+  by "budget-only"/"always-local"/"always-offload"/"oracle") — no
+  `RouterMetrics`, no DB, so the plotting logic is testable with hand-built
+  synthetic data and stays decoupled per the coding guidelines' "one file,
+  one concern." Task 5 will build these from `latency_policies.RouterMetrics`.
+- Categorical color assignment follows the "fixed order, never cycled" rule
+  (repo has no design-system palette of its own, so this used the
+  Okabe-Ito colorblind-safe set): `raw`/`learned` get fixed hex colors from
+  a dict; any other score name gets a deterministic fallback color keyed by
+  its sorted position among the unknown names, so a color is never
+  reassigned between panels or across a rerun. Baselines/oracle get fixed
+  (marker, color) pairs the same way, not `plt`'s default cycler.
+  `matplotlib.use("Agg")` must be called before `import matplotlib.pyplot`,
+  which ruff's E402 flags — needs `# noqa: E402` on the pyplot import (and
+  on the `matplotlib.axes`/`matplotlib.artist` imports that follow it).
+- **Legend clipping gotcha:** `fig.legend(..., bbox_to_anchor=(0.5, -0.04))`
+  placed the shared legend below the axes, and with enough handles (9: two
+  sweeps, two tuned points, four single markers, the budget line) it wraps
+  to 2 rows. With only `fig.tight_layout(rect=(0, 0.1, 1, 1))` reserving
+  bottom margin and a plain `fig.savefig(...)`, the legend's second row
+  silently got clipped off the saved PNG — entries just vanished from the
+  file with no error, only visible by actually opening the rendered image
+  (mypy/ruff/pytest all stayed green throughout). Fixed by rendering once
+  and visually inspecting the output, then adding `bbox_inches="tight"` to
+  `fig.savefig(...)`, which expands the saved canvas to include whatever
+  the legend actually needs regardless of the `tight_layout` rect guess —
+  cheaper and more robust than hand-tuning the rect/ncol until it happens
+  to fit. Worth remembering for Task 6's real 6-budget figure: always open
+  the rendered PNG once rather than trusting a passing smoke test, since a
+  "file is non-empty" test can't catch a legend/label silently clipped at
+  the canvas edge.
