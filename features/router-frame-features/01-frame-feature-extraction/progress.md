@@ -13,10 +13,10 @@
 - Notes: Public load_model extracted; _build_inference_fn uses it, closure unchanged. training: ruff clean, mypy 9 known errors only, 86 passed.
 
 ## Task 3 — Feature functions
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 12:37:10
+- Completed: 2026-09-24 12:42:46
+- Notes: 12 new tests (98 total pass). Real-image check: 000000000139/285/632.jpg via load_model + model(path, device=cpu) twice — confidence features identical (13/1/7 detections).
 
 ## Task 4 — Feature persistence
 - Status: not started
