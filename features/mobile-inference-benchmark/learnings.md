@@ -467,3 +467,40 @@ to not dominate the measured wall-clock loop in an unacceptable way (it
 isn't timed — only `model.run()` is timed — but it does still gate how long
 a full 15-image benchmark run takes end to end), and whether `model.run()`
 actually returns without throwing for this specific model/input shape.
+
+## Task 6 — EAS build configuration, and how to validate `eas.json` without live credentials
+
+- **`eas-cli` was not installed anywhere** (no local devDependency, no
+  global install). Deliberately did *not* add it as an `app/`
+  devDependency — the task's `Files` list is `app/eas.json` only, and
+  `eas-cli` is a developer-machine tool invoked ad hoc (`eas build ...`),
+  not a runtime/build dependency of the app bundle itself; Expo's own docs
+  treat `npx eas-cli` (or a global install) as the normal path rather than
+  pinning it in `package.json`. Used `npx eas-cli` throughout, which
+  auto-installed v24.7.0 into npm's `_npx` cache on first invocation — no
+  permanent change to `app/` beyond `eas.json`.
+- **`eas build:configure` and `eas config` both require an authenticated
+  Expo session** (confirmed by actually running `npx eas-cli config
+  --platform ios --profile development --json --non-interactive`, which
+  failed cleanly with "An Expo user account is required to proceed" —
+  not a schema/config error, i.e. it got past parsing `eas.json` before
+  hitting the auth wall). So neither can be used as this task's local
+  validation step, as the task brief anticipated.
+- **Found a real, unauthenticated validation path anyway**: `eas-cli`
+  depends on the separate `@expo/eas-json` package to parse and resolve
+  `eas.json`, and that package is plain Node with no network/auth calls
+  in its read path. Located it inside the npx cache
+  (`~/.npm/_npx/<hash>/node_modules/@expo/eas-json`) after `npx eas-cli`
+  had already pulled it in, and drove it directly from a throwaway Node
+  script: `EasJsonAccessor.fromProjectPath(<app dir>)` +
+  `EasJsonUtils.getBuildProfileAsync(accessor, Platform.IOS,
+  'development')`. This runs the actual schema validation and profile
+  merge logic the real CLI uses, not a hand-rolled guess at the schema —
+  it resolved the `development`/iOS profile to
+  `{ credentialsSource: "remote", distribution: "internal",
+  developmentClient: true, simulator: false }` and enumerated all three
+  profile names (`development`, `preview`, `production`) cleanly, which
+  is about as strong a local validation as is possible without live
+  credentials. Worth reusing this trick (`@expo/eas-json`'s
+  `EasJsonAccessor`/`EasJsonUtils`) for any future `eas.json` change in
+  this project rather than re-deriving the schema from memory or docs.

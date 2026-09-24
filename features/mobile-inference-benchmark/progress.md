@@ -95,9 +95,17 @@
 - Notes: —
 
 ## Task 6 — EAS Build configuration
-- Status: not started
-- Started: —
-- Completed: —
+- Status: completed
+- Started: 2026-09-23 23:31:53
+- Completed: 2026-09-23 23:35:46
+- Notes: app/eas.json added — development profile (developmentClient: true,
+  internal distribution, physical device, not simulator), plus preview/
+  production for completeness. eas-cli left unauthenticated/not installed
+  as a dependency (used via npx). Validated the config's real schema/merge
+  resolution via @expo/eas-json's own accessor directly (no login needed) —
+  resolved cleanly with no errors. Next step for the user: `eas build
+  --platform ios --profile development` from app/, requires their own
+  `eas login` and Apple Developer account — not attempted here.
 - Notes: —
 
 ## Task 7 — Regression test run
