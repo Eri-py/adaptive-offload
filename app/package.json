@@ -6,7 +6,9 @@
     "expo": "~57.0.24",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-fast-tflite": "^3.0.1",
+    "react-native-nitro-modules": "^0.37.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

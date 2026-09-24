@@ -272,3 +272,102 @@ Verified fixed: `npx expo start` now reaches `Starting Metro Bundler` →
 `timeout` after confirming the ready state) — no `EISDIR`/UNC crash. This
 unblocks Tasks 3, 4, 5, and 7, all of which need a working Metro/dev-server
 run to verify.
+
+## Task 3 — TFLite native module: what could and couldn't be verified without a device/Mac
+
+`react-native-fast-tflite@3.0.1` installed cleanly (`npm install
+react-native-fast-tflite`), and its `enableCoreMLDelegate` config-plugin key
+(checked against the installed version's own README, since the task noted
+the exact key name might differ by version) matched exactly — no adjustment
+needed to the plan's assumed `["react-native-fast-tflite", {
+"enableCoreMLDelegate": true }]` shape.
+
+- **`react-native-nitro-modules` is a required peer dependency, not bundled.**
+  The library is built on Nitro Modules; npm auto-installs the peer into
+  `node_modules` but does *not* add it to `package.json`'s own
+  `dependencies` unless installed explicitly. Per the library's own README
+  install step 1 (`yarn add react-native-fast-tflite
+  react-native-nitro-modules`), installed it explicitly
+  (`npm install react-native-nitro-modules`, resolved to `0.37.1`) rather
+  than relying on the transitive/peer resolution — otherwise a clean
+  `npm ci` elsewhere (e.g. an EAS Build container) could resolve a different
+  compatible-but-untested version, or fail to resolve it at all depending on
+  npm's peer-install behavior in that environment.
+- **`metro.config.js` (new file, not in this task's original Files list) is
+  required for `require('*.tflite')` to bundle at all.** The library's
+  README installation step 2 says Metro needs `tflite` added to
+  `resolver.assetExts` for `.tflite` files to be treated as a bundleable
+  asset (same mechanism RN uses for images/fonts). Without it, any
+  `require('assets/models/yolov8n.tflite')` call — including the one Task
+  4's real hook will make — fails at Metro's bundling stage. Treated this as
+  in-scope for "wire the library into the project" (it's the library's own
+  required install step, immediately following the `npm install` this task
+  already does) rather than out-of-scope scope creep; flagging it here since
+  it wasn't in the plan's original file list for this task.
+- **No ambient `.d.ts` needed for `require('*.tflite')` to type-check.**
+  Worried initially that TS would need a `declare module '*.tflite'`
+  (there's precedent for this pattern — `node_modules/expo/types/global.d.ts`
+  does it for `*.css`/`*.sass`/`*.scss`). Tested directly: `require(...)` of
+  an arbitrary/even nonexistent file extension already type-checks with no
+  error under this project's tsconfig (`expo/tsconfig.base` + `strict:
+  true`), confirming RN/Metro's global `require` is typed as accepting/
+  returning `any` in this project as-is (not narrowed per extension) — TS's
+  static module-existence checking only applies to `import` statements, not
+  bare `require(...)` calls. `loadTensorflowModel`'s real type signature
+  (checked directly in
+  `node_modules/react-native-fast-tflite/lib/typescript/loadTensorflowModel.d.ts`)
+  is `(source: number | { url: string }, delegates: TensorflowModelDelegate[]) =>
+  Promise<TfliteModel>` — a `require(...)` result (`any`) is assignable to
+  the `number` arm without a cast.
+- **No CocoaPods/Xcode/simulator available in this Linux environment** (no
+  `pod`/`ruby`/`gem` on PATH, confirmed) — matches the task's own expected
+  limitation. What this made unverifiable: whether `loadTensorflowModel`
+  actually loads `yolov8n.tflite` and `model.run(...)` actually returns real
+  output tensors on-device. That requires a real iOS build (simulator or
+  physical device), which is Task 6's/the user's territory (EAS Build).
+- **What was verified instead, as real evidence the wiring is correct (not
+  just "looks plausible")**:
+  1. `npx expo config --json` resolves the plugin correctly —
+     `_internal.pluginHistory` lists `{"react-native-fast-tflite": {"version":
+     "3.0.1"}}`, confirming Expo's config-plugin system actually ran the
+     plugin against `app.json`, not just that the JSON was well-formed.
+  2. `npx expo prebuild --platform ios --no-install` (the `--no-install`
+     flag skips the `pod install` step CocoaPods would need) succeeded and
+     generated a real `ios/` project. Its `Podfile` has
+     `$EnableCoreMLDelegate=true` at the very top (exactly the flag the
+     plugin is documented to set per the README's "Bare React Native"
+     section) and uses standard `use_native_modules!`/`use_expo_modules!`
+     autolinking — `react-native-fast-tflite`'s and
+     `react-native-nitro-modules`'s own `.podspec` files are present in
+     `node_modules`, so `pod install` (unavailable here) would discover them
+     automatically at that point; nothing further to configure. `expo
+     prebuild` also auto-filled `ios.bundleIdentifier` in `app.json`
+     (`com.anonymous.mobile-inference-benchmark`, generated since none
+     existed) as a required side effect of generating a real iOS project —
+     left in place since it's needed for any future prebuild/EAS build
+     anyway (Task 6), harmless, and squarely inside `app.json`.
+  3. A throwaway `app/verify-tflite.ts` (removed before finishing, per the
+     task) called `loadTensorflowModel(require('./assets/models/
+     yolov8n.tflite'), [])` then `model.run([input.buffer])` with a
+     correctly-shaped `Float32Array(1*640*640*3)` input (matching the
+     `[1,640,640,3]` float32 NHWC input tensor confirmed in Task 1's
+     `tf.lite.Interpreter` check) — this type-checked cleanly against the
+     library's real `.d.ts` files (`npx tsc --noEmit`, zero errors),
+     confirming the exact call shape Task 4's hook will use is valid against
+     the installed version's real API, not just written from README memory.
+     Actual execution/output was not observed (no device/simulator) — this
+     file proves the call is well-typed and structurally correct, not that
+     it succeeds at runtime.
+  4. `npx expo start` still reaches `Waiting on http://localhost:8081`
+     cleanly after all of the above (new deps + `metro.config.js` + config
+     plugin) — no regression from Task 2's baseline.
+  5. Removed the generated `ios/` directory again after verification (it's
+     gitignored per `app/.gitignore`'s `/ios` entry, and dropping it
+     restores the managed-workflow state Tasks 4/5/7 expect — a native
+     project auto-persisting from this task could otherwise silently change
+     how `expo start`/`tsc` behave for later tasks).
+- **No lint step exists yet for `app/`** — `package.json` has no `lint`
+  script and there's no ESLint config in `app/` as of Task 2's scaffold, so
+  the quality gate for this task was `npx tsc --noEmit` only (clean, zero
+  errors/warnings). Flagging in case a later task is expected to add
+  ESLint — it isn't there yet.

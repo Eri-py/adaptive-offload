@@ -47,10 +47,22 @@
   dev-server run to verify.
 
 ## Task 3 — Add on-device TFLite inference
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-23 23:16:10
+- Completed: 2026-09-23 23:23:36
+- Notes: react-native-fast-tflite + react-native-nitro-modules installed,
+  config plugin wired in app.json (enableCoreMLDelegate: true), metro.config.js
+  added (required by the library's own install steps for .tflite asset
+  resolution — outside the plan's original Files list but a necessary part
+  of "wire the library in", flagged rather than silent). Verified: Expo
+  plugin system actually applies the config (confirmed via `expo config`),
+  `expo prebuild` generates a real iOS project with CoreML delegate wired
+  into the Podfile, and the exact load/run call Task 4 will make type-checks
+  cleanly against the library's real .d.ts signatures. Full native execution
+  (does inference actually run and return real output) is NOT verifiable in
+  this environment — no Mac/Xcode/CocoaPods/physical device — expected per
+  the plan; real confirmation comes from EAS Build (Task 6) on the user's
+  phone. No regression: expo start still reaches ready state, tsc clean.
 
 ## Task 4 — Build the benchmark hook
 - Status: not started
