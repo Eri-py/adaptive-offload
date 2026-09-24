@@ -3,8 +3,9 @@
 ## Overview
 
 Spec 02 showed that under the soft utility (`accuracy − 0.3 × latency in
-seconds`), "always offload" can't be beaten: latency is nearly free, so no
-router gains anything. Published systems frame this decision differently.
+seconds`), no router beat "always offload": the best cost-aware routers only
+tied it. Latency is nearly free under that weighting, so there is little for a
+router to gain. Published systems frame this decision differently.
 DeepDecision (INFOCOM'18) treats latency as a hard constraint. DDNN
 (ICDCS'17) and Big/LITTLE (CODES+ISSS'15) keep the local result when the
 small model is confident and escalate otherwise, and they report a trade-off
