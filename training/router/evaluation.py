@@ -129,6 +129,37 @@ class BootstrapResult:
     useful: bool
 
 
+def bootstrap_mean_difference(
+    frame_ids: pd.Series | npt.NDArray[np.str_],
+    diff: pd.Series | npt.NDArray[np.float64],
+    *,
+    n_resamples: int = 2000,
+    seed: int = 42,
+) -> BootstrapResult:
+    """95% CI for the mean of `diff`, resampling `frame_ids`'s unique photos
+    with replacement. A frame drawn twice in a resample counts its rows twice.
+
+    Vectorised: each frame's sum of per-row `diff` values and row count are
+    precomputed once, then every resample sums only those precomputed values
+    for its drawn frames, instead of re-touching every row per resample.
+    """
+    diff_array = np.asarray(diff)
+    frame_id_array = np.asarray(frame_ids)
+    unique_frames, inverse = np.unique(frame_id_array, return_inverse=True)
+    n_frames = len(unique_frames)
+
+    frame_sums = np.zeros(n_frames)
+    np.add.at(frame_sums, inverse, diff_array)
+    frame_counts = np.bincount(inverse, minlength=n_frames)
+
+    rng = np.random.default_rng(seed)
+    draws = rng.integers(0, n_frames, size=(n_resamples, n_frames))
+    resample_means = frame_sums[draws].sum(axis=1) / frame_counts[draws].sum(axis=1)
+
+    ci_low, ci_high = np.percentile(resample_means, [2.5, 97.5])
+    return BootstrapResult(ci_low=float(ci_low), ci_high=float(ci_high), useful=bool(ci_low > 0))
+
+
 def bootstrap_router_vs_offload(
     df: pd.DataFrame,
     router_utility: pd.Series,
@@ -138,24 +169,10 @@ def bootstrap_router_vs_offload(
 ) -> BootstrapResult:
     """95% CI for the mean per-row (router - offload) utility difference,
     resampling `df["frame_id"]`'s unique photos with replacement. A frame drawn
-    twice in a resample counts its rows twice.
-
-    Vectorised: each frame's sum of per-row differences and row count are
-    precomputed once, then every resample sums only those precomputed values
-    for its drawn frames, instead of re-touching every row per resample.
+    twice in a resample counts its rows twice. Delegates to
+    `bootstrap_mean_difference`, the generic paired bootstrap.
     """
     diff = (router_utility - offload_utility(df)).to_numpy()
-    frame_ids = df["frame_id"].to_numpy()
-    unique_frames, inverse = np.unique(frame_ids, return_inverse=True)
-    n_frames = len(unique_frames)
-
-    frame_sums = np.zeros(n_frames)
-    np.add.at(frame_sums, inverse, diff)
-    frame_counts = np.bincount(inverse, minlength=n_frames)
-
-    rng = np.random.default_rng(seed)
-    draws = rng.integers(0, n_frames, size=(n_resamples, n_frames))
-    resample_means = frame_sums[draws].sum(axis=1) / frame_counts[draws].sum(axis=1)
-
-    ci_low, ci_high = np.percentile(resample_means, [2.5, 97.5])
-    return BootstrapResult(ci_low=float(ci_low), ci_high=float(ci_high), useful=bool(ci_low > 0))
+    return bootstrap_mean_difference(
+        df["frame_id"], diff, n_resamples=n_resamples, seed=seed
+    )
