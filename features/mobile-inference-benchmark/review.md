@@ -117,7 +117,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/.gitignore`, `app/App.tsx`, `app/index.ts`, `app/tsconfig.json` (mode 100755)
 - **Issue:** The template files were committed with `+x`, a leftover from the Windows/WSL toolchain.
 - **Fix:** `git update-index --chmod=-x` on those four files.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N6: clear the executable bit on app template files"
 
 ## Tests
 
