@@ -112,26 +112,11 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
     train_frame_ids = set(train_split["frame_id"])
     test_frame_ids = set(test_split["frame_id"])
 
-    # Re-derive the test rows from `simulated_rows` by frame-id membership
-    # (same set of rows as `test_split`, but in `simulated_rows`'s original
-    # row order) rather than reusing `test_split` directly: `run_router`
-    # filters its own picks the same way internally, so this keeps the
-    # scoring DataFrame's row order identical to `picks`'s order. Scoring
-    # against `test_split`'s (possibly shuffled) order would silently
-    # mis-align the two under pandas's index-based Series arithmetic.
-    test_df = simulated_rows[simulated_rows["frame_id"].isin(test_frame_ids)].reset_index(
-        drop=True
-    )
-
-    # Computed once from `test_df` alone (not per router — these don't depend
-    # on any router's picks), then copied onto every cascade `RouterEvaluation`
-    # below. See S2 in findings.md: the cascade design's own ceiling is below
-    # the (decide-first-reachable) oracle shown per router, because ESCALATE
-    # always pays the local pass's latency on top of the offload pass's.
-    cascade_ceiling = float(cascade_ceiling_utility(test_df).mean())
-    always_escalate = float(escalated_utility(test_df).mean())
-
     routers = []
+    # Depend only on the held-out rows, not any router's picks, so computed
+    # once from the first router's `test_rows` rather than re-filtering here.
+    cascade_ceiling: float | None = None
+    always_escalate: float | None = None
     for design, family, objective in ROUTER_CONFIGS:
         result = run_router(
             frame_table,
@@ -143,20 +128,25 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
             family,
             objective,
         )
+        if cascade_ceiling is None or always_escalate is None:
+            cascade_ceiling = float(cascade_ceiling_utility(result.test_rows).mean())
+            always_escalate = float(escalated_utility(result.test_rows).mean())
         score = score_decide_first if design == "decide_first" else score_cascade
-        router_utility = score(test_df, result.picks)
+        router_utility = score(result.test_rows, result.picks)
         routers.append(
             RouterEvaluation(
                 name=_router_name(design, family, objective),
                 design=design,
                 family=family,
                 objective=objective,
-                summary=summarize(test_df, router_utility),
-                bootstrap=bootstrap_router_vs_offload(test_df, router_utility, seed=42),
+                summary=summarize(result.test_rows, router_utility),
+                bootstrap=bootstrap_router_vs_offload(result.test_rows, router_utility, seed=42),
                 cascade_ceiling=cascade_ceiling if design == "cascade" else None,
             )
         )
 
+    assert cascade_ceiling is not None
+    assert always_escalate is not None
     return ExperimentResult(
         diagnostics=diagnostics,
         train_frame_count=len(train_frame_ids),

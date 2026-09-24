@@ -293,12 +293,17 @@ def predict_stage2(model: Stage2Model, df_test: pd.DataFrame) -> npt.NDArray[np.
 
 @dataclass(frozen=True)
 class RouterResult:
-    """A router's picks for the test rows, plus the exact frame ids each stage
-    actually fit on — what the leakage-guard tests inspect, instead of
-    re-deriving the simulated/train/test filters themselves in the test.
+    """A router's picks for the test rows, the exact `test_rows` they were
+    predicted on (`picks[i]` is the pick for `test_rows.iloc[i]`), and the
+    exact frame ids each stage actually fit on. Score `picks` against this
+    `test_rows`, not a separately re-filtered DataFrame — `picks` has no
+    index of its own, so a different filter risks a silent row-order
+    mismatch. `stage1_trained_frame_ids`/`stage2_trained_frame_ids` are what
+    the leakage-guard tests inspect, instead of re-deriving the filters.
     """
 
     picks: npt.NDArray[np.str_]
+    test_rows: pd.DataFrame
     stage1_trained_frame_ids: frozenset[str]
     stage2_trained_frame_ids: frozenset[str]
 
@@ -347,6 +352,7 @@ def run_router(
     picks = predict_stage2(stage2, test_rows)
     return RouterResult(
         picks=picks,
+        test_rows=test_rows,
         stage1_trained_frame_ids=stage1.trained_frame_ids,
         stage2_trained_frame_ids=stage2.trained_frame_ids,
     )

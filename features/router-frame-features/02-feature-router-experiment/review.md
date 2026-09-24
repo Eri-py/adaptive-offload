@@ -151,7 +151,7 @@ artifacts are ignored per the rules.
 - **Fix:** Have `RouterResult` carry the `test_rows` it predicted on, or return picks as a
   `pd.Series` indexed like them, and score against that. Or add a test that
   asserts `run_router`'s test-row `frame_id` order equals the scoring frame's.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: carry the test rows on RouterResult"
 
 #### S4 — The CI covers test-photo sampling only, from a single train/test split
 
@@ -174,7 +174,7 @@ artifacts are ignored per the rules.
   `np.where` (`evaluation.py:58-68`). The index is ignored, which is why the error was silent.
 - **Fix:** Shorten it to a line like `# Same filter/order as run_router's test rows; picks
   are positional.` (moot if S3 is applied).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: carry the test rows on RouterResult" (the comment described the duplicate filter S3 removed, so it was deleted with it)
 
 #### N2 — Module and dataclass docstrings run long and describe the implementation
 

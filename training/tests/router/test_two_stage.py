@@ -23,7 +23,8 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 
-from router.evaluation import escalated_utility, local_utility
+from datagen.config import DEFAULT_LAMBDA
+from router.evaluation import escalated_utility, local_utility, score_decide_first
 from router.frame_dataset import CONFIDENCE_COLUMNS, IMAGE_COLUMNS
 from router.two_stage import (
     DESIGN_FEATURE_COLUMNS,
@@ -232,6 +233,36 @@ def test_all_design_family_objective_combinations_return_one_pick_per_test_row()
                 )
                 assert len(result.picks) == n_test_rows
                 assert set(result.picks) <= valid_picks[design]
+
+
+def test_router_result_test_rows_align_with_picks() -> None:
+    """Guards S3: `picks` is positional, so scoring must use `test_rows`, not
+    a separately re-filtered DataFrame. Checks `test_rows` covers exactly the
+    test photos in `picks`'s own order, then hand-recomputes utility from raw
+    `test_rows` columns + `picks` (not via `score_decide_first` itself) and
+    confirms it matches `score_decide_first`'s output row-for-row."""
+    frame_table, simulated_rows, train_frame_ids, test_frame_ids, simulated_frame_ids = _fixture()
+    result = run_router(
+        frame_table,
+        simulated_rows,
+        train_frame_ids,
+        test_frame_ids,
+        simulated_frame_ids,
+        "decide_first",
+        "linear",
+    )
+
+    assert len(result.picks) == len(result.test_rows)
+    assert set(result.test_rows["frame_id"]) == test_frame_ids
+
+    hand_utility = [
+        row["local_accuracy"] - DEFAULT_LAMBDA * row["local_latency_ms"] / 1000
+        if pick == "LOCAL"
+        else row["offload_accuracy"] - DEFAULT_LAMBDA * row["offload_latency_ms"] / 1000
+        for pick, (_, row) in zip(result.picks, result.test_rows.iterrows(), strict=True)
+    ]
+    scored_utility = score_decide_first(result.test_rows, result.picks)
+    assert np.allclose(hand_utility, scored_utility.to_numpy())
 
 
 def test_cost_aware_picks_are_identical_across_two_runs() -> None:

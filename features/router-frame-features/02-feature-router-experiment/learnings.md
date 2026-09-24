@@ -362,3 +362,34 @@
   held-out rows' mean local latency in ms (≈73.67, rounds to "≈74 ms") without
   needing to query `local_latency_ms` separately — cheap arithmetic on two
   numbers already in the printed report rather than a third data pull.
+
+## Review finding S3 — single source of truth for the test rows
+
+- `RouterResult` now carries the exact `test_rows` `run_router` predicted
+  `picks` on (returned from the same local variable `run_router` already
+  built internally — no new filter). `run_experiment` no longer builds its
+  own `test_df` via a second `isin` filter; it scores each router against
+  `result.test_rows` and sources `cascade_ceiling`/`always_escalate` (which
+  don't depend on any router's picks) from whichever router's `test_rows` is
+  seen first in the loop, since every router's `test_rows` covers the
+  identical held-out rows in the identical order — confirmed by two full
+  `python -m router.feature_experiment` runs against real Postgres (via a
+  throwaway `git worktree add` of the pre-change commit for the "before"
+  run, since `git stash` is blocked by the auto-mode classifier per Task 5's
+  S1 learning) producing byte-identical stdout before and after this change,
+  including a determinism check within each side.
+- Deleting the duplicate filter made the 7-line comment explaining it
+  (`feature_experiment.py`, just above the old `test_df = ...`) dead, so it
+  was removed along with the filter rather than left describing code that no
+  longer exists — this is the review's N1 finding's target comment, but N1
+  itself (short + fix the wrong "pandas index-based arithmetic" claim) is
+  still open for a separate pass; only the now-fully-obsolete block went
+  with this change.
+- The new regression test
+  (`test_router_result_test_rows_align_with_picks` in `test_two_stage.py`)
+  hand-recomputes utility straight from `test_rows`'s raw
+  `local_accuracy`/`local_latency_ms`/`offload_accuracy`/`offload_latency_ms`
+  columns and `picks` (not by calling `score_decide_first` for the
+  recomputation, only for the final comparison) — recomputing via
+  `score_decide_first` on both sides would make the test tautological and
+  unable to catch a future misalignment.
