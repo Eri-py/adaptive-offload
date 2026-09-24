@@ -31,10 +31,10 @@
 - Notes: feature_experiment.py (run_experiment -> ExperimentResult, main, report); fixed a silent row-order misalignment by deriving the scoring rows the same way run_router does; 1 integration test, 136 pass.
 
 ## Task 6 — Run the experiment and write findings
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 14:05:14
+- Completed: 2026-09-24 14:08:45
+- Notes: Real run x2 identical. All four routers below always-offload with 95% CIs entirely < 0. router.baseline reproduces 0.6812 / 0.6811. findings.md section appended.
 
 ## Task 7 — Regression test run
 - Status: not started

@@ -185,3 +185,37 @@
   `_print_report`) does not raise — it prints `nan%` — so no special-casing
   was needed in the report formatter for the zero-headroom case Task 3
   already produces as `nan`.
+
+## Task 6 — Run the experiment and write findings
+
+- Real-data result is a clean negative, stronger than the earlier baseline
+  routers': all four routers' 95% bootstrap CIs (resampling the 100 held-out
+  photos) sit entirely *below* zero, not just overlapping it. The earlier
+  three baseline routers in `findings.md` were statistical ties with
+  always-offload; these four are worse than always-offload with 95%
+  confidence. `decide_first_linear` (CI `[-0.0471, -0.0024]`) is the least
+  bad; the cascade variants are worst (`[-0.0898, -0.0169]` and
+  `[-0.0868, -0.0214]`), plausibly stage 2 overfitting on only 400 train
+  photos.
+- Two full runs of `../.venv/bin/python -m router.feature_experiment` from
+  `training/` against the real Postgres database produced byte-identical
+  stdout (`diff` clean) — confirms the seeding (split seed 42, bootstrap
+  seed 42, model `random_state=42`) is deterministic end-to-end against real
+  data, not just the synthetic integration test.
+- `python -m router.baseline` still runs clean and reprints
+  always-offload = 0.6812 and utility-regression router = 0.6811 exactly
+  matching the existing findings.md prose. Its printed logistic-router avg
+  utility is 0.6574 (HistGB 0.6481) — findings.md's prose only ever said
+  "~0.68 (comparable, no clear win)" for logistic, which is a loose
+  description rather than a precise figure. `git diff main --stat -- training
+  /router/baseline.py training/router/dataset.py training/router/analyze.py`
+  shows these files are pure additions on this branch (no line changed
+  since `main`), so this isn't a regression from this feature's work — the
+  original prose was just imprecise, not wrong about the conclusion
+  (logistic is comparable to, not clearly better than, always-offload).
+- `router.baseline`'s `.joblib` files under `training/router/models/` and
+  `feature_experiment`'s own `__pycache__` dirs are correctly covered by the
+  root `.gitignore`'s `*.joblib` and standard Python ignore rules —
+  `git status --short --ignored training/router/` shows them as `!!`
+  (ignored), so running both scripts leaves `git status` showing only the
+  intended `training/router/findings.md` edit.
