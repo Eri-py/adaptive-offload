@@ -21,6 +21,7 @@ _QUERY = text(
     """
     SELECT
         sr.frame_id,
+        run.preset_name,
         sr.network_bandwidth_mbps,
         sr.network_latency_ms,
         sr.network_packet_loss_pct,
