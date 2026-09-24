@@ -72,7 +72,7 @@ None.
 - **File:** `training/datagen/simulate/yolo_inference.py:114-119`
 - **Issue:** `load_model` is now shared, but `_require_weights_file` still says "run-simulation does not download weights itself". The same message shows up when `router.extract_features` fails.
 - **Fix:** Make it tool-neutral, e.g. "... Place the real YOLO weights file there; this pipeline never downloads weights."
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: tool-neutral missing-weights message"
 
 #### N2 — Docstring misquotes the spec
 

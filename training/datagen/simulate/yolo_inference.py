@@ -109,13 +109,13 @@ def _require_weights_file(weights_path: Path) -> None:
     whether the given path looks like a path — so passing a fixed but
     missing path still triggers a silent multi-hundred-MB download to that
     path rather than an error. Checking existence ourselves first keeps this
-    simulator's "never fetches data itself" guarantee.
+    pipeline's "never fetches data itself" guarantee.
     """
     if not weights_path.is_file():
         raise FileNotFoundError(
             f"Model weights not found at {weights_path}. Place the real "
-            "YOLO weights file there before running the simulator — "
-            "run-simulation does not download weights itself."
+            "YOLO weights file there; this pipeline never downloads "
+            "weights itself."
         )
 
 
