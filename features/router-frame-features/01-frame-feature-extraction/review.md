@@ -100,7 +100,7 @@ None.
 - **File:** `training/router/feature_store.py:63-69`
 - **Issue:** Each batch re-selects every stored file name for the dataset (about 50 queries of up to 5,000 rows each over a full run), and duplicates `get_known_feature_file_names`'s query inline. This is harmless at this scale, but the query exists twice.
 - **Fix:** Call `get_known_feature_file_names` inside `store_features` instead of repeating the select, or accept that the duplication is deliberate and mirrors `store_complexity_scores`.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — It deliberately mirrors `store_complexity_scores`, and the extra queries do not matter at 5,000 rows.
 
 ## Tests
 
