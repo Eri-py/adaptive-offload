@@ -185,3 +185,16 @@ def test_run_experiment_is_deterministic_with_all_routers_finite(postgres_engine
             bootstrap.ci_high,
         ):
             assert math.isfinite(value)
+
+        # Cascade ceiling: `None` for decide_first rows, a finite number that
+        # is at least that router's own average utility for cascade rows (it
+        # is the best any ACCEPT/ESCALATE assignment on these rows could do).
+        if router.design == "cascade":
+            assert router.cascade_ceiling is not None
+            assert math.isfinite(router.cascade_ceiling)
+            assert router.cascade_ceiling >= summary.avg_utility_router
+        else:
+            assert router.cascade_ceiling is None
+
+    assert math.isfinite(first.cascade_ceiling)
+    assert math.isfinite(first.always_escalate)

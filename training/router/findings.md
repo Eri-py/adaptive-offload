@@ -140,20 +140,27 @@ reports about a frame, not in the frame's raw image statistics.
 
 ### Router results (100 held-out test photos)
 
-| router | avg util | local | offload | oracle | headroom | 95% CI | useful |
-|---|---|---|---|---|---|---|---|
-| decide_first_linear | 0.6575 | 0.6022 | 0.6812 | 0.7208 | -59.95% | [-0.0471, -0.0024] | False |
-| decide_first_gbt | 0.6555 | 0.6022 | 0.6812 | 0.7208 | -64.94% | [-0.0563, -0.0003] | False |
-| cascade_linear | 0.6289 | 0.6022 | 0.6812 | 0.7208 | -132.12% | [-0.0898, -0.0169] | False |
-| cascade_gbt | 0.6330 | 0.6022 | 0.6812 | 0.7208 | -121.93% | [-0.0832, -0.0169] | False |
-| decide_first_linear_costaware | 0.6810 | 0.6022 | 0.6812 | 0.7208 | -0.41% | [-0.0020, 0.0014] | False |
-| decide_first_gbt_costaware | 0.6672 | 0.6022 | 0.6812 | 0.7208 | -35.30% | [-0.0334, 0.0017] | False |
-| cascade_linear_costaware | 0.6611 | 0.6022 | 0.6812 | 0.7208 | -50.89% | [-0.0302, -0.0104] | False |
-| cascade_gbt_costaware | 0.6549 | 0.6022 | 0.6812 | 0.7208 | -66.42% | [-0.0469, -0.0046] | False |
+| router | avg util | local | offload | oracle | headroom | 95% CI | useful | casc ceiling |
+|---|---|---|---|---|---|---|---|---|
+| decide_first_linear | 0.6575 | 0.6022 | 0.6812 | 0.7208 | -59.95% | [-0.0471, -0.0024] | False | - |
+| decide_first_gbt | 0.6555 | 0.6022 | 0.6812 | 0.7208 | -64.94% | [-0.0563, -0.0003] | False | - |
+| cascade_linear | 0.6289 | 0.6022 | 0.6812 | 0.7208 | -132.12% | [-0.0898, -0.0169] | False | 0.7091 |
+| cascade_gbt | 0.6330 | 0.6022 | 0.6812 | 0.7208 | -121.93% | [-0.0832, -0.0169] | False | 0.7091 |
+| decide_first_linear_costaware | 0.6810 | 0.6022 | 0.6812 | 0.7208 | -0.41% | [-0.0020, 0.0014] | False | - |
+| decide_first_gbt_costaware | 0.6672 | 0.6022 | 0.6812 | 0.7208 | -35.30% | [-0.0334, 0.0017] | False | - |
+| cascade_linear_costaware | 0.6611 | 0.6022 | 0.6812 | 0.7208 | -50.89% | [-0.0302, -0.0104] | False | 0.7091 |
+| cascade_gbt_costaware | 0.6549 | 0.6022 | 0.6812 | 0.7208 | -66.42% | [-0.0469, -0.0046] | False | 0.7091 |
+
+`casc ceiling` (cascade rows only, added for review finding S2): the cascade
+design's own ceiling, `max(local_utility, escalated_utility)` per row
+(`router.evaluation.cascade_ceiling_utility`), averaged over the held-out
+rows — identical across all four cascade routers since it depends only on
+the held-out rows, not on any router's picks.
 
 Held-out split: 400 train photos / 100 test photos (`router.dataset
 .frame_level_split`, seed 42). Two runs of `python -m router.feature_experiment`
-on the real database produced byte-identical output for all eight rows.
+on the real database produced byte-identical output for all eight rows,
+including the `casc ceiling` column and the always-escalate figure below.
 
 **The classifier objective's negative result is mostly a cost-blind
 threshold, not feature starvation or overfitting — except for GBT, which
@@ -217,14 +224,21 @@ toward zero.
 
 The `oracle` column above is the same unconstrained per-row max of local and
 offload utility used throughout this file (0.7208), which the spec directs
-both designs to be compared against. The cascade design's own ceiling — the
-best any ACCEPT/ESCALATE assignment could do once escalated rows are charged
-local **and** offload latency — is strictly below that shown oracle, since an
-accepted row can never earn the (uncharged) offload latency the oracle
-implicitly assumes when it prefers offload. Every cascade row's headroom
-share (both classifier and cost-aware) is measured against a ceiling no
-cascade router could reach even with perfect decisions; these percentages
-should not be read as "still this far from a reachable 0%."
+both designs to be compared against — including the cascade rows, so their
+`headroom` percentages are measured against 0.7208, not against the lower
+number below. The cascade design's own ceiling — the best any
+ACCEPT/ESCALATE assignment could do, `max(local_utility, escalated_utility)`
+per row — is **0.7091** (`casc ceiling` column above). That is below the
+0.7208 oracle but *above* always-offload's 0.6812: a cascade router has real
+headroom of about **0.028** over always-offload, which the oracle-relative
+`headroom` percentages in the table can't show. For reference, always-escalate
+(every row ESCALATEs) averages **0.6591** — below always-offload, not above
+it. The reason the cascade ceiling sits below the oracle is simply that
+ESCALATE is charged both the local pass's and the offload pass's latency,
+while the oracle's OFFLOAD alternative is only ever charged the offload
+pass's: escalating adds the local pass's latency (0.6812 − 0.6591 = 0.0221
+utility, ≈74 ms at `DEFAULT_LAMBDA = 0.3`) to every row, which a cascade
+router can never avoid paying once it decides to escalate.
 
 ### Feature compute cost (from spec 01)
 

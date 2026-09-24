@@ -24,6 +24,8 @@ from router.evaluation import (
     BootstrapResult,
     RouterSummary,
     bootstrap_router_vs_offload,
+    cascade_ceiling_utility,
+    escalated_utility,
     score_cascade,
     score_decide_first,
     summarize,
@@ -70,6 +72,13 @@ class RouterEvaluation:
     objective: Objective
     summary: RouterSummary
     bootstrap: BootstrapResult
+    # The cascade design's own ceiling (`cascade_ceiling_utility`'s mean over
+    # the held-out rows) — `None` for decide_first rows, since that ceiling
+    # only applies to the ACCEPT/ESCALATE design. Identical across every
+    # cascade router here (it depends only on the held-out rows, not on any
+    # router's picks), computed once in `run_experiment` and copied onto each
+    # cascade `RouterEvaluation` so it prints alongside that router's row.
+    cascade_ceiling: float | None
 
 
 @dataclass(frozen=True)
@@ -81,6 +90,12 @@ class ExperimentResult:
     train_frame_count: int
     test_frame_count: int
     routers: list[RouterEvaluation]
+    # Cascade design ceiling and always-escalate average over the held-out
+    # test rows (see `RouterEvaluation.cascade_ceiling`'s docstring) — kept
+    # at the experiment level too since both are single numbers shared by
+    # every cascade router, not something that varies per router config.
+    cascade_ceiling: float
+    always_escalate: float
 
 
 def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
@@ -108,6 +123,14 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
         drop=True
     )
 
+    # Computed once from `test_df` alone (not per router — these don't depend
+    # on any router's picks), then copied onto every cascade `RouterEvaluation`
+    # below. See S2 in findings.md: the cascade design's own ceiling is below
+    # the (decide-first-reachable) oracle shown per router, because ESCALATE
+    # always pays the local pass's latency on top of the offload pass's.
+    cascade_ceiling = float(cascade_ceiling_utility(test_df).mean())
+    always_escalate = float(escalated_utility(test_df).mean())
+
     routers = []
     for design, family, objective in ROUTER_CONFIGS:
         result = run_router(
@@ -130,6 +153,7 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
                 objective=objective,
                 summary=summarize(test_df, router_utility),
                 bootstrap=bootstrap_router_vs_offload(test_df, router_utility, seed=42),
+                cascade_ceiling=cascade_ceiling if design == "cascade" else None,
             )
         )
 
@@ -138,6 +162,8 @@ def run_experiment(engine: Engine, dataset: str) -> ExperimentResult:
         train_frame_count=len(train_frame_ids),
         test_frame_count=len(test_frame_ids),
         routers=routers,
+        cascade_ceiling=cascade_ceiling,
+        always_escalate=always_escalate,
     )
 
 
@@ -155,18 +181,27 @@ def _print_report(result: ExperimentResult) -> None:
     # 29-char width fits the longest router name ("decide_first_linear_costaware").
     header = (
         f"{'router':<29} {'avg util':>10} {'local':>10} {'offload':>10} {'oracle':>10} "
-        f"{'headroom':>10} {'95% CI':>22} {'useful':>8}"
+        f"{'headroom':>10} {'95% CI':>22} {'useful':>8} {'casc ceiling':>13}"
     )
     print(header)
     for router in result.routers:
         s = router.summary
         b = router.bootstrap
         ci = f"[{b.ci_low:.4f}, {b.ci_high:.4f}]"
+        ceiling = "-" if router.cascade_ceiling is None else f"{router.cascade_ceiling:.4f}"
         print(
             f"{router.name:<29} {s.avg_utility_router:>10.4f} {s.avg_utility_always_local:>10.4f} "
             f"{s.avg_utility_always_offload:>10.4f} {s.avg_utility_oracle:>10.4f} "
-            f"{s.headroom_share:>10.2%} {ci:>22} {str(b.useful):>8}"
+            f"{s.headroom_share:>10.2%} {ci:>22} {str(b.useful):>8} {ceiling:>13}"
         )
+    print(
+        f"\n'casc ceiling' (cascade rows only) is the cascade design's own ceiling — "
+        f"max(local_utility, escalated_utility) per row, averaged over the held-out "
+        f"rows: {result.cascade_ceiling:.4f}. Always-escalate (every row ESCALATEs): "
+        f"{result.always_escalate:.4f}. Both are below the 'oracle' column above because "
+        f"ESCALATE always pays the local pass's latency on top of the offload pass's, so "
+        f"a cascade router can never earn the oracle's uncharged OFFLOAD latency."
+    )
 
 
 def main() -> None:

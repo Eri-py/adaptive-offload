@@ -138,7 +138,7 @@ artifacts are ignored per the rules.
 - **Fix:** Print the cascade ceiling in the report (for example
   `np.maximum(local_utility, escalated_utility).mean()` in `evaluation.py`, shown as an
   extra column for cascade rows), and replace the prose with those numbers.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: report the cascade design ceiling"
 
 #### S3 — The row-alignment fix depends on two copies of the same filter, and no test covers it
 

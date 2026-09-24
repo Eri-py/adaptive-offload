@@ -52,6 +52,19 @@ def oracle_utility(df: pd.DataFrame) -> pd.Series:
     return np.maximum(local_utility(df), offload_utility(df))
 
 
+def cascade_ceiling_utility(df: pd.DataFrame) -> pd.Series:
+    """Per-row ceiling for the cascade design: the best of ACCEPT (local utility)
+    or ESCALATE (`escalated_utility`, charged both local and offload latency) a
+    perfect cascade policy could pick.
+
+    Strictly at or below `oracle_utility` row-wise, since `escalated_utility` can
+    never exceed `offload_utility` (escalation pays the local pass's latency on
+    top of the offload pass, on every row) — the oracle's OFFLOAD alternative is
+    never available to a cascade router, which must run locally first.
+    """
+    return np.maximum(local_utility(df), escalated_utility(df))
+
+
 def score_decide_first(df: pd.DataFrame, picks: npt.NDArray[np.str_]) -> pd.Series:
     """Per-row router utility for decide-first picks: a LOCAL pick gets local
     utility, an OFFLOAD pick gets offload utility."""

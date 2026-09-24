@@ -18,6 +18,8 @@ import pandas as pd
 from datagen.config import DEFAULT_LAMBDA
 from router.evaluation import (
     bootstrap_router_vs_offload,
+    cascade_ceiling_utility,
+    escalated_utility,
     local_utility,
     offload_utility,
     score_cascade,
@@ -79,6 +81,36 @@ def test_score_cascade_charges_escalated_rows_local_plus_offload_latency() -> No
     # 0.9 - 0.3 * (100 + 200)/1000 = 0.81 — not plain offload_utility (0.84).
     assert math.isclose(scored.iloc[1], 0.81)
     assert not math.isclose(scored.iloc[1], offload_utility(df).iloc[1])
+
+
+def test_cascade_ceiling_utility_is_max_of_local_and_escalated() -> None:
+    df = pd.DataFrame(
+        {
+            # Row 0: local wins. local_utility = 0.9 - 0.3*50/1000 = 0.885;
+            # escalated_utility = 0.85 - 0.3*(50+200)/1000 = 0.775.
+            # Row 1: escalated wins. local_utility = 0.5 - 0.3*50/1000 = 0.485;
+            # escalated_utility = 0.95 - 0.3*(50+100)/1000 = 0.905.
+            "local_accuracy": [0.9, 0.5],
+            "local_latency_ms": [50.0, 50.0],
+            "offload_accuracy": [0.85, 0.95],
+            "offload_latency_ms": [200.0, 100.0],
+        }
+    )
+    ceiling = cascade_ceiling_utility(df)
+    local = local_utility(df)
+    escalated = escalated_utility(df)
+
+    assert math.isclose(local.iloc[0], 0.885)
+    assert math.isclose(escalated.iloc[0], 0.775)
+    assert math.isclose(ceiling.iloc[0], 0.885)  # local wins row 0
+
+    assert math.isclose(local.iloc[1], 0.485)
+    assert math.isclose(escalated.iloc[1], 0.905)
+    assert math.isclose(ceiling.iloc[1], 0.905)  # escalated wins row 1
+
+    # Never below either candidate.
+    assert (ceiling >= local - 1e-12).all()
+    assert (ceiling >= escalated - 1e-12).all()
 
 
 def _oracle_df() -> pd.DataFrame:

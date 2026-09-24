@@ -327,3 +327,38 @@
   ~0.667 train accuracy with 60 photos / 3 possible leaves in a first draft
   of this test, still far below the unconstrained model's 1.0 but not a
   clean "stays at the base rate" assertion).
+
+## Review finding S2 — quantify the cascade's own ceiling
+
+- `cascade_ceiling_utility` (new, `router/evaluation.py`) is just
+  `np.maximum(local_utility(df), escalated_utility(df))`, mirroring
+  `oracle_utility`'s `np.maximum(local_utility(df), offload_utility(df))`
+  pattern exactly — the only difference is which "other path" utility competes
+  with local. Added alongside `oracle_utility` rather than as a new module,
+  since it's the same shape of per-row-ceiling function the file already has.
+- The cascade ceiling and always-escalate average are **identical across all
+  four cascade router configs** (linear/gbt × classifier/cost_aware) in a
+  given experiment run: both are computed purely from `test_df` (the held-out
+  rows), never from any router's `picks`. Computed them once in
+  `run_experiment` before the router loop and copied the same float onto each
+  cascade `RouterEvaluation`, rather than recomputing (or worse, exposing as
+  four separately-derived-but-equal numbers) per router — avoids redundant
+  computation and makes the "why is this the same for every cascade row"
+  invariant explicit in one place instead of implicit in four.
+- Verified the real numbers end to end before writing them into findings.md:
+  two live (read-only) runs of `python -m router.feature_experiment` printed
+  `casc ceiling` = 0.7091 and always-escalate = 0.6591 for every cascade row,
+  byte-identical between runs, and every existing column's numbers (avg util,
+  local, offload, oracle, headroom, 95% CI, useful) matched the pre-change
+  findings.md table exactly — confirms the new column is purely additive, not
+  a side effect of touching `evaluation.py`/`feature_experiment.py`.
+- The arithmetic behind "escalating costs ≈74 ms of local latency": since
+  `escalated_utility = offload_accuracy - lambda*(local_latency+offload_latency)/1000`
+  and `offload_utility = offload_accuracy - lambda*offload_latency/1000`, their
+  difference per row is exactly `-lambda*local_latency_ms/1000` — no
+  `offload_accuracy` term survives. So the *average* gap between the printed
+  always-offload (0.6812) and always-escalate (0.6591) figures, divided by
+  `DEFAULT_LAMBDA` (0.3) and multiplied by 1000, directly gives the
+  held-out rows' mean local latency in ms (≈73.67, rounds to "≈74 ms") without
+  needing to query `local_latency_ms` separately — cheap arithmetic on two
+  numbers already in the printed report rather than a third data pull.
