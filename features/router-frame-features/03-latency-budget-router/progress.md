@@ -37,7 +37,7 @@
 - Notes: Real run x2 identical (stdout and PNG). Spec 02 output unchanged. Cascade not useful at any budget; budget-only within 0.4-1.6 pts of oracle and above both static baselines. Orchestrator had the interpretation revised to lead with budget-only and to recommend resuming phone/server work; added the Debug-build caveat.
 
 ## Task 7 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 17:52:59
+- Completed: 2026-09-24 17:53:16
+- Notes: training: ruff clean, mypy 9 known only, 167 passed; database: 1 passed. No files changed.
