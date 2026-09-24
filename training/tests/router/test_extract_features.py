@@ -174,6 +174,33 @@ def test_missing_image_raises_before_any_row_is_written(
     assert get_known_feature_file_names(postgres_engine, DATASET) == set()
 
 
+def test_many_missing_images_truncates_message_to_first_ten(
+    postgres_engine: Engine, tmp_path: Path
+) -> None:
+    present = "present.jpg"
+    # 15 missing names, zero-padded so `sorted()` order matches list order.
+    missing = [f"missing_{i:02d}.jpg" for i in range(15)]
+    file_names = [present, *missing]
+    _write_images(tmp_path, [present])  # none of the "missing_*" files are written
+    _seed_scene_complexity(postgres_engine, DATASET, file_names)
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        extract_features(
+            postgres_engine,
+            DATASET,
+            tmp_path,
+            _make_predict_factory_spy(_make_stub_predict({}), {"n": 0}),
+        )
+
+    message = str(exc_info.value)
+    assert f"Missing {len(missing)} image file(s) under {tmp_path}" in message
+    for file_name in missing[:10]:
+        assert file_name in message
+    assert "... and 5 more" in message
+    for file_name in missing[10:]:
+        assert file_name not in message
+
+
 def test_nothing_pending_returns_none(postgres_engine: Engine, tmp_path: Path) -> None:
     file_names = ["a.jpg"]
     _write_images(tmp_path, file_names)

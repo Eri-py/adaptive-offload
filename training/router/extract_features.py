@@ -99,8 +99,13 @@ def extract_features(
     pending_paths = {name: folder / name for name in pending}
     missing = sorted(name for name, path in pending_paths.items() if not path.is_file())
     if missing:
+        shown = missing[:10]
+        remainder = len(missing) - len(shown)
+        names = ", ".join(shown)
+        if remainder > 0:
+            names += f", ... and {remainder} more"
         raise FileNotFoundError(
-            f"Missing {len(missing)} image file(s) under {folder}: {', '.join(missing)}"
+            f"Missing {len(missing)} image file(s) under {folder}: {names}"
         )
 
     predict = predict_factory()

@@ -63,7 +63,7 @@ None.
 - **File:** `training/router/extract_features.py:84-88`
 - **Issue:** Point `--folder` at the wrong directory and the `FileNotFoundError` message holds all 5,000 file names. That hides the useful part, which is the folder path and the count.
 - **Fix:** Show the count and folder, plus the first ~10 names and "... and N more".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: truncate the missing-image error"
 
 ## Nitpicks
 
