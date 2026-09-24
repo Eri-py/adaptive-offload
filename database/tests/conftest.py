@@ -1,11 +1,11 @@
-"""Shared pytest fixtures for `training/tests/`.
+"""Shared pytest fixtures for `database/tests/`.
 
-Provides a fresh, disposable Postgres database per test so persistence-layer
-tests run against real Postgres rather than a SQLite stand-in (SQLite's
-dialect differs enough on native `ENUM`, JSON columns, and FK enforcement to
-not be trustworthy here). Covered by the scoped exception in `CLAUDE.md`'s
+Provides a fresh, disposable Postgres database per test so model/query tests
+run against real Postgres rather than a SQLite stand-in (SQLite's dialect
+differs enough on native `ENUM`, JSON columns, and FK enforcement to not be
+trustworthy here). Covered by the scoped exception in `CLAUDE.md`'s
 Infrastructure section: fixture-driven create/drop of ephemeral, uniquely
-named test databases only. Mirrors `database/tests/conftest.py` exactly.
+named test databases only.
 """
 
 import os
@@ -13,9 +13,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from common.testing import ephemeral_postgres_database
 from dotenv import load_dotenv
 from sqlalchemy import Engine
+
+from common.testing import ephemeral_postgres_database
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -31,7 +32,7 @@ def postgres_engine() -> Iterator[Engine]:
     admin_url = os.environ.get("POSTGRES_ADMIN_URL")
     if not admin_url:
         raise RuntimeError(
-            "POSTGRES_ADMIN_URL is not set. Add it to training/.env "
+            "POSTGRES_ADMIN_URL is not set. Add it to database/.env "
             "(a Postgres admin connection string pointed at the "
             "'postgres' maintenance database)."
         )

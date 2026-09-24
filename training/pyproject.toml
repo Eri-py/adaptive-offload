@@ -3,18 +3,27 @@ name = "training"
 version = "0.1.0"
 description = "Data-gen simulator and router training code for adaptive-offload."
 requires-python = ">=3.11"
-# `server` (for `common.db`/`common.models`) is not listed here as a PEP 508
+# `database` (for `common.db`/`common.models`) is not listed here as a PEP 508
 # dependency — plain pip has no portable relative-path syntax for it. Install
 # it explicitly into this package's venv instead:
-#   pip install -e ../server
+#   pip install -e ../database
 #   pip install -e ".[dev]"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "opencv-python-headless>=4.9",
-    "requests>=2.31",
     "python-dotenv>=1.0",
 ]
+
+# Installed as real executables in .venv/bin/ by `pip install -e .` — once
+# the shared venv is activated, e.g. `run-simulation --preset baseline`
+# works from any directory, no `python -m datagen.cli.<name>` needed.
+[project.scripts]
+run-simulation = "datagen.cli.run_simulation:main"
+score-complexity = "datagen.cli.score_complexity:main"
+preview-sample = "datagen.cli.preview_sample:main"
+preview-conditions = "datagen.cli.preview_conditions:main"
+relabel-run = "datagen.cli.relabel_run:main"
 
 [project.optional-dependencies]
 dev = [
@@ -43,12 +52,12 @@ strict = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
 exclude = ["build/"]
-# `common` (from `server/common`, installed via `pip install -e ../server`) is
-# only resolvable at runtime through that install's editable-install import
+# `common` (from `database/common`, installed via `pip install -e ../database`)
+# is only resolvable at runtime through that install's editable-install import
 # hook, not through mypy's static filesystem-based module search. Point mypy
-# directly at `server/` (which is `common`'s own import root, per Task 1) so
+# directly at `database/` (which is `common`'s own import root, per Task 1) so
 # `from common... import ...` type-checks instead of failing as unresolved.
-mypy_path = "../server"
+mypy_path = "../database"
 
 [[tool.mypy.overrides]]
 module = "cv2.*"
