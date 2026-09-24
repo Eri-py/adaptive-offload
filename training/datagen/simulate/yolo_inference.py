@@ -47,11 +47,12 @@ def build_offload_inference_fn() -> RunInferenceFn:
     return _build_inference_fn(config.OFFLOAD_MODEL_WEIGHTS_PATH, "cuda")
 
 
-def _build_inference_fn(weights_path: Path, device: str) -> RunInferenceFn:
-    """Load a YOLO model once on `device`; return a closure that runs real inference.
+def load_model(weights_path: Path, device: str) -> YOLO:
+    """Load a YOLO model from `weights_path` onto `device`, ready for inference.
 
-    Shared by `build_local_inference_fn` and `build_offload_inference_fn`,
-    which differ only in which weights file and device they pass here.
+    Shared setup used by `_build_inference_fn`, and by any other caller that
+    needs a loaded model without a `RunInferenceFn` closure (e.g. frame
+    feature extraction).
 
     Raises `FileNotFoundError` if the weights aren't at `weights_path`.
     `ultralytics`'s `YOLO(...)` will otherwise silently download a fresh copy
@@ -59,11 +60,6 @@ def _build_inference_fn(weights_path: Path, device: str) -> RunInferenceFn:
     list of known asset names regardless of whether the given path is
     missing, so a fixed path alone isn't enough to make a missing file fail
     clearly.
-
-    The returned closure measures wall-clock latency around the model call
-    itself (not `ultralytics`' own reported `speed['inference']`), so the
-    measurement reflects this simulator's actual observed per-frame cost
-    end-to-end, the same way a real on-device caller would experience it.
     """
     _require_weights_file(weights_path)
     model = YOLO(weights_path)
@@ -73,6 +69,21 @@ def _build_inference_fn(weights_path: Path, device: str) -> RunInferenceFn:
     # inference, inflating the first frame's measured latency by roughly two
     # orders of magnitude (see review finding B1).
     model(np.zeros((640, 640, 3), dtype=np.uint8), device=device, verbose=False)
+    return model
+
+
+def _build_inference_fn(weights_path: Path, device: str) -> RunInferenceFn:
+    """Load a YOLO model once on `device`; return a closure that runs real inference.
+
+    Shared by `build_local_inference_fn` and `build_offload_inference_fn`,
+    which differ only in which weights file and device they pass here.
+
+    The returned closure measures wall-clock latency around the model call
+    itself (not `ultralytics`' own reported `speed['inference']`), so the
+    measurement reflects this simulator's actual observed per-frame cost
+    end-to-end, the same way a real on-device caller would experience it.
+    """
+    model = load_model(weights_path, device)
 
     def run_inference(
         image_path: Path, ground_truth_boxes: list[ground_truth.Box]

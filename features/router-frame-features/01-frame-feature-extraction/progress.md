@@ -7,10 +7,10 @@
 - Notes: FrameFeatures model + migration 0003 (offline render verified, not applied); round-trip test extended. database: ruff/mypy clean, 1 passed.
 
 ## Task 2 — Shared YOLO loader
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 12:35:43
+- Completed: 2026-09-24 12:37:10
+- Notes: Public load_model extracted; _build_inference_fn uses it, closure unchanged. training: ruff clean, mypy 9 known errors only, 86 passed.
 
 ## Task 3 — Feature functions
 - Status: not started
