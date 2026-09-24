@@ -4,29 +4,46 @@ On-device TFLite inference benchmark for iOS, built with Expo. See
 `features/mobile-inference-benchmark/spec.md` in the repo root for the full
 feature spec.
 
-## Building and installing on a physical iPhone
+## Build profiles
 
-This app must run as a real, standalone build — not a Metro-connected dev
-client — because one of its acceptance criteria (AC4) requires it to launch
-and run correctly in airplane mode, with no dev server reachable. Use the
-`preview` EAS Build profile (`app/eas.json`), which produces an internal
-distribution build with the Release configuration and the JS bundle
-embedded in the binary itself.
+`app/eas.json` has two profiles for the iPhone, for different jobs:
 
-1. Install `eas-cli` ad hoc (no need to add it as a project dependency):
-   `npx eas-cli --version`
-2. Log in: `npx eas-cli login`
-3. Register the target iPhone's UDID for internal distribution (one-time,
-   per device): `npx eas-cli device:create`
-4. Build: `npx eas-cli build --platform ios --profile preview`
-5. Install the resulting build onto the registered device following the
-   link EAS Build prints when the build finishes.
+| Profile | Use it for | JS comes from | Works offline |
+|---|---|---|---|
+| `development` | Day-to-day work on the app (hot reload) | The dev server on your machine | No |
+| `preview` | Benchmark numbers you intend to report | Embedded in the binary | Yes (AC4) |
 
-Note: there is no `development` profile in `app/eas.json`. A dev-client
-(`developmentClient: true`) build fetches its JS bundle from a running
-`expo start` over the network, so it cannot launch in airplane mode and
-would fail AC4 outright; it also runs JS in `__DEV__` mode, which isn't a
-representative binary for benchmarking. If a dev-client build is ever
-genuinely needed for local iteration, add `expo-dev-client` as a real
-dependency first and add the profile back deliberately — don't rely on
-EAS's interactive prompt to install it implicitly.
+Report latency numbers from a `preview` build only. A `development` build runs
+the Debug configuration with React Native's dev-mode checks on, so its timings
+are slower than a real release and aren't representative.
+
+## One-time setup
+
+1. Log in: `npx eas-cli login`
+2. Register the iPhone's UDID for internal distribution:
+   `npx eas-cli device:create`
+
+## Development build (for iterating)
+
+1. Build and install once: `npx eas-cli build --platform ios --profile development`.
+   Only rebuild when native dependencies or `app.json` plugins change; JS and
+   UI changes reload over the dev server.
+2. Start the dev server from `app/`, then open the dev-client app on the phone
+   and connect to it.
+
+The phone must be able to reach the dev server. WSL2 in its default NAT
+networking mode is not reachable from other devices on the LAN, so either:
+
+- run `npx expo start --tunnel` (works through any network, slightly slower
+  reloads), or
+- switch WSL to mirrored networking (`networkingMode=mirrored` under `[wsl2]`
+  in `%UserProfile%\.wslconfig`, then `wsl --shutdown`) and allow port 8081
+  through the Windows firewall, then run `npx expo start` as usual.
+
+## Preview build (for benchmark runs)
+
+1. `npx eas-cli build --platform ios --profile preview`
+2. Install it from the link EAS Build prints when the build finishes.
+
+This build is a standalone Release binary with the JS bundle embedded, so it
+runs with the phone in airplane mode and needs no dev server.

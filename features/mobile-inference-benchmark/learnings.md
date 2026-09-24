@@ -617,3 +617,14 @@ actually returns without throwing for this specific model/input shape.
   path (option 2 above would close that second gap). Treat this number as a
   reference point for "how much does trimming decode/letterbox/NMS change
   the desktop-side figure," not as a rigorous phone-vs-desktop comparison.
+
+## Post-review — `development` profile restored alongside `preview`
+
+The B2 fix removed the `development` profile. It was later restored at the
+user's request, since UI work is planned and a dev client's hot reload avoids an
+EAS build per edit. `expo-dev-client` is now a real dependency (installed via
+`npx expo install` for SDK-57 version alignment), so the profile no longer
+relies on EAS's interactive install prompt. `preview` stays the profile for
+reported benchmark numbers (Release build, embedded bundle, airplane-mode AC4).
+WSL2 here runs in NAT networking mode, so a phone can't reach Metro at the WSL
+address; `app/README.md` documents `expo start --tunnel` or mirrored networking.
