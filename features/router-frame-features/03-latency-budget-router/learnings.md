@@ -137,3 +137,56 @@
   the rendered PNG once rather than trusting a passing smoke test, since a
   "file is non-empty" test can't catch a legend/label silently clipped at
   the canvas edge.
+
+## Task 5 — Experiment script (integration)
+
+- Kept `BudgetResult`/`BudgetExperimentResult`/`ScoreBudgetResult` free of
+  any `pd.DataFrame` field (they hold only `RouterMetrics`/`BootstrapResult`
+  dataclasses, floats, strings and plain lists/dicts of those) specifically
+  so the integration test's `assert first == second` works with plain `==`
+  — `feature_experiment.ExperimentResult` has to avoid `==` on its
+  `diagnostics: pd.DataFrame` field for the "truth value of a DataFrame is
+  ambiguous" reason spec 02's learnings flag; not storing a DataFrame at all
+  sidesteps that rather than writing a custom comparison.
+- The threshold sweep is computed on **test** rows (`_threshold_sweep`, used
+  for the reported curve and the figure), but the tuned threshold is picked
+  by rerunning the same per-threshold cascade+metrics computation on
+  **train** rows (`_tuned_threshold`) — two structurally identical loops
+  over `THRESHOLDS`, deliberately not shared into one helper, because they
+  read from different `_SplitContext`s (train vs test) and one returns the
+  full sweep while the other reduces to a single best threshold. Trying to
+  unify them would need a callback or a return-type union that's less clear
+  than just having two short loops.
+- `_tuned_threshold`'s tie-break (lowest threshold wins) reuses
+  `oracle_actions`' pattern from Task 2: only a **strict** `>` improvement
+  overwrites `best_on_time`, so among equal on-time accuracies the first
+  (lowest, since `THRESHOLDS` is ascending) threshold tried is the one that
+  survives — no separate tie-break pass needed, same reasoning as the
+  oracle's LOCAL/OFFLOAD/ESCALATE order tie-break.
+- Verified the printed report end-to-end against the integration test's own
+  synthetic Postgres fixture (not the real database — that's Task 6) by
+  calling `run_experiment` + the module's `_print_report` directly in a
+  throwaway script. Two things worth flagging for reading Task 6's real
+  output, so they aren't mistaken for a bug:
+  - A confidence score's tuned cascade can print **identical** numbers to
+    always-local at a budget (e.g. `cascade-raw` == `always-local` exactly
+    in the 100-300ms rows of the synthetic run). This is expected: when the
+    tuned threshold ends up high enough (or the budget tight enough) that no
+    row's escalation both falls below threshold *and* fits, every cascade
+    action is LOCAL, which is bitwise the same policy as always-local on
+    that data.
+  - When that happens, `vs_always_local`'s bootstrap CI is exactly
+    `[0.0000, 0.0000]` — the per-row diff is the constant 0 for every row
+    (same mechanism as Task 1's "hand-built case" bootstrap test), not a
+    sign of a broken bootstrap.
+- The synthetic fixture needed to diverge from `test_feature_experiment.py`'s
+  in one deliberate way: that fixture uses a **constant**
+  `local_latency_ms`/`offload_latency_ms` per row (it never exercises
+  latency-based routing), which would make every budget's routing decision
+  degenerate to the same action here. This test instead draws
+  `local_latency_ms ~ Uniform(20, 400)` per row and derives
+  `offload_latency_ms` from a real `1000/bandwidth_mbps + noise`
+  relationship (`bandwidth ~ Uniform(1, 100)`, so offload latency roughly
+  spans 10-1000ms) — both ranges straddle the whole 100-500ms budget sweep,
+  so budget-only and the cascade both genuinely branch at every budget
+  rather than only exercising one action's code path.

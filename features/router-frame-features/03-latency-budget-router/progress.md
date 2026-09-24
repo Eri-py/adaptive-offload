@@ -25,10 +25,10 @@
 - Notes: budget_plot.py (BudgetPoint, BudgetPanelData, plot_budget_curves; Agg; bbox_inches=tight fixed a clipped legend); matplotlib declared in pyproject; 3 new tests, 166 pass.
 
 ## Task 5 — Experiment script (integration)
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 17:36:54
+- Completed: 2026-09-24 17:45:09
+- Notes: budget_experiment.py (run_experiment -> BudgetExperimentResult, report, build_budget_panel, main --dataset/--figure); 1 integration test, 167 pass; --help works.
 
 ## Task 6 — Run the experiment and write findings
 - Status: not started
