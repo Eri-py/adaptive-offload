@@ -85,3 +85,58 @@
   compute the cascade's ACCEPT/ESCALATE label — reusing it there avoids a
   second reimplementation of "offload accuracy charged local + offload
   latency."
+
+## Task 4 — Two-stage routers
+
+- `frame_dataset.load_simulated_rows` already merges the 11 `frame_features`
+  columns (plus `scene_complexity` from `load_training_data`) onto every
+  simulated row, so stage 1's outputs never need a frame-table merge at
+  prediction time — `predict_stage1` just reads `models.feature_columns`
+  straight off whatever DataFrame it's given (the per-frame table for
+  training, or `simulated_rows` for inference). Confirmed this by re-reading
+  `load_simulated_rows`'s implementation rather than assuming a join was
+  still needed.
+- `Stage1Models`/`Stage2Model`/`RouterResult` each carry the *actual*
+  `frame_id`/`file_name` set that reached `.fit()` (`trained_frame_ids`),
+  rather than the router recomputing the simulated/train/test filter a
+  second time for tests to check against. The two leakage-guard tests then
+  assert directly on those returned sets (`train_stage1`'s return for the
+  stage-1 guard; `run_router`'s `RouterResult.stage2_trained_frame_ids` for
+  the stage-2 guard) instead of re-deriving the filter logic in the test —
+  a change to the actual filtering would break both the guard test and any
+  reuse of `trained_frame_ids` elsewhere, so it can't silently drift.
+- `_StageRegressor`/`_StageClassifier` (the `Pipeline | HistGradientBoosting*`
+  unions) needed an explicit `: TypeAlias` annotation
+  (`from typing import TypeAlias`) — mypy strict rejects a bare
+  `X = A | B` module-level assignment as "not valid as a type" when used
+  later as a parameter/return annotation, even though inlining the same
+  union directly in a signature (as `router/baseline.py` already does)
+  works fine. `TypeAlias` is the fix; a `type X = A | B` (PEP 695) statement
+  would also work under `python_version = "3.12"` but wasn't needed here.
+- Single-class stage-2 labels (e.g. every train-photo cascade label is
+  ACCEPT) make `LogisticRegression`/`HistGradientBoostingClassifier.fit()`
+  raise `ValueError` — chose to detect this before fitting
+  (`labels.unique()` length check) and short-circuit to a constant pick
+  returned for every test row, recorded on `Stage2Model` as
+  `constant_pick` with `classifier=None`. `predict_stage2` then branches on
+  `classifier is None` instead of trying to fit/predict and catching the
+  exception.
+- `np.full(n, "ACCEPT", dtype=np.str_)` silently truncates to 1 character
+  (`'A'`) because unsized `np.str_`/`str` dtype defaults to `<U0`/`<U1`, not
+  the string's actual length — a real footgun, easy to hit here since the
+  constant-pick fallback returns a small fixed-length array. Fixed by
+  sizing the dtype explicitly from the string itself:
+  `np.full(n, pick, dtype=f"<U{len(pick)}")`. By contrast,
+  `np.asarray(existing_str_array, dtype=np.str_)` (used for the classifier
+  branch, converting `.predict()`'s `object`-dtype output) infers the
+  correct width from the array's actual contents and does *not* truncate —
+  confirmed both behaviors directly in a REPL before relying on either.
+- Built the leakage-guard/determinism/label test fixtures with an
+  **alternating gap sign by frame index** (even index → offload better, odd
+  → local better) rather than a single unconstrained RNG draw, so that
+  *any* contiguous slice used later (the non-simulated pool, or the
+  simulated train/test subsets) is guaranteed to contain both classes for
+  stage 1's `gap <= 0` classifier and, via fixed local/offload latencies
+  chosen so the escalate threshold (`gap > 0.036` at `DEFAULT_LAMBDA =
+  0.3`) lines up with the sign, for the cascade label too — avoids flaky
+  single-class failures without re-seeding until a mix happens to appear.

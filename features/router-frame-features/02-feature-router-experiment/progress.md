@@ -19,10 +19,10 @@
 - Notes: evaluation.py (utilities, decide-first/cascade scoring, summarize, vectorised photo-level bootstrap); 9 new tests, 129 pass.
 
 ## Task 4 — Two-stage routers
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 13:51:03
+- Completed: 2026-09-24 13:58:36
+- Notes: two_stage.py (train/predict stage1+2, cascade_label, run_router -> RouterResult with .picks plus trained-frame sets for leakage tests); single-class stage-2 label -> constant pick; 6 new tests, 135 pass.
 
 ## Task 5 — Experiment script (integration)
 - Status: not started
