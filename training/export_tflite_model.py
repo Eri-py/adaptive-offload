@@ -1,7 +1,8 @@
 """Export yolov8n.pt to TFLite and bundle sample images for the mobile app.
 
 One-off script, not a registered `training/datagen/cli/` tool — see
-features/mobile-inference-benchmark/spec.md for why it lives here instead.
+features/mobile-inference-benchmark/implementation.md for why it lives here
+instead.
 
 IMPORTANT — the TFLite export (`export_tflite_model()`) must be run in an
 isolated, throwaway virtualenv, NOT the shared repo-root `.venv/`. The
@@ -35,11 +36,18 @@ of pinned versions. The shared `.venv/` is never touched by this process.
 The throwaway venv can be deleted afterward; it isn't part of the repo.
 
 `bundle_sample_images()` has no such constraint and can be run from the
-shared repo-root `.venv/` as usual.
+shared repo-root `.venv/` as usual, via `--images-only`:
+
+    python training/export_tflite_model.py --images-only
+
+Plain `python training/export_tflite_model.py` (no flag) runs both steps and
+must use the throwaway venv above, since it calls `export_tflite_model()`
+first.
 """
 
 from __future__ import annotations
 
+import argparse
 import shutil
 from pathlib import Path
 
@@ -82,8 +90,17 @@ def bundle_sample_images() -> list[Path]:
 
 
 if __name__ == "__main__":
-    tflite_path = export_tflite_model()
-    print(f"Exported TFLite model to {tflite_path}")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--images-only",
+        action="store_true",
+        help="skip the TFLite export and only bundle sample images (safe in the shared venv)",
+    )
+    args = parser.parse_args()
+
+    if not args.images_only:
+        tflite_path = export_tflite_model()
+        print(f"Exported TFLite model to {tflite_path}")
 
     image_paths = bundle_sample_images()
     print(f"Copied {len(image_paths)} sample images to {APP_IMAGES_DIR}")

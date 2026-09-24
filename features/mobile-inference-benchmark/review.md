@@ -103,7 +103,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `training/export_tflite_model.py:3-4`, `:36-37`, `:83-88`
 - **Issue:** It says the rationale is in `spec.md`, but it is in `implementation.md`. It also says `bundle_sample_images()` can run from the shared venv, but `__main__` always runs `export_tflite_model()` first, which fails there.
 - **Fix:** Point to `implementation.md`. Either add a `--images-only` argument (or split `__main__`) or drop the shared-venv claim.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N4: fix the export script docstring"
 
 #### N5 — Running state has no per-image progress, unlike the mockup
 
