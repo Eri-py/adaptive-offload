@@ -19,7 +19,7 @@ from common.models import FrameFeatures, SceneComplexity
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from router.extract_features import Predict, extract_features
+from router.extract_features import Predict, PredictFactory, extract_features
 from router.feature_store import get_known_feature_file_names
 
 DATASET = "test_dataset_extract_features"
@@ -59,6 +59,16 @@ def _make_stub_predict(
     return predict
 
 
+def _make_predict_factory_spy(predict: Predict, call_count: dict[str, int]) -> PredictFactory:
+    """A `PredictFactory` recording how many times it was called before returning `predict`."""
+
+    def factory() -> Predict:
+        call_count["n"] += 1
+        return predict
+
+    return factory
+
+
 def test_stores_one_row_per_frame_with_every_column_populated(
     postgres_engine: Engine, tmp_path: Path
 ) -> None:
@@ -66,7 +76,9 @@ def test_stores_one_row_per_frame_with_every_column_populated(
     _write_images(tmp_path, file_names)
     _seed_scene_complexity(postgres_engine, DATASET, file_names)
 
-    summary = extract_features(postgres_engine, DATASET, tmp_path, _make_stub_predict({}))
+    summary = extract_features(
+        postgres_engine, DATASET, tmp_path, lambda: _make_stub_predict({})
+    )
 
     assert summary is not None
     assert get_known_feature_file_names(postgres_engine, DATASET) == set(file_names)
@@ -99,7 +111,7 @@ def test_zero_detection_frame_is_stored_with_zeros(
         postgres_engine,
         DATASET,
         tmp_path,
-        _make_stub_predict({"empty.jpg": ([], [])}),
+        lambda: _make_stub_predict({"empty.jpg": ([], [])}),
     )
 
     with Session(postgres_engine) as session:
@@ -120,7 +132,7 @@ def test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged(
     _write_images(tmp_path, file_names)
     _seed_scene_complexity(postgres_engine, DATASET, file_names)
 
-    extract_features(postgres_engine, DATASET, tmp_path, _make_stub_predict({}))
+    extract_features(postgres_engine, DATASET, tmp_path, lambda: _make_stub_predict({}))
 
     call_count = {"n": 0}
     # A predict that would raise if ever called proves the second run
@@ -130,7 +142,7 @@ def test_second_run_computes_nothing_new_and_leaves_existing_rows_unchanged(
         raise AssertionError(f"predict() should not be called again for {path.name}")
 
     summary = extract_features(
-        postgres_engine, DATASET, tmp_path, _predict_that_must_not_be_called
+        postgres_engine, DATASET, tmp_path, lambda: _predict_that_must_not_be_called
     )
 
     assert summary is None
@@ -144,15 +156,21 @@ def test_missing_image_raises_before_any_row_is_written(
     file_names = ["present.jpg", "missing.jpg"]
     _write_images(tmp_path, ["present.jpg"])  # "missing.jpg" is never written
     _seed_scene_complexity(postgres_engine, DATASET, file_names)
-    call_count = {"n": 0}
+    predict_calls: dict[str, int] = {"n": 0}
+    factory_calls: dict[str, int] = {"n": 0}
 
     with pytest.raises(FileNotFoundError) as exc_info:
         extract_features(
-            postgres_engine, DATASET, tmp_path, _make_stub_predict({}, call_count)
+            postgres_engine,
+            DATASET,
+            tmp_path,
+            _make_predict_factory_spy(_make_stub_predict({}, predict_calls), factory_calls),
         )
 
     assert "missing.jpg" in str(exc_info.value)
-    assert call_count["n"] == 0
+    assert predict_calls["n"] == 0
+    # The predictor must never be built when an image is missing (S2).
+    assert factory_calls["n"] == 0
     assert get_known_feature_file_names(postgres_engine, DATASET) == set()
 
 
@@ -160,8 +178,16 @@ def test_nothing_pending_returns_none(postgres_engine: Engine, tmp_path: Path) -
     file_names = ["a.jpg"]
     _write_images(tmp_path, file_names)
     _seed_scene_complexity(postgres_engine, DATASET, file_names)
-    extract_features(postgres_engine, DATASET, tmp_path, _make_stub_predict({}))
+    extract_features(postgres_engine, DATASET, tmp_path, lambda: _make_stub_predict({}))
 
-    summary = extract_features(postgres_engine, DATASET, tmp_path, _make_stub_predict({}))
+    factory_calls: dict[str, int] = {"n": 0}
+    summary = extract_features(
+        postgres_engine,
+        DATASET,
+        tmp_path,
+        _make_predict_factory_spy(_make_stub_predict({}), factory_calls),
+    )
 
     assert summary is None
+    # The predictor must never be built when nothing is pending (S2).
+    assert factory_calls["n"] == 0

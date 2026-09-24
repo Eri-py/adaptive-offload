@@ -56,7 +56,7 @@ None.
 - **File:** `training/router/extract_features.py:170-172`
 - **Issue:** `main()` builds the real predictor (weights load plus a warm-up inference) before `extract_features` finds out nothing is pending or that images are missing. A re-run on a complete dataset pays the model load, and a wrong `--folder` is reported only after the model has loaded.
 - **Fix:** Make `predict` lazy (build the model on first call). Or split the pending and missing-image check into a helper that `main()` calls before `_make_real_predictor`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: load the model only when frames are pending"
 
 #### S3 — The missing-image error lists every missing name
 

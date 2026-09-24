@@ -87,3 +87,31 @@
 - No test in `test_extract_features.py` asserted on `TimingSummary`'s field
   values (only `summary is not None`/`is None`), so adding the field
   required no test changes.
+
+## Review fix — S2 (lazy predictor)
+
+- Chose the lazy-predictor option over the "split the check into a helper
+  `main()` calls first" option: `extract_features()` now takes a
+  `predict_factory: PredictFactory` (`Callable[[], Predict]`) instead of an
+  already-built `Predict`, and calls it itself, once, right after the
+  pending/missing-image checks and before the per-frame timed loop starts.
+  This keeps the check-then-build ordering inside one function (instead of
+  main() and extract_features() each doing part of it), and made the "not
+  built" behavior directly unit-testable against `extract_features()`
+  itself rather than only against the untested `main()`.
+- Timing stays clean because `predict_factory()` is called once, outside
+  and before the `for name in pending:` loop's `time.perf_counter()`
+  blocks — same place a pre-built `predict` used to be handed in, just
+  built one line later instead of in `main()`.
+- `main()` now passes `lambda: _make_real_predictor(config.LOCAL_MODEL_WEIGHTS_PATH, "cpu")`
+  instead of calling `_make_real_predictor` eagerly. `_make_real_predictor`
+  itself is unchanged — it still loads weights and returns a `Predict`
+  synchronously; laziness comes entirely from wrapping the call in a
+  lambda the caller controls when to invoke.
+- Test coverage: added a `_make_predict_factory_spy` helper (a
+  `PredictFactory` that counts its own calls before returning a stub
+  `Predict`), and used it in `test_missing_image_raises_before_any_row_is_written`
+  and `test_nothing_pending_returns_none` to assert the factory is never
+  invoked in either case — proving the predictor itself is never built, not
+  just that `predict()` is never called per-frame (the two are different
+  now that building and calling are separate steps).

@@ -49,6 +49,10 @@ BATCH_SIZE = 100
 # not `Results` directly, so tests can stub this without a real model/torch.
 Predict = Callable[[Path], tuple[Sequence[float], Sequence[float]]]
 
+# Builds a `Predict`, e.g. loading model weights — deferred to a factory so
+# `extract_features` can call it only once pending/missing-image checks pass.
+PredictFactory = Callable[[], Predict]
+
 
 @dataclass(frozen=True)
 class TimingSummary:
@@ -67,7 +71,7 @@ class TimingSummary:
 
 
 def extract_features(
-    engine: Engine, dataset: str, folder: Path, predict: Predict
+    engine: Engine, dataset: str, folder: Path, predict_factory: PredictFactory
 ) -> TimingSummary | None:
     """Compute and store `frame_features` rows for every pending frame of `dataset`.
 
@@ -78,6 +82,11 @@ def extract_features(
     computation runs, per the spec's "never leaves partial/missing values"
     and "fails clearly on a missing image" requirements. Returns `None` when
     there's nothing to compute.
+
+    `predict_factory` is only called once those checks pass, so a real
+    predictor's model load (weights + warm-up inference) is never paid on a
+    no-op re-run or a bad `folder`. It's called before the per-frame timing
+    loop below starts, so the load never skews the reported averages.
     """
     known_frames = list_dataset_frames(engine, dataset)
     already_stored = get_known_feature_file_names(engine, dataset)
@@ -93,6 +102,8 @@ def extract_features(
         raise FileNotFoundError(
             f"Missing {len(missing)} image file(s) under {folder}: {', '.join(missing)}"
         )
+
+    predict = predict_factory()
 
     image_stats_total = 0.0
     model_total = 0.0
@@ -176,8 +187,12 @@ def main() -> None:
     args = parser.parse_args()
 
     engine = get_engine()
-    predict = _make_real_predictor(config.LOCAL_MODEL_WEIGHTS_PATH, "cpu")
-    extract_features(engine, args.dataset, args.folder, predict)
+    extract_features(
+        engine,
+        args.dataset,
+        args.folder,
+        lambda: _make_real_predictor(config.LOCAL_MODEL_WEIGHTS_PATH, "cpu"),
+    )
 
 
 if __name__ == "__main__":
