@@ -122,7 +122,7 @@ artifacts are ignored per the rules.
   - Or use a photo-grouped validation split.
 
   At minimum, describe the mechanism in `findings.md` instead of "400 photos is too few".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: stop the gradient-boosted stage 2 memorising photos"
 
 #### S2 — Quantify the cascade's own ceiling, which is above always-offload
 

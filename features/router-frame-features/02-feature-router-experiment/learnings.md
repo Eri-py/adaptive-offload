@@ -275,3 +275,55 @@
   eight rows, four classifier + four cost-aware) produced byte-identical
   stdout again, same as Task 6's four-row run — the new cost-aware path is
   just as deterministic given the fixed `random_state=42`/split seed 42.
+
+## Review finding S1 — GBT stage 2 memorising photos (fix)
+
+- `git stash` is blocked by the auto-mode classifier as irreversible local
+  destruction, so "before" numbers for a fix like this can't be gotten by
+  stashing the change and re-running. Instead, reproduced the pre-fix GBT
+  behaviour directly: `HistGradientBoostingClassifier(random_state=42)` with
+  no `min_samples_leaf` argument (sklearn's default is 20) is exactly what
+  the old `_make_stage2_classifier`/`_make_stage2_regressor` built, so
+  fitting that alongside the current (fixed) `train_stage2` in one ad-hoc,
+  read-only script — reusing `train_stage1`/`predict_stage1`/`cascade_label`
+  from `router.two_stage` so both paths see identical stage-1 outputs and
+  train/test rows — gives a clean before/after comparison without touching
+  git history or the working tree.
+- The fix (`min_samples_leaf` = `STAGE2_MIN_LEAF_PHOTOS` (20) photos' worth
+  of rows, computed from `df_train` itself: `len(df_train) /
+  df_train["frame_id"].nunique()` rows/photo × 20) roughly **halves** the
+  train/test accuracy gap rather than closing it — decide-first
+  0.982/0.555 → 0.816/0.585 (gap 0.427 → 0.231), cascade 0.992/0.526 →
+  0.839/0.559 (gap 0.465 → 0.280). This is expected, not a sign the fix is
+  incomplete: with 80,000 train rows and `min_samples_leaf` = 4,000 (200
+  rows/photo × 20), a leaf can still span ~20 neighboring photos, and
+  `predicted_gap`'s *ordering* does carry real signal (stage 1 is trained to
+  predict the actual gap), so some of the remaining train/test gap is
+  legitimate learning, not memorization of any single photo. The relevant
+  guarantee the constraint gives is structural (no leaf can be smaller than
+  20 photos' rows, so no leaf can ever isolate one photo), not a specific
+  post-fix train/test accuracy target — don't expect the gap to fully close
+  the way it would if the diagnosis were pure noise.
+- The fix changed one GBT row's usefulness *category* even though no row's
+  `useful` column flipped to `True`: `decide_first_gbt_costaware`'s 95% CI
+  went from entirely-below-zero ([-0.0448, -0.0028], "worse with 95%
+  confidence") to straddling zero ([-0.0334, 0.0017], a statistical tie,
+  same category as `decide_first_linear_costaware`). `findings.md`'s
+  Recommendation section had a sentence enumerating "only
+  `decide_first_linear_costaware` is a tie; the other seven are worse with
+  95% confidence" that became factually wrong post-fix even though no
+  `useful` cell changed — had to reread every row's new CI against zero
+  (not just diff the table) to catch this, since the task's instruction was
+  phrased around "verdict changes" and a literal reading of `useful` alone
+  would have missed it.
+- Synthetic test design for "GBT can no longer memorise pure per-photo
+  noise": picking exactly `n_photos = STAGE2_MIN_LEAF_PHOTOS` (20) with an
+  even label split makes `_stage2_min_samples_leaf` compute a leaf minimum
+  equal to the *entire* training set, so the constrained tree provably
+  cannot split at all and its train accuracy is exactly the base rate
+  (0.5008 observed, effectively 0.5) — a much cleaner assertion than picking
+  a larger photo count, where the constrained model can still split into a
+  few leaves and pick up small amounts of sampling noise (empirically
+  ~0.667 train accuracy with 60 photos / 3 possible leaves in a first draft
+  of this test, still far below the unconstrained model's 1.0 but not a
+  clean "stays at the base rate" assertion).

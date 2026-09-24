@@ -143,13 +143,13 @@ reports about a frame, not in the frame's raw image statistics.
 | router | avg util | local | offload | oracle | headroom | 95% CI | useful |
 |---|---|---|---|---|---|---|---|
 | decide_first_linear | 0.6575 | 0.6022 | 0.6812 | 0.7208 | -59.95% | [-0.0471, -0.0024] | False |
-| decide_first_gbt | 0.6459 | 0.6022 | 0.6812 | 0.7208 | -89.15% | [-0.0661, -0.0085] | False |
+| decide_first_gbt | 0.6555 | 0.6022 | 0.6812 | 0.7208 | -64.94% | [-0.0563, -0.0003] | False |
 | cascade_linear | 0.6289 | 0.6022 | 0.6812 | 0.7208 | -132.12% | [-0.0898, -0.0169] | False |
-| cascade_gbt | 0.6282 | 0.6022 | 0.6812 | 0.7208 | -133.86% | [-0.0868, -0.0214] | False |
+| cascade_gbt | 0.6330 | 0.6022 | 0.6812 | 0.7208 | -121.93% | [-0.0832, -0.0169] | False |
 | decide_first_linear_costaware | 0.6810 | 0.6022 | 0.6812 | 0.7208 | -0.41% | [-0.0020, 0.0014] | False |
-| decide_first_gbt_costaware | 0.6591 | 0.6022 | 0.6812 | 0.7208 | -55.76% | [-0.0448, -0.0028] | False |
+| decide_first_gbt_costaware | 0.6672 | 0.6022 | 0.6812 | 0.7208 | -35.30% | [-0.0334, 0.0017] | False |
 | cascade_linear_costaware | 0.6611 | 0.6022 | 0.6812 | 0.7208 | -50.89% | [-0.0302, -0.0104] | False |
-| cascade_gbt_costaware | 0.6504 | 0.6022 | 0.6812 | 0.7208 | -77.83% | [-0.0513, -0.0086] | False |
+| cascade_gbt_costaware | 0.6549 | 0.6022 | 0.6812 | 0.7208 | -66.42% | [-0.0469, -0.0046] | False |
 
 Held-out split: 400 train photos / 100 test photos (`router.dataset
 .frame_level_split`, seed 42). Two runs of `python -m router.feature_experiment`
@@ -178,21 +178,42 @@ statistical tie with always-offload, not a loss. `cascade_linear_costaware`
 also improves, to 0.6611, but its CI ([-0.0302, -0.0104]) stays entirely
 below zero: cost-awareness helps the cascade design without clearing the
 bar. Both GBT cost-aware variants improve over their classifier counterparts
-too (`decide_first_gbt_costaware` 0.6591, `cascade_gbt_costaware` 0.6504)
-but remain significantly negative.
+too (`decide_first_gbt_costaware` 0.6672, `cascade_gbt_costaware` 0.6549)
+but remain significantly negative — `decide_first_gbt_costaware`'s CI
+([-0.0334, 0.0017]) now brushes zero at its upper end, but still spans it
+rather than clearing it, so it is not useful either.
 
-**The overfitting claim only holds for the GBT variants, and its cause is
-identifiable: `predicted_gap` acting as a photo ID.** Linear stage 2's
-train/test accuracy is close (0.570/0.560 for decide-first, 0.644/0.604 for
-cascade) — not overfitting. GBT stage 2's train/test accuracy is 0.982/0.555
-(decide-first) and 0.992/0.526 (cascade) — a large train/test gap, because
+**The overfitting claim only holds for the GBT variants, and its cause was
+`predicted_gap` acting as a photo ID — fixed by constraining stage 2's leaf
+size.** Linear stage 2's train/test accuracy is close (0.570/0.560 for
+decide-first, 0.644/0.604 for cascade) — not overfitting, so the linear
+family needed no change. GBT stage 2 originally showed a large train/test
+gap — 0.982/0.555 (decide-first) and 0.992/0.526 (cascade) — because
 `predicted_gap` (stage 1's own regression output, one of stage 2's five
 inputs) takes ~400 distinct values across the 400 train photos, essentially
-one per photo. A gradient-boosted stage 2 can split on that near-unique value
-per training row instead of learning a generalizable relationship — it
-memorizes which photo each row belongs to rather than the actual gap. (This
-is the mechanism S1 fixes; the GBT numbers above are expected to change once
-that lands, not addressed here.)
+one per photo: an unconstrained `HistGradientBoostingClassifier`/
+`HistGradientBoostingRegressor` can split on that near-unique value per
+training row instead of learning a generalizable relationship, memorizing
+which photo each row belongs to rather than the actual gap.
+
+**Fix (S1):** every GBT stage-2 model (the classifier and the cost-aware
+regressor) now fits with `min_samples_leaf` set to `STAGE2_MIN_LEAF_PHOTOS`
+(20) photos' worth of rows, computed from the training data itself (`len(df_train)
+/ df_train["frame_id"].nunique()` rows per photo, × 20) rather than a
+hard-coded row count — 4,000 rows on this dataset's 200 rows/photo. A leaf
+that must hold 20 photos' rows can never isolate one photo's `predicted_gap`
+value, so the near-unique-per-photo split that caused the memorization is no
+longer available. The linear family is untouched (`training/router/two_stage.py`).
+After the fix, GBT stage 2's train/test accuracy is 0.8157/0.5847
+(decide-first) and 0.8394/0.5594 (cascade) — the train/test gap roughly
+halves (0.427 → 0.231 decide-first, 0.465 → 0.280 cascade) instead of
+closing entirely, because a 4,000-row leaf can still span ~20 neighboring
+photos and pick up some real signal from `predicted_gap`'s ordering (which
+does correlate with the true label, since stage 1 is trained to predict the
+gap) rather than memorizing any single photo. The router utility numbers in
+the table above are the post-fix numbers; no GBT variant's verdict changes
+(all four remain `useful=False`), but every GBT row's CI narrows and shifts
+toward zero.
 
 The `oracle` column above is the same unconstrained per-row max of local and
 offload utility used throughout this file (0.7208), which the spec directs
@@ -220,10 +241,11 @@ Do not resume the parked phone/server work
 (`features/server-served-benchmark/`) yet. Of the eight routers this
 experiment built — spanning both a decide-first and a cascade design, a
 linear and a gradient-boosted model family, and both a classifier and a
-cost-aware stage-2 objective — only `decide_first_linear_costaware` reaches
-a statistical tie with always-offload; the other seven, including every
-cascade variant, remain worse with 95% confidence. A tie is not a router
-worth deploying either. The oracle headroom above always-offload is real
+cost-aware stage-2 objective — `decide_first_linear_costaware` and
+`decide_first_gbt_costaware` reach a statistical tie with always-offload
+(their CIs straddle zero); the other six, including every cascade variant,
+remain worse with 95% confidence. A tie is not a router worth deploying
+either. The oracle headroom above always-offload is real
 (~0.0396 utility, matching the earlier section), but nothing built here
 shows a way to capture it reliably. Building phone-side feature extraction
 and a server-side serving path only pays off once there is a router that
@@ -233,11 +255,10 @@ If the router idea is revisited before touching phone/server infrastructure,
 cost-aware stage 2 (margin regression, not more train photos) was the first
 candidate next step, and this experiment already tried it — see the
 `_costaware` rows above. It closed the gap for `decide_first_linear` (a tie)
-but not for the cascade design or either GBT variant. Two next steps remain
-untried: (1) resolve the GBT variants' `predicted_gap`-as-photo-ID
-overfitting (S1) before judging whether a cost-aware GBT stage 2 can also
-close its gap, since the GBT numbers above aren't trustworthy yet either
-way; and (2) possibly dropping the image statistics entirely in favor of the
+and, once the GBT memorization fix (S1) landed, also brought
+`decide_first_gbt_costaware`'s CI to straddle zero (a tie, not a win) — but
+not for the cascade design under either family. One next step remains
+untried: possibly dropping the image statistics entirely in favor of the
 confidence features alone, since the diagnostics above show almost all of
 the frame-level signal comes from running the local model, not from its raw
 image statistics — which also undercuts the decide-first design's premise

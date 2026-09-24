@@ -21,11 +21,13 @@ import math
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import HistGradientBoostingClassifier
 
 from router.evaluation import escalated_utility, local_utility
 from router.frame_dataset import CONFIDENCE_COLUMNS, IMAGE_COLUMNS
 from router.two_stage import (
     DESIGN_FEATURE_COLUMNS,
+    STAGE2_FEATURE_COLUMNS,
     Design,
     Family,
     Objective,
@@ -322,3 +324,62 @@ def test_stage2_cost_aware_picks_follow_sign_of_predicted_margin() -> None:
 
     picks = predict_stage2(model, df_test)
     assert list(picks) == ["LOCAL", "OFFLOAD"]
+
+
+def test_gbt_stage2_classifier_does_not_memorise_per_photo_noise() -> None:
+    """Guards S1: `predicted_gap`/`p_local_good_enough` are constant within a
+    photo, so an unconstrained `HistGradientBoostingClassifier` can split on
+    them to learn each training photo's own label instead of a generalizable
+    relationship. Here the label is pure per-photo noise (an even LOCAL/
+    OFFLOAD split fixed by photo index), independent of every feature (drawn
+    from a separate RNG stream), so any train accuracy above the 50% base
+    rate is memorisation, not signal. First confirms the unconstrained
+    premise directly (sklearn's default `min_samples_leaf=20` reaches
+    perfect train accuracy by isolating each photo's 10 rows). Then asserts
+    `train_stage2`'s constrained GBT stays at the base rate: with exactly 20
+    photos here, `_stage2_min_samples_leaf` (`STAGE2_MIN_LEAF_PHOTOS` = 20
+    photos' worth of rows) requires a leaf as large as the whole training
+    set, so the tree cannot split at all and just predicts the majority
+    class for every row — the strongest possible demonstration that no leaf
+    can isolate a single photo."""
+    n_photos = 20
+    rows_per_photo = 10
+    feature_rng = np.random.default_rng(8)
+
+    frame_ids = [f"frame_{i:03d}.jpg" for i in range(n_photos)]
+    photo_labels = np.array(["LOCAL"] * (n_photos // 2) + ["OFFLOAD"] * (n_photos // 2))
+
+    records = []
+    for i, frame_id in enumerate(frame_ids):
+        # Constant within the photo, like real `predicted_gap`/
+        # `p_local_good_enough` — and drawn independently of `photo_labels`,
+        # so they carry zero real signal about the label.
+        predicted_gap = feature_rng.uniform(-1.0, 1.0)
+        p_local_good_enough = feature_rng.uniform(0.0, 1.0)
+        for _ in range(rows_per_photo):
+            records.append(
+                {
+                    "frame_id": frame_id,
+                    "predicted_gap": predicted_gap,
+                    "p_local_good_enough": p_local_good_enough,
+                    "network_bandwidth_mbps": feature_rng.uniform(1.0, 50.0),
+                    "network_latency_ms": feature_rng.uniform(5.0, 100.0),
+                    "network_packet_loss_pct": feature_rng.uniform(0.0, 5.0),
+                    "device_load_pct": feature_rng.uniform(0.0, 100.0),
+                    "label": str(photo_labels[i]),
+                }
+            )
+    df_train = pd.DataFrame.from_records(records)
+
+    unconstrained = HistGradientBoostingClassifier(random_state=42)
+    unconstrained.fit(df_train[STAGE2_FEATURE_COLUMNS], df_train["label"])
+    unconstrained_accuracy = float(
+        (unconstrained.predict(df_train[STAGE2_FEATURE_COLUMNS]) == df_train["label"]).mean()
+    )
+    assert unconstrained_accuracy > 0.95
+
+    model = train_stage2(df_train, "decide_first", "gbt")
+    assert model.classifier is not None
+    picks = predict_stage2(model, df_train)
+    constrained_accuracy = float((picks == df_train["label"].to_numpy()).mean())
+    assert math.isclose(constrained_accuracy, 0.5, abs_tol=0.05)

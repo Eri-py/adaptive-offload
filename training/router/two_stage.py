@@ -13,6 +13,7 @@ it either.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
@@ -57,6 +58,15 @@ STAGE2_NETWORK_COLUMNS = [
 ]
 STAGE2_FEATURE_COLUMNS = ["predicted_gap", "p_local_good_enough", *STAGE2_NETWORK_COLUMNS]
 
+# Stage 2's GBT variants (classifier and cost-aware regressor) must not be
+# able to isolate a single training photo in a leaf: `predicted_gap` and
+# `p_local_good_enough` are constant within a photo's rows, so an
+# unconstrained tree can split on them to memorise each photo's own outcome
+# instead of learning a generalizable relationship (train accuracy ~98%,
+# test ~55% — see findings.md's S1 section). Requiring at least this many
+# photos' worth of rows per leaf makes that impossible by construction.
+STAGE2_MIN_LEAF_PHOTOS = 20
+
 _StageRegressor: TypeAlias = Pipeline | HistGradientBoostingRegressor
 _StageClassifier: TypeAlias = Pipeline | HistGradientBoostingClassifier
 
@@ -74,16 +84,26 @@ def _make_stage1_models(family: Family) -> tuple[_StageRegressor, _StageClassifi
     )
 
 
-def _make_stage2_classifier(family: Family) -> _StageClassifier:
+def _stage2_min_samples_leaf(df_train: pd.DataFrame) -> int:
+    """At least `STAGE2_MIN_LEAF_PHOTOS` photos' worth of rows per leaf,
+    computed from `df_train` itself (rows per photo = len(df_train) /
+    number of unique train frame_ids) rather than a hard-coded row count —
+    stays correct if the simulated rows-per-photo count ever changes."""
+    n_photos = int(df_train["frame_id"].nunique())
+    rows_per_photo = len(df_train) / n_photos
+    return int(math.ceil(rows_per_photo * STAGE2_MIN_LEAF_PHOTOS))
+
+
+def _make_stage2_classifier(family: Family, min_samples_leaf: int) -> _StageClassifier:
     if family == "linear":
         return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
-    return HistGradientBoostingClassifier(random_state=42)
+    return HistGradientBoostingClassifier(random_state=42, min_samples_leaf=min_samples_leaf)
 
 
-def _make_stage2_regressor(family: Family) -> _StageRegressor:
+def _make_stage2_regressor(family: Family, min_samples_leaf: int) -> _StageRegressor:
     if family == "linear":
         return make_pipeline(StandardScaler(), LinearRegression())
-    return HistGradientBoostingRegressor(random_state=42)
+    return HistGradientBoostingRegressor(random_state=42, min_samples_leaf=min_samples_leaf)
 
 
 def _positive_class_proba(
@@ -207,13 +227,20 @@ def train_stage2(
     df_train)` instead of a 0/1 label, so a mistake's cost (not just its
     direction) drives the fit; `label_column` is unused. A regressor never
     raises on "single-class" data, so there is no constant-pick fallback here.
+
+    Both objectives' GBT family use `min_samples_leaf =
+    _stage2_min_samples_leaf(df_train)` (`STAGE2_MIN_LEAF_PHOTOS` photos'
+    worth of rows), so a leaf can never be small enough to isolate one
+    training photo via `predicted_gap`/`p_local_good_enough` (see that
+    constant's docstring). The linear family is unaffected.
     """
     trained_frame_ids = frozenset(df_train["frame_id"])
     positive_pick = STAGE2_POSITIVE_PICK[design]
     negative_pick = STAGE2_NEGATIVE_PICK[design]
+    min_samples_leaf = _stage2_min_samples_leaf(df_train)
 
     if objective == "cost_aware":
-        regressor = _make_stage2_regressor(family)
+        regressor = _make_stage2_regressor(family, min_samples_leaf)
         regressor.fit(df_train[STAGE2_FEATURE_COLUMNS], stage2_margin(design, df_train))
         return Stage2Model(
             objective=objective,
@@ -237,7 +264,7 @@ def train_stage2(
             negative_pick=negative_pick,
             trained_frame_ids=trained_frame_ids,
         )
-    classifier = _make_stage2_classifier(family)
+    classifier = _make_stage2_classifier(family, min_samples_leaf)
     classifier.fit(df_train[STAGE2_FEATURE_COLUMNS], labels)
     return Stage2Model(
         objective=objective,
