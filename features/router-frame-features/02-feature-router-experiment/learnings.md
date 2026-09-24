@@ -52,3 +52,36 @@
 - To order by |rho| descending without a lambda-in-`sort_values` (which mypy
   strict flags less cleanly here), built the DataFrame unordered first, then
   reindexed by `result["spearman_rho"].abs().sort_values(ascending=False).index`.
+
+## Task 3 — Evaluation and bootstrap
+
+- `router.evaluation` has no pandas-stubs installed (`pip show pandas-stubs`
+  finds nothing), and `[tool.mypy.overrides]` already sets
+  `ignore_missing_imports = true` for `pandas.*`, so `pd.Series`/`pd.DataFrame`
+  type hints resolve to effectively untyped members under mypy strict — no
+  per-call `# type: ignore` needed for `.to_numpy()`, `np.where(...)` on a
+  `pd.Series`, or `np.maximum` of two Series (all pass through unchecked).
+  Only bare `np.ndarray` (no type args) trips `strict`'s `[type-arg]` check,
+  hence `npt.NDArray[np.str_]` for the `picks` parameters.
+- The bootstrap is fully vectorised without ever re-touching individual rows
+  per resample: precompute each frame's sum of (router − offload) per-row
+  differences and its row count once (`np.add.at` scatter-sum keyed by
+  `np.unique(frame_ids, return_inverse=True)`'s inverse index), then each of
+  the 2,000 resamples is just `frame_sums[draws].sum(axis=1) /
+  frame_counts[draws].sum(axis=1)` over an `(n_resamples, n_frames)` draw
+  matrix from a single `rng.integers(...)` call — no Python-level loop over
+  resamples at all. Runs in well under a second even at the real dataset's
+  ~100 frames, so it'll comfortably clear "seconds" at ~20k rows too.
+- Chose exact float equality (`denominator == 0`) for the headroom-share
+  zero-denominator check rather than `math.isclose` — the case that actually
+  occurs is oracle-average exactly equal to offload-average (every row's
+  oracle pick *is* offload, so `oracle_utility` and `offload_utility` are
+  literally the same per-row values before averaging), not a near-zero
+  floating-point residue from unrelated arithmetic, so exact comparison is
+  the right check and easy to hit exactly in tests.
+- Kept `oracle_utility` and `escalated_utility` as separate public functions
+  (not just inlined into `summarize`/`score_cascade`) since the plan's
+  Task 4 needs `escalated_utility` (or the equivalent comparison) again to
+  compute the cascade's ACCEPT/ESCALATE label — reusing it there avoids a
+  second reimplementation of "offload accuracy charged local + offload
+  latency."

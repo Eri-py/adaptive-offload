@@ -13,10 +13,10 @@
 - Notes: diagnostics.py compute_feature_diagnostics (Spearman, |rho| desc); 5 new tests, 120 pass.
 
 ## Task 3 — Evaluation and bootstrap
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 13:47:08
+- Completed: 2026-09-24 13:51:03
+- Notes: evaluation.py (utilities, decide-first/cascade scoring, summarize, vectorised photo-level bootstrap); 9 new tests, 129 pass.
 
 ## Task 4 — Two-stage routers
 - Status: not started
