@@ -73,7 +73,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/app.json:11`
 - **Issue:** `expo prebuild` auto-generated `com.anonymous.mobile-inference-benchmark`. App IDs are globally unique across Apple teams, and `com.anonymous.<slug>` is Expo's default pattern, so EAS's App ID registration can fail if someone else already claimed it. It is also not an identifier the user owns.
 - **Fix:** Change it to a reverse-domain ID the user controls, such as `com.<username>.adaptiveoffload.bench`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: use an owned bundle identifier"
 
 ## Nitpicks
 
