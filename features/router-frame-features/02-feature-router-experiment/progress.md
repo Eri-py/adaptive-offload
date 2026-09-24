@@ -7,10 +7,10 @@
 - Notes: frame_dataset.py (load_frame_table, load_simulated_frame_ids, load_simulated_rows, IMAGE_COLUMNS, CONFIDENCE_COLUMNS); 6 new tests, 115 pass.
 
 ## Task 2 — Feature diagnostics
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 13:45:21
+- Completed: 2026-09-24 13:47:08
+- Notes: diagnostics.py compute_feature_diagnostics (Spearman, |rho| desc); 5 new tests, 120 pass.
 
 ## Task 3 — Evaluation and bootstrap
 - Status: not started

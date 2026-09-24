@@ -30,3 +30,25 @@
   stats) — kept a third, unexported `_FRAME_FEATURE_COLUMNS` (the 11 minus
   `scene_complexity`) since that's the exact set `load_simulated_rows` needs
   to merge in without re-adding a duplicate `scene_complexity` column.
+
+## Task 2 — Feature diagnostics
+
+- `router.diagnostics.compute_feature_diagnostics` is pure (no DB access) —
+  it takes any DataFrame with a `gap` column (in practice `load_frame_table`'s
+  output) plus the feature column names to check, so it's testable with a
+  small synthetic DataFrame instead of seeding Postgres, and reusable for
+  both spec 01's frame features and the pre-existing `scene_complexity`.
+- Followed the router test suite's existing convention (from
+  `test_confidence.py`/`test_image_stats.py`) of avoiding `import pytest` —
+  plain `def test_...()` functions only — since importing pytest here has
+  previously pulled `_pytest`'s numpy integration into a stub incompatible
+  with this venv.
+- `scipy.stats.spearmanr` returns a result object whose `.correlation`/
+  `.pvalue` unpack fine via tuple assignment (`rho, p_value = spearmanr(...)`)
+  under the repo's existing blanket `scipy.*` mypy override
+  (`ignore_missing_imports = true`), so no per-call `# type: ignore` was
+  needed — matches how the task description said to check existing handling
+  rather than adding one.
+- To order by |rho| descending without a lambda-in-`sort_values` (which mypy
+  strict flags less cleanly here), built the DataFrame unordered first, then
+  reindexed by `result["spearman_rho"].abs().sort_values(ascending=False).index`.
