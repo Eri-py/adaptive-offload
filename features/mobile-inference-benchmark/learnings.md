@@ -628,3 +628,19 @@ relies on EAS's interactive install prompt. `preview` stays the profile for
 reported benchmark numbers (Release build, embedded bundle, airplane-mode AC4).
 WSL2 here runs in NAT networking mode, so a phone can't reach Metro at the WSL
 address; `app/README.md` documents `expo start --tunnel` or mirrored networking.
+
+## First on-device results — iPhone 15 Pro (2026-09-24)
+
+Development build (Debug config), 15 bundled images, 1 run each, one discarded
+warm-up per delegate, CPU run first then Core ML. Timed scope is the raw
+forward pass only (see the S2 section above).
+
+| Delegate | Mean | Median | Min | Max | Std dev |
+|---|---|---|---|---|---|
+| CPU | 106.01 ms | 106.37 ms | 102.22 ms | 107.96 ms | 1.82 ms |
+| Core ML | 17.34 ms | 16.98 ms | 16.52 ms | 21.40 ms | 1.17 ms |
+
+Core ML is ~6x faster than CPU. The desktop-measured `local_latency_ms`
+(~20-24 ms, which also includes decode/letterbox/NMS) is roughly in line with
+the Core ML path but understates the CPU path by ~4-5x. Re-run from a
+`preview` (Release) build before reporting these numbers.
