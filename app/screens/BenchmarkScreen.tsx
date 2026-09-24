@@ -1,9 +1,7 @@
 import type { ReactElement } from 'react';
 import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useBenchmark } from '../hooks/useBenchmark';
+import { BUNDLED_IMAGE_COUNT, useBenchmark } from '../hooks/useBenchmark';
 
-// Static description of the bundled test set, not derived from useBenchmark's run results.
-const BUNDLED_IMAGE_COUNT = 15;
 const RUNS_PER_IMAGE = 1;
 const MODEL_NAME = 'yolov8n.tflite';
 

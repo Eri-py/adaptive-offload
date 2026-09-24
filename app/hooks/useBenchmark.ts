@@ -32,6 +32,9 @@ const BUNDLED_IMAGE_MODULES: number[] = [
   require('../assets/images/000000001490.jpg'),
 ];
 
+// Single source of truth for the screen's "Images" label — keeps it in sync with the array above.
+export const BUNDLED_IMAGE_COUNT = BUNDLED_IMAGE_MODULES.length;
+
 export type BenchmarkStatus = 'idle' | 'running' | 'done' | 'error';
 
 export interface BenchmarkStats {

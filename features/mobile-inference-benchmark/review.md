@@ -89,7 +89,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/screens/BenchmarkScreen.tsx:7`
 - **Issue:** `BUNDLED_IMAGE_COUNT = 15` duplicates `BUNDLED_IMAGE_MODULES.length` in the hook. Adding or removing an image would make the screen's label wrong without any error.
 - **Fix:** Export the count (or `BUNDLED_IMAGE_MODULES.length`) from `useBenchmark.ts`, or return it from the hook, and use that value in the screen.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: derive the image count from the bundled image list"
 
 #### N3 — `eslint-disable` comment with no ESLint configured
 
