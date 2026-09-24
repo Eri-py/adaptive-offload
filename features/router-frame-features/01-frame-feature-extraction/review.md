@@ -49,7 +49,7 @@ None.
 - **File:** `training/router/extract_features.py:116-127`
 - **Issue:** The spec asks for the average time "to compute each feature group". The output splits the confidence group into `model` and `confidence`, and the value labelled `confidence` (list-to-stats, microseconds) looks like the group's cost when the real cost is the model call. Spec 02 could easily quote the wrong number.
 - **Fix:** Also print (and put in `TimingSummary`) a `confidence_group_seconds = model + confidence` total. Or rename the labels to `image_features=` and `confidence_features (model+derive)=`, with the breakdown in parentheses.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: report the confidence-feature group total cost"
 
 #### S2 — The model loads even when there is nothing to compute
 

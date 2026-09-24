@@ -72,3 +72,18 @@
   flush itself isn't part of any of the three timed segments, matching the
   plan's "times the image statistics, the model call and the confidence
   derivation separately" (three segments, not four).
+
+## Review fix — S1 (timing summary group cost)
+
+- `TimingSummary` gained a `confidence_group_seconds` field
+  (`model_seconds + confidence_seconds`) so the confidence-features group's
+  full per-frame cost is explicit, not just its two component segments.
+  `image_stats_seconds` already *was* the image-features group's full cost
+  (one segment), so no new field was needed on that side.
+- The printed line's labels were changed from `image_stats=`/`model=`/
+  `confidence=` to `image_features=`/`confidence_features (model+derive)=`
+  (with `model=`/`confidence=` breakdown kept in parentheses) to match the
+  spec's own terminology ("image features" / "confidence features").
+- No test in `test_extract_features.py` asserted on `TimingSummary`'s field
+  values (only `summary is not None`/`is None`), so adding the field
+  required no test changes.

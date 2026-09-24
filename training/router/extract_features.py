@@ -52,11 +52,18 @@ Predict = Callable[[Path], tuple[Sequence[float], Sequence[float]]]
 
 @dataclass(frozen=True)
 class TimingSummary:
-    """Average per-frame seconds spent in each of the three timed segments."""
+    """Average per-frame seconds spent in each timed segment, plus group totals.
+
+    `image_stats_seconds` is the image-features group's full per-frame cost.
+    `confidence_group_seconds` is the confidence-features group's full
+    per-frame cost — `model_seconds + confidence_seconds`, since that group's
+    cost is the model call plus the confidence derivation, not either alone.
+    """
 
     image_stats_seconds: float
     model_seconds: float
     confidence_seconds: float
+    confidence_group_seconds: float
 
 
 def extract_features(
@@ -118,12 +125,13 @@ def extract_features(
         image_stats_seconds=image_stats_total / frame_count,
         model_seconds=model_total / frame_count,
         confidence_seconds=confidence_total / frame_count,
+        confidence_group_seconds=(model_total + confidence_total) / frame_count,
     )
     print(
         f"Computed features for {frame_count} frame(s). Average per-frame seconds: "
-        f"image_stats={summary.image_stats_seconds:.4f}, "
-        f"model={summary.model_seconds:.4f}, "
-        f"confidence={summary.confidence_seconds:.4f}"
+        f"image_features={summary.image_stats_seconds:.4f}, "
+        f"confidence_features (model+derive)={summary.confidence_group_seconds:.4f} "
+        f"(model={summary.model_seconds:.4f}, confidence={summary.confidence_seconds:.4f})"
     )
     return summary
 
