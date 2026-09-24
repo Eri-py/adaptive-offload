@@ -70,6 +70,14 @@ export function useBenchmark(): UseBenchmarkResult {
       let model = modelRef.current;
       if (model == null) {
         model = await loadTensorflowModel(require('../assets/models/yolov8n.tflite'), []);
+        // Discard a warmup inference: the first real call otherwise pays for
+        // one-off weight packing/allocation (and Core ML compilation, if that
+        // delegate is on) on top of actual inference, inflating the stats
+        // (see review finding B1, matching the Python-side fix).
+        const warmupInput = new Float32Array(
+          MODEL_INPUT_SIZE * MODEL_INPUT_SIZE * MODEL_INPUT_CHANNELS
+        );
+        await model.run([warmupInput.buffer as ArrayBuffer]);
         modelRef.current = model;
       }
 

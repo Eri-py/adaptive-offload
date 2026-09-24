@@ -504,3 +504,17 @@ actually returns without throwing for this specific model/input shape.
   credentials. Worth reusing this trick (`@expo/eas-json`'s
   `EasJsonAccessor`/`EasJsonUtils`) for any future `eas.json` change in
   this project rather than re-deriving the schema from memory or docs.
+
+## Review finding B1 (app-side warm-up)
+
+- `react-native-fast-tflite`'s `TfliteModel.run(input: ArrayBuffer[]):
+  Promise<ArrayBuffer[]>` accepts any correctly-shaped `ArrayBuffer` — a
+  zero-filled `Float32Array(640*640*3).buffer` is fine as a throwaway
+  warm-up input, no need for a real decoded image.
+- Placed the warm-up call inside the `model == null` branch in
+  `useBenchmark.ts`, right after `loadTensorflowModel` and before caching
+  into `modelRef`. This runs the discarded inference exactly once per
+  model load (not once per benchmark run), which is the right cadence
+  since `modelRef` persists the loaded model across repeated
+  `runBenchmark()` calls — only the very first call after a fresh load
+  pays the one-off packing/compilation cost the finding describes.

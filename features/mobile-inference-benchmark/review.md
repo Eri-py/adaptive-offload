@@ -36,7 +36,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/hooks/useBenchmark.ts:70-87`
 - **Issue:** The first `model.run()` pays one-off costs (TFLite/XNNPACK weight packing and allocation, plus Core ML compilation if S1 turns that delegate on). That sample is recorded like any other, which inflates mean/max/stdev over n=15. This is the same defect the Python side fixed as review finding B1 (`training/datagen/simulate/yolo_inference.py`, the discarded warm-up call). Without the fix the phone numbers are not comparable to the desktop ones.
 - **Fix:** Right after the model loads (or on every run), do one untimed `await model.run([...])` on a zero-filled `Float32Array(640*640*3)` (or the first image's tensor) before the timed loop. Optionally, show "1 warm-up discarded" in the bundled-set card.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1: warm-up inference before the timed loop"
 
 #### B2 — The recommended `development` profile gives a Metro-dependent Debug build that breaks AC4
 
