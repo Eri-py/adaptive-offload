@@ -31,10 +31,20 @@
   follow-up entry for full diagnosis and final package versions.
 
 ## Task 2 — Scaffold the Expo app
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-23 23:00:33
+- Completed: 2026-09-23 23:15:44
+- Notes: Expo TypeScript template scaffolded into app/ (iOS-only config,
+  placeholder App.tsx per coding-guidelines style). Type-check clean. The
+  `expo start` success criterion initially failed — Metro's file watcher
+  crashed (`EISDIR`) watching the project directory through the Windows-side
+  Node's WSL/UNC path. Fixed by installing a native Linux Node.js (v24.21.0)
+  to ~/.local/node, symlinked into ~/.local/bin (reliably on PATH regardless
+  of shell invocation mode — see learnings.md for why .bashrc/.profile edits
+  alone weren't enough), and reinstalling app/node_modules clean under it.
+  Verified: `expo start` now reaches "Waiting on http://localhost:8081"
+  with no crash. This also unblocks Tasks 3/4/5/7, which all need a working
+  dev-server run to verify.
 
 ## Task 3 — Add on-device TFLite inference
 - Status: not started
