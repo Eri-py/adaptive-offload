@@ -65,9 +65,19 @@
   phone. No regression: expo start still reaches ready state, tsc clean.
 
 ## Task 4 — Build the benchmark hook
-- Status: not started
-- Started: —
-- Completed: —
+- Status: completed
+- Started: 2026-09-23 23:23:56
+- Completed: 2026-09-23 23:29:14
+- Notes: app/hooks/useBenchmark.ts built — loads the model once (cached in a
+  ref), runs inference over all 15 bundled images, times each model.run()
+  call, computes mean/median/min/max/stdev, exposes
+  {status, results, error, runBenchmark}. Added expo-asset/expo-file-system
+  (asset resolution + reading bytes) and jpeg-js (pure-JS decode, no native
+  module) plus a hand-written jpeg-js .d.ts (the published @types package
+  targets jpeg-js's old 0.3 API, not the installed 0.4.4). Whole run wrapped
+  in one try/catch -> error state, nothing silent. tsc clean (independently
+  reverified). Full on-device execution still unverified (no Mac/device),
+  same expected limitation as Task 3 — awaits Task 6/7.
 - Notes: —
 
 ## Task 5 — Build the benchmark screen

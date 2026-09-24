@@ -371,3 +371,99 @@ needed to the plan's assumed `["react-native-fast-tflite", {
   the quality gate for this task was `npx tsc --noEmit` only (clean, zero
   errors/warnings). Flagging in case a later task is expected to add
   ESLint — it isn't there yet.
+
+## Task 4 — Benchmark hook: image-to-tensor preprocessing needed real new dependencies, and `@types/jpeg-js` turned out to be for the wrong API version
+
+Nothing suitable for decoding a bundled JPEG into raw pixel data (and
+resizing it) was already present in `app/` — confirmed by checking
+`node_modules` top-level and `expo`'s own declared dependencies. Added three
+real, justified new dependencies rather than over-engineering around their
+absence:
+
+- `expo-asset` and `expo-file-system` — both already ship *inside* `expo`'s
+  own `node_modules` (nested, e.g.
+  `node_modules/expo/node_modules/expo-asset`) since `expo` itself depends
+  on them, but a nested `node_modules/expo/node_modules/expo-asset` is not
+  resolvable via `require('expo-asset')` from app-level code (Node/Metro
+  resolution only walks up through node_modules directories visible to the
+  requiring file, not sideways into another package's private nested
+  deps) — relying on it would also be fragile even if it happened to hoist,
+  since it isn't declared in `app/package.json`. Installed both explicitly
+  via `npx expo install expo-asset expo-file-system` (not plain `npm
+  install`) so their versions are the ones Expo SDK 57 actually declares as
+  compatible (`expo-asset@~57.0.18`, `expo-file-system@~57.0.7`) — this
+  matched Task 3's own install method for `react-native-fast-tflite`'s peer.
+  `expo-file-system@57` ships a new `File`/`Directory` API (the SDK 54+
+  redesign) whose `File.arrayBuffer()` returns a raw `ArrayBuffer` directly
+  from a `file://` URI — this avoided an entire unnecessary
+  read-as-base64-then-decode round trip that the older/legacy
+  `expo-file-system` API would have required.
+  - **Side effect worth flagging**: `expo install expo-asset` auto-added
+    `"expo-asset"` to `app.json`'s Expo config-plugins list (a one-line
+    diff) — not in this task's original `Files` list, same situation Task 3
+    flagged for `metro.config.js`: a necessary, automatic install side
+    effect of wiring in a real dependency, not scope creep. `app/app.json`
+    and `app/package.json`'s file *mode* also flipped 755→644 as an
+    incidental `npm`/`expo` rewrite side effect (content changes are the
+    only ones that matter; not fixed, harmless).
+- `jpeg-js` (pure-JS JPEG decoder, no native module — works on the Hermes JS
+  thread with no platform-specific code, so nothing here depends on a
+  device/simulator build to *type-check* correctly) — decodes the raw JPEG
+  bytes from `File.arrayBuffer()` into an RGBA `Uint8Array` pixel buffer.
+  - **`@types/jpeg-js` (0.3.x on npm) documents the wrong API and was
+    deliberately *not* installed.** It types `decode`'s second argument as a
+    plain `boolean` (the old jpeg-js 0.3 signature). The actual installed
+    runtime (`jpeg-js@0.4.4`, confirmed against its own
+    `node_modules/jpeg-js/README.md`) takes an *options object*
+    (`{ useTArray, formatAsRGBA, ... }`) instead — installing
+    `@types/jpeg-js` would have type-checked cleanly against an API this
+    version doesn't actually have, and silently miscompiled at the call
+    site. Installed it once to inspect, confirmed the mismatch, then
+    uninstalled it and wrote a small ambient declaration
+    (`app/types/jpeg-js.d.ts`) matching the *real* 0.4.4 `decode(data,
+    options?)` shape instead, with a comment explaining why the
+    DefinitelyTyped package was skipped (so a future contributor doesn't
+    "helpfully" reintroduce it).
+- **Preprocessing approach chosen**: nearest-neighbor resize (hand-written,
+  no resize library needed) from the decoded image's native resolution
+  down/up to the model's required 640×640, reading only the R/G/B channels
+  of jpeg-js's default RGBA output (alpha dropped) and normalizing each to
+  `[0, 1]` by dividing by 255, written directly into a NHWC-ordered
+  `Float32Array`. This is a real, correct-shape preprocessing pass, not a
+  stub — but per the task's own scope note, it makes no attempt at
+  pixel-exact parity with `training/datagen/simulate/yolo_inference.py`'s
+  preprocessing, since this benchmark only measures `model.run()` latency
+  and never compares detection output.
+- **`Float32Array.prototype.buffer` is typed `ArrayBufferLike`, not
+  `ArrayBuffer`** (TS's lib.es2017 typed-array types allow a
+  `SharedArrayBuffer`-backed view), which doesn't structurally satisfy
+  `TfliteModel.run(input: ArrayBuffer[])`. Fixed with a narrow, commented
+  `as ArrayBuffer` cast at the one call site — safe here because the array
+  is always freshly allocated by this hook's own `resizeAndNormalize`
+  (never a view onto a `SharedArrayBuffer`), not a blanket type-safety
+  hole.
+
+**What was verified**: `npx tsc --noEmit` is clean (zero errors) against the
+hook's real code, the real (non-stubbed) `.d.ts` types for
+`react-native-fast-tflite` (reused from Task 3's already-verified API
+shape — `loadTensorflowModel(source, delegates)` returning `Promise<TfliteModel>`,
+`TfliteModel.run(input: ArrayBuffer[]): Promise<ArrayBuffer[]>`), the real
+`expo-asset`/`expo-file-system` v57 `.d.ts` types, and the hand-written
+`jpeg-js` ambient declaration. Traced both the success path (idle → running
+→ done, `results` populated) and the failure path (any thrown error at any
+stage — asset download, JPEG decode, model load, or `model.run()` itself —
+is caught by the single `try/catch` wrapping the whole `runBenchmark` body,
+surfaced as a string via `error` state, `status` set to `'error'`, nothing
+swallowed silently) by manual code review; this satisfies the task's two
+success criteria structurally.
+
+**What necessarily still awaits a real device test (Task 6/7 territory, no
+Mac/device available in this environment, same limitation Task 3
+documented)**: whether `loadTensorflowModel` actually loads the bundled
+`.tflite` file at runtime, whether `Asset.downloadAsync()` +
+`File.arrayBuffer()` actually produce readable bytes for a bundled JPEG on a
+real iOS build, whether `jpeg-js`'s pure-JS decode is fast enough on-device
+to not dominate the measured wall-clock loop in an unacceptable way (it
+isn't timed — only `model.run()` is timed — but it does still gate how long
+a full 15-image benchmark run takes end to end), and whether `model.run()`
+actually returns without throwing for this specific model/input shape.

@@ -16,7 +16,8 @@
         {
           "enableCoreMLDelegate": true
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }
