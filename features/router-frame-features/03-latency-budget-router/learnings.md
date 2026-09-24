@@ -190,3 +190,50 @@
   spans 10-1000ms) — both ranges straddle the whole 100-500ms budget sweep,
   so budget-only and the cascade both genuinely branch at every budget
   rather than only exercising one action's code path.
+
+## Task 6 — Run the experiment and write findings
+
+- On the real database, the tuned cascade (both raw and learned score)
+  turned out **not useful at any of the six budgets** — its 95% CI against
+  budget-only has a strictly negative upper bound at every single budget
+  (worst [-0.0380, -0.0192] at 400ms, best [-0.0220, -0.0129] at 150ms),
+  not a tie or a near-miss. Worth remembering this is a *stronger* negative
+  than spec 02's soft-utility result (several of those were ties), even
+  though this experiment deliberately reframed the objective to give the
+  cascade its best shot — the reframing didn't rescue it, which is itself
+  informative and shouldn't be undersold in the write-up.
+- Raw and learned confidence scores are functionally interchangeable here:
+  their tuned metrics agree to 3-4 decimal places at every budget despite
+  choosing different tuned thresholds and the learned score using six
+  features against the raw score's one. The bottleneck isn't which frames
+  get flagged for escalation, it's a structural cost (see next point), so
+  no amount of better scoring input fixes it.
+- The reason the cascade loses to budget-only everywhere is mechanical,
+  not a modeling gap: the cascade always runs locally first, so an
+  escalated request is charged local + offload latency, while budget-only
+  decides up front and pays only offload latency when it offloads. This is
+  the exact same mechanism spec 02's `casc ceiling` section already named
+  ("escalating adds the local pass's latency ... which a cascade router
+  can never avoid paying once it decides to escalate") — worth cross-
+  referencing rather than re-deriving, since it's the same structural fact
+  showing up under a second, unrelated objective.
+- Two full `python -m router.budget_experiment` runs on the real database
+  were not just numerically identical (stdout `diff` clean) but **byte-
+  identical PNGs** (`cmp` clean) — matplotlib's `Agg` backend with this
+  project's `savefig` call embeds no timestamp/random metadata that would
+  differ between runs, so there was no need to fall back to "identical
+  except metadata" reasoning.
+- Confirmed by re-running `python -m router.feature_experiment` after all
+  of Tasks 1-6 landed: every number in findings.md's existing "Feature-
+  router experiment" section (the 12-row Spearman table and all 8 router
+  rows, including `casc ceiling`) matched the file exactly, including
+  4-decimal utility and CI values — the `bootstrap_mean_difference`
+  refactor in Task 1 really did produce bit-for-bit identical output on
+  the full real dataset, not just on the unit tests' small fixtures.
+- The recommendation section cites two real numbers from earlier in the
+  project (Core ML ~17ms vs CPU ~106ms iPhone 15 Pro forward pass) that
+  don't appear anywhere in this repo (checked with `grep -rn` across
+  `*.md` before writing them down) — they came from the task prompt's
+  guidance, not from a file in this repo. If a future task needs to cite
+  them again, they aren't independently verifiable from this repo alone;
+  the source is this project's earlier (Windows-side) research notes.

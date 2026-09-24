@@ -296,3 +296,355 @@ accuracy maximized inside it. That reframing supersedes the recommendation
 above, not just its next-steps list — the "does any router beat
 always-offload on this utility" question this file answers stops being the
 relevant question once the objective changes.
+
+## Latency-budget experiment (spec 03)
+
+### Why the framing changed
+
+Under the soft utility above (`accuracy − 0.3 × latency in seconds`),
+nothing beat always-offload: the best cost-aware routers only reached a
+statistical tie. Latency is nearly free under that weighting — 300 ms of
+extra latency costs only 0.09 utility, far less than a single accuracy
+point is worth — so a router has almost nothing to gain by ever avoiding
+it. Published systems that route between local and remote inference don't
+use a soft blended score; they either treat latency as a hard constraint
+(DeepDecision) or cascade on confidence and report a trade-off curve
+(DDNN, Big/LITTLE) rather than a single weighted number. This experiment
+reframes the router that way: each request has a hard latency budget,
+routing must maximize accuracy inside it, and results are reported as
+accuracy-vs-latency curves per budget instead of one utility figure.
+
+`python -m router.budget_experiment` ran twice on the real database; both
+runs produced byte-identical stdout and byte-identical PNGs. Re-running
+`python -m router.feature_experiment` afterward reproduced every number in
+the "Feature-router experiment" section above exactly (the Spearman table
+and all eight router rows, including the `casc ceiling` column), confirming
+the generic-bootstrap refactor in `router/evaluation.py` changed nothing
+about spec 02's results.
+
+Held-out split: 400 train photos / 100 test photos (`router.dataset
+.frame_level_split`, seed 42) — the same split spec 02 uses.
+
+### Per-budget results
+
+Each table reports mean accuracy, on-time accuracy (a result that arrives
+after the budget counts as 0), mean latency and the share of requests that
+missed the budget, for every policy on the 100 held-out test photos. The
+cascade rows use each score's threshold tuned on the training photos alone
+(τ, highest on-time accuracy on train).
+
+**100 ms budget** — raw τ = 0.65, learned τ = 0.45
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.4104 | 73.77 | 34.36% |
+| always-offload | 0.7709 | 0.0602 | 299.05 | 92.21% |
+| budget-only | 0.6360 | 0.4447 | 71.76 | 30.56% |
+| cascade-raw | 0.6248 | 0.4105 | 74.01 | 34.41% |
+| cascade-learned | 0.6248 | 0.4106 | 73.97 | 34.39% |
+| oracle | 0.6359 | 0.4484 | 71.44 | 30.11% |
+
+vs budget-only 95% CI: raw [-0.0374, -0.0310], learned [-0.0374, -0.0310] —
+useful=False for both. vs always-local 95% CI: raw [-0.0002, 0.0004],
+learned [-0.0001, 0.0004] — straddles zero, a statistical tie.
+
+**150 ms budget** — raw τ = 0.85, learned τ = 0.70
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.6233 | 73.77 | 0.15% |
+| always-offload | 0.7709 | 0.1022 | 299.05 | 86.72% |
+| budget-only | 0.6434 | 0.6425 | 73.82 | 0.13% |
+| cascade-raw | 0.6283 | 0.6253 | 75.91 | 0.45% |
+| cascade-learned | 0.6280 | 0.6251 | 75.74 | 0.43% |
+| oracle | 0.6447 | 0.6439 | 72.63 | 0.12% |
+
+vs budget-only 95% CI: raw [-0.0215, -0.0128], learned [-0.0220, -0.0129] —
+useful=False for both. vs always-local 95% CI: raw [0.0008, 0.0033],
+learned [0.0007, 0.0029] — entirely above zero.
+
+**200 ms budget** — raw τ = 0.95, learned τ = 1.00
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.6243 | 73.77 | 0.00% |
+| always-offload | 0.7709 | 0.1514 | 299.05 | 80.42% |
+| budget-only | 0.6536 | 0.6481 | 80.10 | 0.77% |
+| cascade-raw | 0.6375 | 0.6338 | 81.39 | 0.48% |
+| cascade-learned | 0.6375 | 0.6338 | 81.47 | 0.48% |
+| oracle | 0.6543 | 0.6543 | 75.72 | 0.00% |
+
+vs budget-only 95% CI: raw [-0.0190, -0.0098], learned [-0.0190, -0.0098] —
+useful=False for both. vs always-local 95% CI: raw [0.0059, 0.0133],
+learned [0.0059, 0.0133] — entirely above zero.
+
+**300 ms budget** — raw τ = 0.95, learned τ = 1.00
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.6243 | 73.77 | 0.00% |
+| always-offload | 0.7709 | 0.3600 | 299.05 | 53.31% |
+| budget-only | 0.6932 | 0.6839 | 128.66 | 1.24% |
+| cascade-raw | 0.6658 | 0.6578 | 119.03 | 1.04% |
+| cascade-learned | 0.6658 | 0.6578 | 119.47 | 1.04% |
+| oracle | 0.6958 | 0.6958 | 102.21 | 0.00% |
+
+vs budget-only 95% CI: raw [-0.0340, -0.0186], learned [-0.0340, -0.0186] —
+useful=False for both. vs always-local 95% CI: raw [0.0217, 0.0453],
+learned [0.0217, 0.0453] — entirely above zero.
+
+**400 ms budget** — raw τ = 0.95, learned τ = 1.00
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.6243 | 73.77 | 0.00% |
+| always-offload | 0.7709 | 0.6064 | 299.05 | 21.34% |
+| budget-only | 0.7401 | 0.7294 | 218.00 | 1.40% |
+| cascade-raw | 0.7064 | 0.7010 | 195.37 | 0.73% |
+| cascade-learned | 0.7064 | 0.7010 | 196.57 | 0.73% |
+| oracle | 0.7454 | 0.7454 | 151.43 | 0.00% |
+
+vs budget-only 95% CI: raw [-0.0379, -0.0191], learned [-0.0380, -0.0192] —
+useful=False for both. vs always-local 95% CI: raw [0.0543, 0.1001],
+learned [0.0542, 0.1001] — entirely above zero.
+
+**500 ms budget** — raw τ = 0.95, learned τ = 1.00
+
+| policy | mean acc | on-time acc | mean latency (ms) | over-budget % |
+|---|---|---|---|---|
+| always-local | 0.6243 | 0.6243 | 73.77 | 0.00% |
+| always-offload | 0.7709 | 0.7423 | 299.05 | 3.71% |
+| budget-only | 0.7651 | 0.7651 | 280.43 | 0.00% |
+| cascade-raw | 0.7472 | 0.7427 | 298.46 | 0.58% |
+| cascade-learned | 0.7472 | 0.7427 | 300.73 | 0.58% |
+| oracle | 0.7727 | 0.7727 | 186.96 | 0.00% |
+
+vs budget-only 95% CI: raw [-0.0275, -0.0173], learned [-0.0275, -0.0173] —
+useful=False for both. vs always-local 95% CI: raw [0.0848, 0.1534],
+learned [0.0848, 0.1534] — entirely above zero.
+
+### The headline result: condition-based budget-only nearly matches the oracle
+
+The main positive result in this experiment is not the cascade — it's the
+plain **budget-only** policy (DeepDecision-style: offload only if the
+predicted offload latency fits the budget, decided up front from network
+and device conditions, no local inference required to decide). At every
+budget its on-time accuracy lands within about 0.4-1.6 points of the
+within-budget oracle:
+
+| budget | budget-only on-time | oracle on-time | gap |
+|---|---|---|---|
+| 100 ms | 0.4447 | 0.4484 | 0.0037 |
+| 150 ms | 0.6425 | 0.6439 | 0.0014 |
+| 200 ms | 0.6481 | 0.6543 | 0.0062 |
+| 300 ms | 0.6839 | 0.6958 | 0.0119 |
+| 400 ms | 0.7294 | 0.7454 | 0.0160 |
+| 500 ms | 0.7651 | 0.7727 | 0.0076 |
+
+And it beats both static baselines on on-time accuracy at every budget,
+sometimes by a wide margin:
+
+| budget | budget-only on-time | always-local on-time | always-offload on-time |
+|---|---|---|---|
+| 100 ms | 0.4447 | 0.4104 | 0.0602 |
+| 150 ms | 0.6425 | 0.6233 | 0.1022 |
+| 200 ms | 0.6481 | 0.6243 | 0.1514 |
+| 300 ms | 0.6839 | 0.6243 | 0.3600 |
+| 400 ms | 0.7294 | 0.6243 | 0.6064 |
+| 500 ms | 0.7651 | 0.6243 | 0.7423 |
+
+At 300 ms budget-only's 0.6839 clears always-local's 0.6243 and
+always-offload's 0.3600; at 400 ms it clears 0.6243 and 0.6064 by more
+than 10 points each — always-offload loses ground there specifically
+because 21.34% of its unconditional offloads arrive after 400 ms, while
+budget-only avoids all but 1.40% of those misses by declining to offload
+when its own latency prediction says it won't fit. At the loosest budget
+(500 ms) budget-only's mean accuracy (0.7651) sits just under
+always-offload's (0.7709), but its on-time accuracy is *higher* (0.7651
+vs 0.7423) for the same reason: it pays for 0% over-budget misses where
+always-offload pays for 3.71%.
+
+**This gap was not bootstrap-tested by this experiment** — the spec's
+formal verdict only covers the tuned cascade against budget-only and
+against always-local, not budget-only against the two static baselines,
+so there is no confidence interval to report for the comparisons above.
+That said, the gaps are large relative to the noise scale visible
+elsewhere in this experiment: the bootstrap intervals this experiment does
+report (tuned cascade vs. budget-only and vs. always-local) are roughly
+0.01-0.07 wide, while several of the budget-only-vs-baseline gaps above
+run to several points and, at 300-400 ms, into the tens of points — far
+outside anything that width of interval could plausibly explain away. A
+formal bootstrap on this specific comparison is still worth running (see
+the recommendation below) rather than asserted from magnitude alone.
+
+The one hard floor even budget-only and the oracle can't clear is 100 ms:
+local latency alone exceeds the budget for roughly a third of frames
+(always-local's own over-budget share is 34.36%), so no assignment of any
+kind reaches much above 0.45 on-time accuracy there — the oracle itself
+only reaches 0.4484.
+
+### The cascade verdict: not useful at any budget
+
+The rule: the tuned cascade counts as useful at a budget only if its
+on-time-accuracy interval against budget-only lies entirely above zero.
+By that rule, **the cascade is not useful at any of the six budgets, for
+either score** — at every single budget, both scores' 95% CI against
+budget-only has a strictly negative upper bound (worst: [-0.0380, -0.0192]
+at 400 ms; best: [-0.0220, -0.0129] at 150 ms). The tuned cascade is
+significantly *worse* than the simpler budget-only policy everywhere it
+was tested, though it does beat always-local at every budget from 150 ms
+up (CI entirely above zero) and ties it at 100 ms (CI straddles zero).
+
+The mechanism is structural, not a tuning or modeling failure, and it
+comes down to the cascade being forced into one of two extremes rather
+than finding a genuinely selective middle:
+
+- **At 200-500 ms, the tuned thresholds are 0.95 or 1.00** — high enough
+  that the local result is kept only when the raw/learned score is at or
+  near its maximum, so the cascade escalates on almost every request that
+  fits the remaining budget. That makes it behave like "run local, then
+  offload anyway whenever there's room" rather than a genuinely selective
+  cascade: confidence isn't separating "local is good enough" frames from
+  the rest well enough for the tuning search to find a threshold in
+  between, so it saturates toward "escalate nearly always." Since an
+  escalated request is charged local *plus* offload latency while
+  budget-only's offloads pay only offload latency, the cascade pays for
+  the local pass on nearly every request without reliably earning it
+  back in accuracy — at 300 ms this shows up as cascade-raw's mean latency
+  (119.03 ms) actually being *lower* than budget-only's (128.66 ms)
+  because it's forced to escalate less often to stay under budget, trading
+  accuracy for it (0.6578 vs 0.6839 on-time); at 400-500 ms the pattern
+  flips and cascade's mean latency tracks close to or above budget-only's
+  while its accuracy still trails, because the local pass eats into the
+  same budget budget-only can spend entirely on the offload path.
+- **At 100-150 ms, the tuned thresholds drop instead (0.65/0.45 and
+  0.85/0.70)** — not because confidence becomes more selective, but
+  because local-then-offload almost never fits inside so tight a budget
+  once the local pass is paid for, so the search finds that keeping local
+  more often is the least-bad option. The result is the cascade collapsing
+  toward always-local (statistically tied with it at 100 ms) rather than
+  toward budget-only.
+- **Either way, the tuned threshold can't recover the gap** — it only
+  trades which side of it the cascade loses on. This reproduces, under a
+  completely different objective, the same structural finding spec 02's
+  cascade-ceiling analysis made: "escalating adds the local pass's latency
+  ... which a cascade router can never avoid paying once it decides to
+  escalate."
+- **Raw and learned scores perform equivalently.** At every budget the two
+  scores' tuned metrics agree to at least 3 decimal places in accuracy
+  (e.g. 0.6248 vs 0.6248 at 100 ms mean accuracy; identical to 4 decimals
+  at 200-500 ms) despite picking different tuned thresholds and despite
+  the learned score using six confidence features against the raw score's
+  one. Training a classifier on more inputs doesn't buy the cascade
+  design anything here — the bottleneck is the local-first latency tax
+  above, not which frames get flagged for escalation.
+- The oracle's headroom above the cascade (~0.03-0.04 on-time accuracy
+  throughout) is consistently larger than its headroom above budget-only
+  (0.0014-0.0160, per the table above) — confirming budget-only, not the
+  cascade, is the policy actually capturing most of what's available.
+
+### Figure
+
+![Accuracy vs. latency under a hard budget](latency_budget_curves.png)
+
+Six panels, one per budget, each plotting on-time accuracy against mean
+latency: the raw and learned threshold-sweep curves, their tuned points,
+and single markers for budget-only, always-local, always-offload and the
+oracle, with a dashed vertical line at the budget. At 100 ms and 150 ms the
+sweep curves collapse to a near-single point (escalation rarely changes
+the outcome at those budgets, per the mechanism above); from 200 ms up the
+curves spread out visibly between the always-local cluster and the
+budget-only/oracle points, with always-offload's marker sitting far to the
+right and low on the y-axis until the budget is loose enough (500 ms) for
+it to catch up.
+
+### Related work
+
+This experiment's design follows a line of local/remote-inference routing
+work that treats latency as a real constraint rather than folding it into
+a single blended score. Kang et al.'s *Neurosurgeon* (ASPLOS 2017)
+partitions a network across the local/cloud boundary layer-by-layer, using
+a per-layer latency/energy prediction from system conditions — the same
+kind of conditions-to-latency prediction this experiment's offload-latency
+model makes, just at request granularity instead of per layer. Ran, Chen,
+Zhu, Liu & Chen's *DeepDecision* (INFOCOM 2018) is the direct source of
+this experiment's hard-budget framing: it maximises frame rate plus
+α·accuracy subject to per-frame latency, bandwidth, battery, accuracy and
+frame-rate constraints, deciding local vs. remote from network conditions.
+Han et al.'s *MCDNN* (MobiSys 2016) schedules approximate models under a
+resource budget with device/cloud trade-offs, the same budget-constrained
+framing applied to model selection rather than a single routing decision.
+Park et al.'s *Big/LITTLE* (CODES+ISSS 2015) and Teerapittayanon, McDanel &
+Kung's *DDNN* (ICDCS 2017) are this experiment's cascade design's direct
+ancestors: Big/LITTLE runs a little model first and escalates to a big one
+only when the result isn't estimated accurate, and DDNN exits locally when
+normalized entropy is below a threshold, reporting accuracy against a
+local-exit-rate curve — exactly the threshold-sweep curves this
+experiment's figure reports, generalized here to a latency budget instead
+of an exit rate. Wang et al.'s *IDK Cascades* (UAI 2018) formalizes
+cascades with an explicit "I don't know" option and a cost-aware
+objective, and Chen, Zaharia & Zou's *FrugalGPT* (2023) applies the same
+cascade-with-a-learned-scorer idea to LLM calls — both are the direct
+precedent for comparing a raw confidence score against a learned one as
+this experiment's cascade threshold, though here the two scores end up
+performing equivalently rather than the learned scorer buying anything
+extra. Taylor et al.'s *Adaptive Deep Learning Model Selection on Embedded
+Systems* (LCTES 2018) selects per-input among models using cheap image
+features and kNN for ImageNet classification — the same "route from cheap
+signals computed before the expensive path" idea spec 01's frame features
+and this project's raw/learned confidence scores both draw on.
+
+### Recommendation on the phone/server work (supersedes spec 02)
+
+**Supersedes the recommendation above.** Spec 02 recommended not resuming
+`features/server-served-benchmark/` because none of its eight soft-utility
+routers beat always-offload. This experiment changes that: under a hard
+latency budget, **the adaptive router is worth pursuing — in its
+condition-based (budget-only) form.** Routing purely on predicted network
+latency, decided before any inference runs, gets within 0.4-1.6 points of
+the within-budget oracle and clearly beats both always-local and
+always-offload on on-time accuracy at every budget tested, in simulation.
+That is a real result, not a tie or a near-miss the way most of spec 02's
+routers were. **Resuming `features/server-served-benchmark/` is justified**
+— but to validate budget-only, not the cascade.
+
+The policy's simulated value rests on two things only real hardware can
+confirm, and the phone/server work is exactly the way to check them:
+
+1. **Real offload latency, and how well it can be predicted from live
+   network measurements.** This experiment's offload-latency model is
+   fit on the simulator's analytical relationship between
+   `network_bandwidth_mbps`/`network_latency_ms`/`network_packet_loss_pct`
+   and `offload_latency_ms` — not a measurement of an actual request going
+   over a real network from a real phone.
+2. **Real local latency on the phone.** This experiment used the
+   desktop-simulated `local_latency_ms` from `simulation_results` (mean
+   73.77 ms across the held-out rows). Earlier in this project, on-device
+   forward-pass latency was measured on an iPhone 15 Pro at roughly
+   17.34 ms mean via the Core ML delegate versus roughly 106.01 ms mean on
+   CPU (`feature/mobile-inference-benchmark` branch,
+   `features/mobile-inference-benchmark/learnings.md`; measured on a
+   Debug development build, so still to be confirmed on a Release build) —
+   a real local pass
+   could be either several times cheaper or noticeably more expensive than
+   this experiment's simulated figure depending on which delegate the app
+   ends up using.
+
+That second point cuts both ways for the cascade, too, and is worth
+re-checking rather than treating the cascade verdict above as final. The
+cascade's whole disadvantage is the local-first latency tax (paying local
+*plus* offload where budget-only pays offload alone); if real on-device
+local latency via Core ML turns out much cheaper than the simulated
+~74 ms mean, that tax shrinks, and the cascade's tighter-budget numbers
+(where the tax is proportionally largest) should be re-evaluated against
+real hardware numbers before being written off for good. This experiment
+doesn't establish that it would change the verdict — it only used the
+stored simulated values, per spec — so it isn't grounds to prefer the
+cascade over budget-only yet; it's grounds to re-run this comparison once
+real local and offload latencies are available.
+
+As a small, cheap follow-up before or alongside the phone/server work: add
+a bootstrap comparison of budget-only against always-local and
+always-offload (the same `bootstrap_mean_difference` machinery already
+used for the cascade comparisons), so the headline result above rests on
+a formal interval instead of the magnitude argument made here.
