@@ -81,9 +81,17 @@
 - Notes: —
 
 ## Task 5 — Build the benchmark screen
-- Status: not started
-- Started: —
-- Completed: —
+- Status: completed
+- Started: 2026-09-23 23:29:30
+- Completed: 2026-09-23 23:31:37
+- Notes: app/screens/BenchmarkScreen.tsx built — bundled-set info card, Run
+  Benchmark button (disabled while running), four mutually exclusive states
+  (idle/running/error/done) driven off useBenchmark's status, error shown
+  visibly in red, results card with mean/median/min/max/stdev (toFixed(2)
+  ms). App.tsx now renders it. tsc clean (independently reverified), expo
+  start still reaches ready state. No bugs found in useBenchmark, not
+  modified. On-device tap-through interaction still unverified (no device),
+  same expected limitation as Tasks 3/4.
 - Notes: —
 
 ## Task 6 — EAS Build configuration
