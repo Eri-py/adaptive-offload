@@ -41,3 +41,34 @@
   `000000000139.jpg`, `000000000285.jpg`, `000000000632.jpg` from
   `training/data/coco/val2017/`: all three images' confidence features
   matched exactly between the two runs (detection counts 13/1/7).
+
+## Task 5 — Extraction step (integration)
+
+- The plan text's `predict(image_path) -> Results`-like callable is
+  ambiguous on its own; per the task's accompanying implementation note it
+  actually returns the *sequences* (`tuple[Sequence[float], Sequence[float]]`
+  of confidences and normalised box areas), not a `Results` object — that's
+  what lets `test_extract_features.py` stub predictions with plain lists
+  and never import `ultralytics`/`torch`.
+- To keep "time the model call" and "time the confidence derivation"
+  separate per the plan, `confidence.py`'s `from_results` was split: a new
+  `sequences_from_results(results) -> tuple[list[float], list[float]]`
+  holds the `boxes.conf`/`boxes.xywhn` extraction, and `from_results` is now
+  just `sequences_from_results` + `confidence_features`. `from_results`'s
+  signature and behavior are unchanged, so none of Task 3's tests needed
+  updating. `extract_features.py`'s real predictor calls
+  `sequences_from_results` directly (inside the timed "model" segment,
+  since it's cheap tensor-to-list conversion tied to the model call); the
+  orchestration function calls `confidence_features` itself as the
+  separately-timed "confidence" segment.
+- `extract_features()` computes the missing-image check from the *pending*
+  set only (`known_frames - already_stored`), not every known frame — an
+  image already covered by a stored `frame_features` row is never touched
+  again, so it's fine for it to be absent from `--folder` on a later run
+  (e.g. a partial local image cache). Only pending frames' images are
+  required to exist.
+- Batching (`BATCH_SIZE = 100`) calls `store_features()` per batch inside
+  the same loop that does image stats/model/confidence timing — the batch
+  flush itself isn't part of any of the three timed segments, matching the
+  plan's "times the image statistics, the model call and the confidence
+  derivation separately" (three segments, not four).

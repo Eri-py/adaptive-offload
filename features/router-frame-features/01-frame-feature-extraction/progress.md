@@ -25,10 +25,10 @@
 - Notes: feature_store.py (FeatureRow, list_dataset_frames, get_known_feature_file_names, store_features); 5 new tests, 103 pass.
 
 ## Task 5 — Extraction step (integration)
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 12:44:54
+- Completed: 2026-09-24 12:49:15
+- Notes: extract_features.py + 6 integration tests (108 pass). Minimal split in confidence.py (sequences_from_results) so the model call and feature derivation are timed separately; from_results unchanged. --help works. Real run not executed (migration not applied).
 
 ## Task 6 — Regression test run
 - Status: not started

@@ -63,8 +63,13 @@ def confidence_features(
     )
 
 
-def from_results(results: Results) -> ConfidenceFeatures:
-    """Adapt one YOLO `Results` object to `confidence_features`.
+def sequences_from_results(results: Results) -> tuple[list[float], list[float]]:
+    """Extract per-detection confidences and normalised box areas from a YOLO `Results`.
+
+    Split out of `from_results` so a caller that needs to time the model
+    call and the feature derivation separately (`router.extract_features`)
+    can run the model, get these raw sequences back, and pass them to
+    `confidence_features` itself as a distinct, separately-timed step.
 
     Uses `boxes.conf` for per-detection confidences and `boxes.xywhn`
     (normalised `[x, y, w, h]`) for box areas (`w * h`), so areas are
@@ -79,4 +84,13 @@ def from_results(results: Results) -> ConfidenceFeatures:
     )
     confidences = [float(conf) for conf in boxes.conf.tolist()]
     box_areas = [float(w * h) for _, _, w, h in boxes.xywhn.tolist()]
+    return confidences, box_areas
+
+
+def from_results(results: Results) -> ConfidenceFeatures:
+    """Adapt one YOLO `Results` object to `confidence_features`.
+
+    See `sequences_from_results` for how the sequences are extracted.
+    """
+    confidences, box_areas = sequences_from_results(results)
     return confidence_features(confidences, box_areas)
