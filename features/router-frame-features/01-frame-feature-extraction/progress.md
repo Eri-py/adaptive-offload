@@ -31,7 +31,7 @@
 - Notes: extract_features.py + 6 integration tests (108 pass). Minimal split in confidence.py (sequences_from_results) so the model call and feature derivation are timed separately; from_results unchanged. --help works. Real run not executed (migration not applied).
 
 ## Task 6 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-24 12:49:15
+- Completed: 2026-09-24 12:49:38
+- Notes: database: ruff/mypy clean, 1 passed. training: ruff clean, mypy 9 known errors only, 108 passed, 0 skipped.
