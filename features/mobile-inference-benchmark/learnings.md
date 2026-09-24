@@ -583,3 +583,37 @@ actually returns without throwing for this specific model/input shape.
 - `BenchmarkScreen.tsx` now renders one card per `DelegateResult` (labelled
   "Delegate: CPU" / "Delegate: Core ML") instead of a single "Last result"
   card, showing that delegate's stats or its own error text inline.
+
+## Review finding S2 (timed-scope mismatch between the app and the Python side)
+
+- Confirmed against `training/datagen/simulate/yolo_inference.py:80-84`:
+  `run_inference` starts the clock before `model(image_path, ...)` and stops
+  it after, so the Python-side "latency" includes JPEG read/decode,
+  letterbox preprocessing, the forward pass, *and* NMS. `useBenchmark.ts`
+  only times `await model.run([input.buffer])` on an already-preprocessed
+  tensor — the raw forward pass, nothing else. The two numbers were never
+  comparable; corrected the hook's docstring (no timing/behavior change) to
+  say "raw forward pass only" and point here.
+- **For a like-for-like comparison**, use one of:
+  1. The desktop's `results[0].speed['inference']` (ultralytics' own
+     forward-pass-only timing, milliseconds, already computed per call and
+     unrelated to `run_inference`'s own wall-clock measurement) — same scope
+     as the app's `model.run()` timing.
+  2. Time the same exported `.tflite` (not the `.pt`) through
+     `tf.lite.Interpreter.invoke()` on the desktop, for full parity with
+     what's actually running on the phone (the `.pt`/CPU path uses a
+     different runtime than the TFLite delegate the app benchmarks).
+- Measured option 1, since it's cheap and needs no package changes: ran in
+  the shared root `.venv/` (`ultralytics==8.4.82`, already installed —
+  nothing added/upgraded), `YOLO("training/models/yolov8n.pt")` on
+  `device="cpu"`, over the same 15 bundled `app/assets/images/*.jpg`, one
+  discarded warm-up call before the timed loop (same warm-up rationale as
+  finding B1). Result: mean 53.19 ms, median 45.12 ms, min 23.38 ms, max
+  89.93 ms (n=15). This is forward-pass-only on the `.pt`/CPU path, on
+  whatever machine ran this venv — not the same hardware or runtime as the
+  desktop `~20-24 ms` figure the original review cited (that included
+  decode/letterbox/NMS per the bug this finding describes, and may also be a
+  different machine), and not the same runtime as the app's TFLite delegate
+  path (option 2 above would close that second gap). Treat this number as a
+  reference point for "how much does trimming decode/letterbox/NMS change
+  the desktop-side figure," not as a rigorous phone-vs-desktop comparison.

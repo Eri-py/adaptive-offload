@@ -59,7 +59,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/hooks/useBenchmark.ts:51-57`
 - **Issue:** The docstring says the timing matches `yolo_inference.py`'s approach. In fact the Python side times `model(image_path)`, which includes JPEG read/decode, letterbox, the forward pass and NMS. The app times only the raw forward pass. The desktop ~20-24 ms figure therefore covers more work than the phone number, and comparing them directly (AC2) biases the result in the phone's favour.
 - **Fix:** Correct the docstring to say "raw forward pass only". Note the scope difference in learnings.md. For a like-for-like comparison, compare against the desktop's `results[0].speed['inference']`, or time the same `.tflite` through `tf.lite.Interpreter.invoke()` on the desktop.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: correct the timed-scope claim vs. the Python side"
 
 #### S3 — The export script adds a new mypy error to `training/`
 

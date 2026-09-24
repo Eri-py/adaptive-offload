@@ -75,9 +75,12 @@ const DELEGATE_SPECS: { id: DelegateId; label: string; delegates: TensorflowMode
  * Loads the bundled YOLOv8n TFLite model once per delegate (Task 3/S1: CPU
  * and Core ML), then runs on-device inference over all 15 bundled COCO
  * images per delegate, timing each `model.run()` call with
- * `performance.now()` (matching the wall-clock-around-inference approach
- * `training/datagen/simulate/yolo_inference.py` uses on the Python side, so
- * "latency" means the same thing on both sides of this project).
+ * `performance.now()`. This is the raw forward pass only, on an
+ * already-preprocessed tensor — narrower than
+ * `training/datagen/simulate/yolo_inference.py`'s `model(image_path)`,
+ * which also includes JPEG decode, letterbox, and NMS (review finding S2;
+ * see `features/mobile-inference-benchmark/learnings.md` for a
+ * like-for-like comparison method).
  */
 export function useBenchmark(): UseBenchmarkResult {
   const [status, setStatus] = useState<BenchmarkStatus>('idle');
