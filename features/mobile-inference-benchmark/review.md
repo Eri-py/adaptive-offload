@@ -66,7 +66,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `training/export_tflite_model.py:46`
 - **Issue:** `mypy export_tflite_model.py` reports `Module "ultralytics" does not explicitly export attribute "YOLO" [attr-defined]`. That is a new error, not a pre-existing one as progress.md implies. The coding guidelines require mypy to run clean.
 - **Fix:** Copy the existing suppression pattern from `datagen/simulate/yolo_inference.py`: a one-line why-comment plus `# type: ignore[attr-defined]`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: silence the ultralytics YOLO attr-defined mypy error"
 
 #### S4 — Placeholder `com.anonymous.*` bundle identifier
 

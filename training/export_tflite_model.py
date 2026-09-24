@@ -43,7 +43,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from ultralytics import YOLO
+# mypy can't see YOLO in ultralytics' runtime-built __all__ (not a missing-stub issue).
+from ultralytics import YOLO  # type: ignore[attr-defined]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WEIGHTS_PATH = REPO_ROOT / "training" / "models" / "yolov8n.pt"
