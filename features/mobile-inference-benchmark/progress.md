@@ -109,7 +109,10 @@
 - Notes: —
 
 ## Task 7 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
+- Status: completed
+- Started: 2026-09-23 23:36:01
+- Completed: 2026-09-23 23:36:53
+- Notes: `npx tsc --noEmit` clean across the whole app/ project. `npx expo
+  start` reaches "Waiting on http://localhost:8081" cleanly with all of
+  Tasks 2-6's changes in place — no crash, no regression. Plan complete.
 - Notes: —
