@@ -43,7 +43,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/eas.json:7-13` (and the next-step instruction in progress.md, Task 6)
 - **Issue:** `developmentClient: true` builds a dev client in the Debug configuration, and `expo-dev-client` is not even in `app/package.json`. Such a build fetches its JS bundle from a running `expo start`, so it cannot launch in airplane mode (AC4). It also runs JS in `__DEV__` mode, which is not a representative binary. Depending on the answer to EAS's interactive prompt, it either installs `expo-dev-client` or produces an app that shows "No bundle URL present".
 - **Fix:** Point the user to `eas build --platform ios --profile preview`, which uses internal distribution, the Release config and an embedded JS bundle. Mention that internal distribution first needs `eas device:create` to register the iPhone's UDID. Either remove the `development` profile or add `expo-dev-client` if a dev-client build is actually wanted. Put the command in a short `app/README.md` or in the export-script docstring so it is not lost in progress.md.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B2: build with the preview profile, not development"
 
 ## Suggestions
 

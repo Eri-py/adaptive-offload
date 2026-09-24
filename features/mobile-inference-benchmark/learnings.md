@@ -505,6 +505,42 @@ actually returns without throwing for this specific model/input shape.
   `EasJsonAccessor`/`EasJsonUtils`) for any future `eas.json` change in
   this project rather than re-deriving the schema from memory or docs.
 
+## Review finding B2 (removed the `development` EAS profile, added app/README.md)
+
+- Removed the `development` block from `app/eas.json` entirely (orchestrator
+  decision: no dev-client build wanted). `app/package.json` was confirmed to
+  have no `expo-dev-client` dependency, matching the finding's observation
+  that the old profile would have hit EAS's interactive
+  install-it-or-fail-at-runtime prompt.
+- Re-validated with the same unauthenticated `@expo/eas-json` trick Task 6's
+  entry documented (`EasJsonAccessor.fromProjectPath` +
+  `EasJsonUtils.getBuildProfileAsync`), reusing the already-cached package
+  at `~/.npm/_npx/e25a38a8cc65d08e/node_modules/@expo/eas-json` rather than
+  re-triggering an `npx eas-cli` pull. `preview` (ios) resolves to
+  `{ credentialsSource: "remote", distribution: "internal", simulator: false
+  }` and `production` (ios) to `{ credentialsSource: "remote", distribution:
+  "store", autoIncrement: true }`, both clean. Also confirmed
+  `getBuildProfileAsync(..., "development")` now throws "Missing build
+  profile in eas.json" with the profile list explicitly excluding
+  `development` — i.e. the removal actually took effect in the schema the
+  real CLI would resolve, not just visually in the JSON.
+- Added `app/README.md` (didn't exist before) with the build/install
+  sequence: `eas device:create` (one-time UDID registration required before
+  an internal-distribution build can install on a device) → `eas build
+  --platform ios --profile preview`, plus a short note on why there's no
+  `development` profile (dev-client can't launch in airplane mode, breaking
+  AC4) and what to do if one is ever genuinely needed later (add
+  `expo-dev-client` as a real dependency deliberately, don't rely on EAS's
+  interactive prompt).
+- Corrected `features/mobile-inference-benchmark/progress.md`'s Task 6 entry,
+  which previously told the user to run `eas build --platform ios --profile
+  development` — updated to point at `preview` and mention
+  `eas device:create` and `app/README.md`.
+- No code/type-checked surface changed (`eas.json` is data, not TS), so
+  `npx tsc --noEmit` was re-run only as a no-regression check (clean, zero
+  output/errors). `app/package.json` still has no `lint` script (same gap
+  Task 3 already flagged) — nothing to run there.
+
 ## Review finding B1 (app-side warm-up)
 
 - `react-native-fast-tflite`'s `TfliteModel.run(input: ArrayBuffer[]):

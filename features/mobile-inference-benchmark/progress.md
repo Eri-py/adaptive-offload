@@ -98,14 +98,19 @@
 - Status: completed
 - Started: 2026-09-23 23:31:53
 - Completed: 2026-09-23 23:35:46
-- Notes: app/eas.json added — development profile (developmentClient: true,
-  internal distribution, physical device, not simulator), plus preview/
-  production for completeness. eas-cli left unauthenticated/not installed
-  as a dependency (used via npx). Validated the config's real schema/merge
-  resolution via @expo/eas-json's own accessor directly (no login needed) —
-  resolved cleanly with no errors. Next step for the user: `eas build
-  --platform ios --profile development` from app/, requires their own
-  `eas login` and Apple Developer account — not attempted here.
+- Notes: app/eas.json added — preview profile (internal distribution,
+  physical device, not simulator), plus production for completeness. No
+  `development` profile: a dev-client build needs `expo-dev-client` (not a
+  dependency here) and fetches its JS bundle from a running `expo start`,
+  which cannot launch in airplane mode (AC4) and doesn't run a
+  representative Release-mode binary. eas-cli left unauthenticated/not
+  installed as a dependency (used via npx). Validated the config's real
+  schema/merge resolution via @expo/eas-json's own accessor directly (no
+  login needed) — resolved cleanly with no errors. Next step for the user:
+  `eas device:create` to register the iPhone's UDID (required once for
+  internal distribution), then `eas build --platform ios --profile preview`
+  from app/ — requires their own `eas login` and Apple Developer account,
+  not attempted here. See app/README.md for the full steps.
 - Notes: —
 
 ## Task 7 — Regression test run
