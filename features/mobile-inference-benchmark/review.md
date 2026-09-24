@@ -110,7 +110,7 @@ New runtime dependencies not listed in the plan: `expo-asset`, `expo-file-system
 - **File:** `app/screens/BenchmarkScreen.tsx:41-46`
 - **Issue:** The mockup shows "Running inference 9 / 15…". The screen shows a generic "Running benchmark…". On-device JPEG decoding in pure JS makes a run take several seconds, so progress would be useful.
 - **Fix:** Add a `progress` counter to the hook's state, update it after each image, and render `Running inference {n} / {total}…`.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — Cosmetic; the spec says styling and polish are not a priority.
 
 #### N6 — Executable bit set on non-executable files
 
