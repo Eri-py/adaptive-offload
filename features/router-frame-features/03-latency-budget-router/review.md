@@ -156,7 +156,7 @@ None.
 - **File:** `training/router/budget_experiment.py:107-143`
 - **Issue:** The two loops are identical except for the reduction step. `max()` returns the first maximal element, so tuning can reuse the sweep and keep the lowest-threshold tie-break.
 - **Fix:** `return max(_threshold_sweep(ctx, score_name, budget_ms), key=lambda t: t[1].on_time_accuracy)[0]`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N4: reuse the threshold sweep when tuning"
 
 #### N5 — Docstrings refer to plan task numbers
 

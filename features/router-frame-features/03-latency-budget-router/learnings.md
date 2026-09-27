@@ -442,3 +442,30 @@
   on the regenerated figure PNG was also identical, consistent with every
   earlier task/fix's finding that this script has no run-to-run metadata
   drift.
+
+## Review fix N4 — `_tuned_threshold` reuses `_threshold_sweep`
+
+- Task 5's own learnings (above) argued the two loops shouldn't be unified
+  because they read from different `_SplitContext`s — but that's not a
+  reason to duplicate the loop body itself: `_threshold_sweep` already takes
+  `ctx` as a parameter, so `_tuned_threshold` can call it with whichever
+  context its caller passes (train, per `_score_budget_result`) and just
+  reduce the returned `list[tuple[float, RouterMetrics]]` with `max(...,
+  key=lambda t: t[1].on_time_accuracy)[0]`. No callback or return-type union
+  needed after all — the two "structurally identical loops" collapsed to a
+  three-line reduction over the first loop's output.
+- The lowest-threshold tie-break survives for free, but only because two
+  facts both hold and are worth restating together: (1) `_threshold_sweep`
+  iterates `THRESHOLDS` in ascending order (built via `np.round(np.arange(21)
+  * 0.05, 2)`, not sorted afterward), and (2) Python's `max()` returns the
+  *first* item that achieves the maximum when there's a tie, not the last.
+  Either fact alone isn't enough — a descending sweep with `max()`, or an
+  ascending sweep with a hypothetical "last-max-wins" reducer, would both
+  flip the tie-break to highest-threshold.
+- Confirmed byte-for-byte no behavior change the same way every prior fix in
+  this file did: captured `python -m router.budget_experiment` stdout and
+  figure PNG against the real database before editing, diffed/`cmp`'d after
+  — both identical. This one needed no new dataclass fields or print lines
+  (pure internal refactor), so unlike S2-S5 there was no expected diff to
+  distinguish from an unexpected one — a clean `diff`/`cmp` was the whole
+  story.

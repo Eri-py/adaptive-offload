@@ -113,24 +113,13 @@ def _threshold_sweep(
 
 def _tuned_threshold(ctx: _SplitContext, score_name: str, budget_ms: float) -> float:
     """The threshold with the highest on-time accuracy on `ctx`'s rows (meant
-    to be called on train rows), ties won by the lowest threshold — only a
-    strict improvement overwrites the running best, so the first (lowest)
-    threshold to reach the maximum is the one kept."""
-    best_threshold = float(THRESHOLDS[0])
-    best_on_time = -np.inf
-    for threshold in THRESHOLDS:
-        actions = cascade_actions(
-            ctx.local_latency_ms,
-            ctx.predicted_offload_ms,
-            ctx.scores[score_name],
-            float(threshold),
-            budget_ms,
-        )
-        on_time = _policy_metrics(ctx.rows, actions, budget_ms).on_time_accuracy
-        if on_time > best_on_time:
-            best_on_time = on_time
-            best_threshold = float(threshold)
-    return best_threshold
+    to be called on train rows), ties won by the lowest threshold. Reuses
+    `_threshold_sweep`, which tries `THRESHOLDS` in ascending order, so
+    `max` (which returns the first maximal element) naturally keeps the
+    lowest threshold among ties."""
+    return max(
+        _threshold_sweep(ctx, score_name, budget_ms), key=lambda t: t[1].on_time_accuracy
+    )[0]
 
 
 @dataclass(frozen=True)
