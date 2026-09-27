@@ -168,10 +168,7 @@ def _plot_panel(ax: Axes, panel: BudgetPanelData, handles_by_label: dict[str, Ar
         marker, color = _SINGLE_POINT_STYLE[name]
         plot_x, plot_y = point.mean_latency_ms, point.on_time_accuracy
         if name == "always-offload" and offload_off_panel:
-            # True (latency, accuracy) is off-panel on at least one axis:
-            # clamp only the axis that's actually out of range to its inset
-            # edge, and label it with the real values, instead of it silently
-            # vanishing past the axis limits.
+            # Clamp only the out-of-range axis to its inset edge; label with the real value.
             x_inset = (xlim[1] - xlim[0]) * _EDGE_INSET_FRAC
             y_inset = (ylim[1] - ylim[0]) * _EDGE_INSET_FRAC
             if plot_x > xlim[1]:

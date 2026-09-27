@@ -107,9 +107,7 @@ def test_panel_axis_limits_clips_far_off_always_offload_latency() -> None:
 
 
 def test_panel_axis_limits_clips_far_off_always_offload_accuracy() -> None:
-    # always-offload's latency (90ms) is in range but its accuracy (0.06) is
-    # far below every other point — the real 300ms-budget panel's shape,
-    # where the marker would otherwise silently clip past the y-axis.
+    # Latency in range but accuracy (0.06) far below others — would otherwise clip past the y-axis.
     panel = _panel_with_offload_at(budget_ms=100.0, offload_latency_ms=90.0, offload_accuracy=0.06)
 
     xlim, ylim, offload_off_panel = _panel_axis_limits(panel)

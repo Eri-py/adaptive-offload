@@ -44,10 +44,7 @@ def test_cascade_keeps_local_escalates_when_it_fits_and_falls_back_otherwise() -
     actions = cascade_actions(
         local_latency, predicted_offload, score, threshold=0.5, budget_ms=100.0
     )
-    # Row 0: score >= threshold -> stays local.
-    # Row 1: below threshold, 10+50=60 <= 100 -> escalates.
-    # Row 2: below threshold, 10+90=100 <= 100 -> escalates (boundary, inclusive).
-    # Row 3: below threshold, 10+200=210 > 100 -> doesn't fit, falls back to local.
+    # Row 0 stays local; rows 1-2 escalate (fits, incl. boundary); row 3 falls back (over budget).
     assert list(actions) == ["LOCAL", "ESCALATE", "ESCALATE", "LOCAL"]
 
 
@@ -165,9 +162,7 @@ def test_oracle_breaks_remaining_ties_by_local_offload_escalate_order() -> None:
         offload_latency=[50.0],
         offload_accuracy=[0.75],  # same accuracy and latency as local
     )
-    # LOCAL and OFFLOAD tie on both accuracy (0.75) and latency (50), so the
-    # LOCAL/OFFLOAD/ESCALATE order picks LOCAL. ESCALATE (100) also fits but
-    # has higher latency, so it never enters the tie.
+    # LOCAL/OFFLOAD tie on accuracy and latency, so order picks LOCAL; ESCALATE fits but is slower.
     assert list(oracle_actions(rows, budget_ms=100.0)) == ["LOCAL"]
 
 

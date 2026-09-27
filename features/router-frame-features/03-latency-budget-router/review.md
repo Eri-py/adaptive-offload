@@ -142,7 +142,7 @@ None.
 - **File:** `training/router/latency_policies.py:89-92`, `training/router/budget_experiment.py:56-59`, `:242-245`
 - **Issue:** Four-line comments, partly restating context. For example, `:56-59` explains that an array is "never mutated… but kept explicit regardless". `.claude/coding-guidelines.md` "Comments" allows one line, or two when truly needed.
 - **Fix:** Cut each to one line. For example: `# <U8 fits "ESCALATE"; np.full would otherwise size the dtype from the fill value`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: shorten multi-line comments"
 
 #### N3 — `_ACTION_DTYPE` is duplicated, and the constant sits mid-module
 

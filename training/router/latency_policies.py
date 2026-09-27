@@ -25,9 +25,7 @@ LOCAL = "LOCAL"
 OFFLOAD = "OFFLOAD"
 ESCALATE = "ESCALATE"
 
-# The network/device condition columns the offload-latency model is trained
-# on. The router never sees a request's *true* latency when it decides — only
-# these conditions, predicted ahead of time.
+# The router decides using predicted conditions only — it never sees the true latency in advance.
 _OFFLOAD_LATENCY_FEATURE_COLUMNS = [
     "network_bandwidth_mbps",
     "network_latency_ms",
@@ -86,10 +84,7 @@ def learned_score(model: Stage1Models, rows: pd.DataFrame) -> npt.NDArray[np.flo
     predicted = predict_stage1(model, rows)
     return np.asarray(predicted["p_local_good_enough"], dtype=np.float64)
 
-# Sized to the longest label ("ESCALATE") so every action array holds all
-# three labels without truncation — `np.full(..., dtype=np.str_)` sizes the
-# dtype from the fill value alone and silently truncates a later assignment
-# of a longer string (training/router learnings, spec 02).
+# <U8 fits "ESCALATE"; np.full would otherwise size the dtype from the fill value and truncate.
 _ACTION_DTYPE = "<U8"
 
 

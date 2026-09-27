@@ -229,9 +229,7 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
             if name == "oracle":
                 continue
             assert oracle_on_time >= m.on_time_accuracy - 1e-9, f"{name} at {budget.budget_ms}ms"
-        # Budget-only with true offload latency also only ever picks among
-        # LOCAL/OFFLOAD, never ESCALATE, so the oracle's max over all three
-        # options bounds it the same way.
+        # Budget-only-true never escalates, so the oracle bounds it the same way.
         assert oracle_on_time >= budget.budget_only_true_on_time - 1e-9
 
 

@@ -54,10 +54,7 @@ SCORE_NAMES = ("raw", "learned")
 # drift `np.arange(0, 1.05, 0.05)` would otherwise accumulate.
 THRESHOLDS: npt.NDArray[np.float64] = np.round(np.arange(21) * 0.05, 2)
 
-# Sized to the longest label ("ESCALATE") for the same reason
-# `latency_policies._ACTION_DTYPE` is — see that constant's comment. Never
-# mutated after creation here (always-local/always-offload are constant
-# arrays), but kept explicit and consistent regardless.
+# Same fixed-width reason as `_ACTION_DTYPE` in latency_policies — see its comment.
 _ACTION_DTYPE = "<U8"
 
 
@@ -268,10 +265,7 @@ def run_experiment(
     split_train, split_test = frame_level_split(simulated_rows, test_size=0.2, seed=42)
     train_frame_ids = set(split_train["frame_id"])
     test_frame_ids = set(split_test["frame_id"])
-    # `frame_level_split`'s own DataFrames come back in a different row order
-    # than `simulated_rows` (spec 02's learning) — only its `frame_id` *sets*
-    # are used; both splits' rows are re-derived by filtering `simulated_rows`
-    # itself, so every array built below lines up positionally with its rows.
+    # Row order differs from simulated_rows; frame_id sets are used, rows re-derived by filtering.
     train_rows = simulated_rows[simulated_rows["frame_id"].isin(train_frame_ids)].reset_index(
         drop=True
     )
