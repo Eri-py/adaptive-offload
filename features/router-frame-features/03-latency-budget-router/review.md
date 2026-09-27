@@ -80,7 +80,7 @@ None.
 - **Fix:**
   - In `run_experiment`, compute and print these two intervals per budget (the per-row on-time arrays are already built at `:268-269`).
   - In `findings.md`, replace the "not bootstrap-tested… That said" paragraph with the intervals, and drop the matching follow-up at `findings.md:646-650`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: bootstrap budget-only against the static baselines"
 
 #### S3 — The cascade explanation blames confidence separation; the data shows there is almost nothing for the cascade to win
 

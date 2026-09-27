@@ -464,18 +464,18 @@ always-offload's (0.7709), but its on-time accuracy is *higher* (0.7651
 vs 0.7423) for the same reason: it pays for 0% over-budget misses where
 always-offload pays for 3.71%.
 
-**This gap was not bootstrap-tested by this experiment** — the spec's
-formal verdict only covers the tuned cascade against budget-only and
-against always-local, not budget-only against the two static baselines,
-so there is no confidence interval to report for the comparisons above.
-That said, the gaps are large relative to the noise scale visible
-elsewhere in this experiment: the bootstrap intervals this experiment does
-report (tuned cascade vs. budget-only and vs. always-local) are roughly
-0.01-0.07 wide, while several of the budget-only-vs-baseline gaps above
-run to several points and, at 300-400 ms, into the tens of points — far
-outside anything that width of interval could plausibly explain away. A
-formal bootstrap on this specific comparison is still worth running (see
-the recommendation below) rather than asserted from magnitude alone.
+The same paired photo-level bootstrap used for the cascade comparisons
+(`bootstrap_mean_difference`, seed 42) also covers this gap directly. Every
+interval lies entirely above zero:
+
+| budget | vs always-local 95% CI | vs always-offload 95% CI |
+|---|---|---|
+| 100 ms | [0.0311, 0.0376] | [0.3443, 0.4242] |
+| 150 ms | [0.0139, 0.0245] | [0.4834, 0.5946] |
+| 200 ms | [0.0159, 0.0320] | [0.4447, 0.5465] |
+| 300 ms | [0.0410, 0.0791] | [0.2902, 0.3571] |
+| 400 ms | [0.0732, 0.1376] | [0.1097, 0.1357] |
+| 500 ms | [0.1024, 0.1809] | [0.0203, 0.0253] |
 
 The one hard floor even budget-only and the oracle can't clear is 100 ms:
 local latency alone exceeds the budget for roughly a third of frames
@@ -642,9 +642,3 @@ doesn't establish that it would change the verdict — it only used the
 stored simulated values, per spec — so it isn't grounds to prefer the
 cascade over budget-only yet; it's grounds to re-run this comparison once
 real local and offload latencies are available.
-
-As a small, cheap follow-up before or alongside the phone/server work: add
-a bootstrap comparison of budget-only against always-local and
-always-offload (the same `bootstrap_mean_difference` machinery already
-used for the cascade comparisons), so the headline result above rests on
-a formal interval instead of the magnitude argument made here.

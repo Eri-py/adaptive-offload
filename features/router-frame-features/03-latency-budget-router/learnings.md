@@ -237,3 +237,29 @@
   guidance, not from a file in this repo. If a future task needs to cite
   them again, they aren't independently verifiable from this repo alone;
   the source is this project's earlier (Windows-side) research notes.
+
+## Review fix S2 — bootstrap budget-only vs. static baselines
+
+- Adding `budget_only_vs_always_local`/`budget_only_vs_always_offload` as
+  two more `BootstrapResult` fields on `BudgetResult` (same
+  `bootstrap_mean_difference(frame_ids, diff, seed=42)` call already used
+  for the cascade comparisons, just fed `budget_only_on_time -
+  always_local_on_time` / `- always_offload_on_time`) needed one new
+  per-row array the loop didn't already have: `always_offload_on_time`
+  (`always_local_on_time`/`budget_only_on_time` already existed). Cheap to
+  add alongside the other two `_on_time_per_row` calls in `run_experiment`.
+- `assert first == second` in the integration test already covers
+  determinism for these two new fields for free — they're plain dataclass
+  fields on `BudgetResult`, no extra equality-check work needed beyond
+  asserting `ci_low`/`ci_high` are finite (mirroring the existing
+  `vs_budget_only`/`vs_always_local` finite-check block).
+- Confirmed the fix mechanically rather than trusting the numbers by eye:
+  captured full stdout from the unmodified script first (worktrees don't
+  work here per Task 1's learning above), then diffed it against stdout
+  after the change — every previously-printed number was byte-identical
+  and the only diff lines were the two new "budget-only vs always-local /
+  always-offload" lines per budget, which matched the reviewer-supplied
+  intervals exactly. Two consecutive post-fix runs were also identical
+  (stdout diff clean), and the figure PNGs `cmp`-identical, consistent with
+  Task 6's finding that this script's `Agg` output has no run-to-run
+  metadata drift.

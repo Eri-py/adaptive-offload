@@ -201,8 +201,9 @@ def _score_budget_result(
 @dataclass(frozen=True)
 class BudgetResult:
     """Everything one latency budget needs: the four baseline/oracle
-    policies' metrics on the test rows, and each confidence score's tuned
-    cascade result."""
+    policies' metrics on the test rows, each confidence score's tuned
+    cascade result, and bootstrap 95% CIs for budget-only's on-time accuracy
+    minus each static baseline's (both over the test rows)."""
 
     budget_ms: float
     always_local: RouterMetrics
@@ -210,6 +211,8 @@ class BudgetResult:
     budget_only: RouterMetrics
     oracle: RouterMetrics
     scores: dict[str, ScoreBudgetResult]
+    budget_only_vs_always_local: BootstrapResult
+    budget_only_vs_always_offload: BootstrapResult
 
 
 @dataclass(frozen=True)
@@ -266,6 +269,7 @@ def run_experiment(
         oracle_test_actions = oracle_actions(test_rows, budget_ms)
 
         always_local_on_time = _on_time_per_row(test_rows, always_local_actions, budget_ms)
+        always_offload_on_time = _on_time_per_row(test_rows, always_offload_actions, budget_ms)
         budget_only_on_time = _on_time_per_row(test_rows, budget_only_test_actions, budget_ms)
 
         scores = {
@@ -288,6 +292,12 @@ def run_experiment(
                 budget_only=_policy_metrics(test_rows, budget_only_test_actions, budget_ms),
                 oracle=_policy_metrics(test_rows, oracle_test_actions, budget_ms),
                 scores=scores,
+                budget_only_vs_always_local=bootstrap_mean_difference(
+                    test_rows["frame_id"], budget_only_on_time - always_local_on_time, seed=42
+                ),
+                budget_only_vs_always_offload=bootstrap_mean_difference(
+                    test_rows["frame_id"], budget_only_on_time - always_offload_on_time, seed=42
+                ),
             )
         )
 
@@ -364,6 +374,13 @@ def _print_report(result: BudgetExperimentResult) -> None:
                 f"{name:<17} {m.mean_accuracy:>10.4f} {m.on_time_accuracy:>12.4f} "
                 f"{m.mean_latency_ms:>12.2f} {m.over_budget_share:>14.2%}"
             )
+        print()
+
+        bo_al, bo_ao = budget.budget_only_vs_always_local, budget.budget_only_vs_always_offload
+        print(
+            f"budget-only vs always-local 95% CI [{bo_al.ci_low:.4f}, {bo_al.ci_high:.4f}]  |  "
+            f"budget-only vs always-offload 95% CI [{bo_ao.ci_low:.4f}, {bo_ao.ci_high:.4f}]"
+        )
         print()
 
         for score_name in SCORE_NAMES:

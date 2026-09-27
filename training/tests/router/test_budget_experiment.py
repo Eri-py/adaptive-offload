@@ -187,6 +187,13 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
                 assert math.isfinite(bootstrap.ci_low)
                 assert math.isfinite(bootstrap.ci_high)
 
+        for bootstrap in (
+            budget.budget_only_vs_always_local,
+            budget.budget_only_vs_always_offload,
+        ):
+            assert math.isfinite(bootstrap.ci_low)
+            assert math.isfinite(bootstrap.ci_high)
+
         # The oracle knows every row's true latencies/accuracies, so its
         # on-time accuracy is at least every other policy's at every budget.
         oracle_on_time = budget.oracle.on_time_accuracy
