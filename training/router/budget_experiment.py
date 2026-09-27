@@ -1,5 +1,5 @@
-"""Wires Tasks 1-4 together: loads the frame/simulated data, trains the
-offload-latency predictor and the learned confidence score, then evaluates
+"""Runs the latency-budget experiment: loads the frame/simulated data, trains
+the offload-latency predictor and the learned confidence score, then evaluates
 always-local, always-offload, budget-only, the tuned raw/learned cascades and
 the within-budget oracle on the frame-level held-out split, at six latency
 budgets. Prints a per-budget table, each score's tuned threshold and

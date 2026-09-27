@@ -163,7 +163,7 @@ None.
 - **File:** `training/router/budget_experiment.py:1`, `training/router/budget_plot.py:10`
 - **Issue:** "Wires Tasks 1-4 together" and "(Task 5)" tie the code to a process document that will go stale.
 - **Fix:** Describe the modules in domain terms instead, e.g. "Runs the latency-budget experiment: …".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N5: describe the modules in domain terms"
 
 #### N6 — Threshold sweep values appear only in the figure
 

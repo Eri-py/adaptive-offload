@@ -1,8 +1,8 @@
 """End-to-end test for `router.budget_experiment.run_experiment`, against a
-small synthetic dataset seeded in ephemeral Postgres (per Task 1's tests'
-approach, since this integration exercises the real SQL joins), plus a
-handful of no-database unit tests for `_score_budget_result`'s train/test
-threshold-tuning wiring further down.
+small synthetic dataset seeded in ephemeral Postgres (following the same
+approach as `test_frame_dataset.py`, since this integration exercises the
+real SQL joins), plus a handful of no-database unit tests for
+`_score_budget_result`'s train/test threshold-tuning wiring further down.
 
 Reuses `test_feature_experiment.py`'s fixture strategy (alternating
 `local`/`offload` accuracy so stage 1's `gap <= 0` classifier sees both
