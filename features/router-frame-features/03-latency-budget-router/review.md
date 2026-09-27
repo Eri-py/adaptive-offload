@@ -170,7 +170,7 @@ None.
 - **File:** `training/router/budget_experiment.py:347-385`
 - **Issue:** The printed report shows only tuned τ, so the per-threshold numbers can't be read in text form.
 - **Fix:** Optionally print a compact per-threshold on-time/latency line per score.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — The figure already satisfies the AC; printing 21 × 2 × 6 extra lines adds noise to the report for little value.
 
 ## Tests
 
