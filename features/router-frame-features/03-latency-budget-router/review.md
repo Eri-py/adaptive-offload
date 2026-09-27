@@ -124,7 +124,7 @@ None.
 - **File:** `training/router/budget_experiment.py:124-143`, `:171-172`
 - **Issue:** The AC "no held-out row used to tune" rests on `_tuned_threshold(train_ctx, …)` receiving the train context. Nothing tests that `_score_budget_result` passes the train context rather than the test context, or that ties go to the lowest threshold. Swapping the two arguments would pass every current test and silently leak held-out rows into tuning.
 - **Fix:** Add a unit test with two small `_SplitContext`s whose best thresholds differ. Assert that `_score_budget_result(...).tuned_threshold` equals the train context's pick, and that a flat sweep returns 0.0.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S6: test train-only threshold tuning and its tie-break"
 
 ## Nitpicks
 

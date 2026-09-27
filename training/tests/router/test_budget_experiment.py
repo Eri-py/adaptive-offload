@@ -1,6 +1,8 @@
 """End-to-end test for `router.budget_experiment.run_experiment`, against a
 small synthetic dataset seeded in ephemeral Postgres (per Task 1's tests'
-approach, since this integration exercises the real SQL joins).
+approach, since this integration exercises the real SQL joins), plus a
+handful of no-database unit tests for `_score_budget_result`'s train/test
+threshold-tuning wiring further down.
 
 Reuses `test_feature_experiment.py`'s fixture strategy (alternating
 `local`/`offload` accuracy so stage 1's `gap <= 0` classifier sees both
@@ -17,6 +19,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 from common.models import Label
 from sqlalchemy import Engine
 
@@ -29,7 +32,13 @@ from datagen.persistence import (
     store_results,
 )
 from datagen.simulate.inference import DetectionResult
-from router.budget_experiment import DEFAULT_BUDGETS_MS, SCORE_NAMES, run_experiment
+from router.budget_experiment import (
+    DEFAULT_BUDGETS_MS,
+    SCORE_NAMES,
+    _score_budget_result,
+    _SplitContext,
+    run_experiment,
+)
 from router.feature_store import FeatureRow, store_features
 from router.frame_features.confidence import ConfidenceFeatures
 from router.frame_features.image_stats import ImageStats
@@ -224,3 +233,110 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
         # LOCAL/OFFLOAD, never ESCALATE, so the oracle's max over all three
         # options bounds it the same way.
         assert oracle_on_time >= budget.budget_only_true_on_time - 1e-9
+
+
+def _make_split_context(
+    *,
+    frame_ids: list[str],
+    local_latency_ms: list[float],
+    local_accuracy: list[float],
+    offload_latency_ms: list[float],
+    offload_accuracy: list[float],
+    score: list[float],
+) -> _SplitContext:
+    """Hand-built `_SplitContext` for the tuning tests below. Predicted
+    offload latency is set equal to the true offload latency (no prediction
+    error to reason about) and the only score is `"score"`."""
+    rows = pd.DataFrame(
+        {
+            "frame_id": frame_ids,
+            "local_latency_ms": local_latency_ms,
+            "local_accuracy": local_accuracy,
+            "offload_latency_ms": offload_latency_ms,
+            "offload_accuracy": offload_accuracy,
+        }
+    )
+    offload = np.asarray(offload_latency_ms, dtype=np.float64)
+    return _SplitContext(
+        rows=rows,
+        local_latency_ms=np.asarray(local_latency_ms, dtype=np.float64),
+        predicted_offload_ms=offload,
+        scores={"score": np.asarray(score, dtype=np.float64)},
+    )
+
+
+def test_score_budget_result_tunes_threshold_on_train_context_not_test() -> None:
+    """The AC that no held-out row is used to tune the threshold rests on
+    `_score_budget_result` calling `_tuned_threshold` on the train context,
+    never the test context. Train and test are built so their best
+    thresholds differ (0.35 vs. 0.05); passing the test context in by
+    mistake would make `tuned_threshold` come back 0.05, failing this."""
+    budget_ms = 100.0
+
+    # Escalating row "a" (score 0.3) alone is best (on-time accuracy 0.9)
+    # for thresholds 0.35-0.70; outside that range it's 0.7.
+    train_ctx = _make_split_context(
+        frame_ids=["train_a", "train_b"],
+        local_latency_ms=[10.0, 10.0],
+        local_accuracy=[0.5, 0.9],
+        offload_latency_ms=[10.0, 10.0],
+        offload_accuracy=[0.9, 0.5],
+        score=[0.3, 0.7],
+    )
+    # Escalating row "d" (score 0.02) alone is best for thresholds
+    # 0.05-0.50 — a different best threshold (0.05) than train's (0.35).
+    test_ctx = _make_split_context(
+        frame_ids=["test_c", "test_d"],
+        local_latency_ms=[10.0, 10.0],
+        local_accuracy=[0.9, 0.5],
+        offload_latency_ms=[10.0, 10.0],
+        offload_accuracy=[0.5, 0.9],
+        score=[0.5, 0.02],
+    )
+
+    result = _score_budget_result(
+        "score",
+        train_ctx,
+        test_ctx,
+        budget_ms,
+        budget_only_on_time=np.zeros(2),
+        always_local_on_time=np.zeros(2),
+    )
+
+    assert result.tuned_threshold == 0.35
+
+
+def test_score_budget_result_flat_sweep_tunes_to_lowest_threshold() -> None:
+    """When every threshold gives the same on-time accuracy, the tuned
+    threshold must be the lowest one (0.0) — `_tuned_threshold`'s tie-break.
+    A score of 1.0 never satisfies `score < threshold` for any threshold in
+    [0, 1], so every threshold in the sweep yields the identical all-LOCAL
+    policy on the train context."""
+    budget_ms = 100.0
+    train_ctx = _make_split_context(
+        frame_ids=["train_a", "train_b"],
+        local_latency_ms=[10.0, 10.0],
+        local_accuracy=[0.6, 0.6],
+        offload_latency_ms=[10.0, 10.0],
+        offload_accuracy=[0.9, 0.9],
+        score=[1.0, 1.0],
+    )
+    test_ctx = _make_split_context(
+        frame_ids=["test_a"],
+        local_latency_ms=[10.0],
+        local_accuracy=[0.6],
+        offload_latency_ms=[10.0],
+        offload_accuracy=[0.9],
+        score=[0.5],
+    )
+
+    result = _score_budget_result(
+        "score",
+        train_ctx,
+        test_ctx,
+        budget_ms,
+        budget_only_on_time=np.zeros(1),
+        always_local_on_time=np.zeros(1),
+    )
+
+    assert result.tuned_threshold == 0.0

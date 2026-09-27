@@ -375,3 +375,46 @@
   touches plotting/axis code, never the computed metrics. Two post-fix runs
   produced `cmp`-identical PNGs (no metadata drift, consistent with every
   earlier task/fix touching this script).
+
+## Review fix S6 — test that tuning uses the train context, not the test
+   context
+
+- `_score_budget_result` is easy to unit-test in isolation: `_SplitContext`
+  only needs `rows` (a `pd.DataFrame` with `frame_id`, `local_latency_ms`,
+  `local_accuracy`, `offload_latency_ms`, `offload_accuracy` — the columns
+  `outcomes`/`_policy_metrics` read), `local_latency_ms`,
+  `predicted_offload_ms` (set equal to the row's true offload latency, so
+  there's no prediction error to reason about) and `scores` (a
+  `{"score": array}` dict; the key can be anything since `_score_budget_result`
+  takes `score_name` as a parameter — it isn't restricted to the module's
+  real `SCORE_NAMES`). No Postgres fixture needed.
+- To make a swapped train/test argument observable, built two 2-row contexts
+  whose best threshold provably differs: with `cascade_actions`' `score <
+  threshold` rule, a single row's score sitting strictly between two
+  `THRESHOLDS` steps creates a threshold *band* where only that row escalates
+  and on-time accuracy peaks, bounded above and below by lower accuracy
+  outside the band. Placing that row's score at 0.3 (train) vs. 0.02 (test)
+  puts the peak band's first threshold at 0.35 vs. 0.05 respectively — worked
+  out by hand-simulating `cascade_actions` across all 21 `THRESHOLDS` values,
+  not by trial and error.
+- For the flat-sweep case, the simplest reliable construction is a score of
+  exactly `1.0` (the sweep's own maximum, since `THRESHOLDS` tops out at
+  1.0): `score < threshold` is then false for every threshold in the sweep,
+  so every threshold produces the identical all-LOCAL policy regardless of
+  what the row's accuracy/latency values are — no need to reason about a
+  coincidental tie between two different policies' accuracies.
+- Verified the tests actually guard the AC (not just pass vacuously) by
+  temporarily changing `_score_budget_result`'s `tuned_threshold =
+  _tuned_threshold(train_ctx, ...)` line to pass `test_ctx` instead, which
+  failed both new tests (0.55 instead of 0.0 for the flat-sweep case — the
+  flat-sweep test's own `test_ctx` fixture has a real, non-flat sweep, so a
+  swap doesn't just silently produce another flat/0.0 result), then
+  restored the line and confirmed `git diff training/router/budget_experiment.py`
+  showed no change.
+- Added the two tests to the existing `test_budget_experiment.py` rather
+  than a new file: that file already mirrors `budget_experiment.py`
+  one-to-one (same pattern as `test_feature_experiment.py`/
+  `feature_experiment.py`), and this repo has no precedent anywhere for
+  splitting a source file's tests into separate unit/integration files by
+  suffix — introducing one for a single review fix seemed worse than a
+  short docstring note that the file now holds both kinds of test.
