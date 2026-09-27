@@ -135,7 +135,7 @@ None.
   - "Within about 0.4–1.6 points" of the oracle: the 150 ms gap is 0.0014 (0.14 points).
   - The oracle's headroom over the cascade, given as "~0.03–0.04", is actually 0.019–0.044 (150 ms 0.0186, 200 ms 0.0205, 400 ms 0.0444).
 - **Fix:** Change these to "0.1–1.6 points" and "~0.02–0.04".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: correct the oracle-gap and headroom ranges"
 
 #### N2 — Multi-line comments break the one-line comment rule
 

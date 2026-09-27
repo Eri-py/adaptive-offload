@@ -429,7 +429,7 @@ The main positive result in this experiment is not the cascade — it's the
 plain **budget-only** policy (DeepDecision-style: offload only if the
 predicted offload latency fits the budget, decided up front from network
 and device conditions, no local inference required to decide). At every
-budget its on-time accuracy lands within about 0.4-1.6 points of the
+budget its on-time accuracy lands within about 0.1-1.6 points of the
 within-budget oracle:
 
 | budget | budget-only on-time | oracle on-time | gap |
@@ -553,7 +553,7 @@ local-first latency cost, not by how well a score ranks frames:
   whenever it fits" regardless of how the underlying score ranks frames —
   the tie says nothing about the two scores' relative ranking quality, and
   a setting with more separable rows would be needed to test that.
-- The oracle's headroom above the cascade (~0.03-0.04 on-time accuracy
+- The oracle's headroom above the cascade (~0.02-0.04 on-time accuracy
   throughout) is consistently larger than its headroom above budget-only
   (0.0014-0.0160, per the table above) — confirming budget-only, not the
   cascade, is the policy actually capturing most of what's available.
@@ -633,7 +633,7 @@ and this project's raw/learned confidence scores both draw on.
 routers beat always-offload. This experiment changes that: under a hard
 latency budget, **the adaptive router is worth pursuing — in its
 condition-based (budget-only) form.** Routing purely on predicted network
-latency, decided before any inference runs, gets within 0.4-1.6 points of
+latency, decided before any inference runs, gets within 0.1-1.6 points of
 the within-budget oracle and clearly beats both always-local and
 always-offload on on-time accuracy at every budget tested, in simulation.
 The gap to the oracle is this small largely because simulated offload
