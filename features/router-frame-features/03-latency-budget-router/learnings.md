@@ -418,3 +418,27 @@
   splitting a source file's tests into separate unit/integration files by
   suffix — introducing one for a single review fix seemed worse than a
   short docstring note that the file now holds both kinds of test.
+
+## Review fix N3 — de-duplicate `_ACTION_DTYPE` via a shared `constant_actions` helper
+
+- `latency_policies.py`'s own action-building functions (`budget_only_actions`,
+  `cascade_actions`, `oracle_actions`) all start from `np.full(..., LOCAL,
+  dtype=_ACTION_DTYPE)` as a *default* that a boolean mask then partially
+  overwrites — none of them ever builds a genuinely constant (all-one-value)
+  action array, so `constant_actions` had nothing to replace inside that
+  module; it only replaced `budget_experiment.py`'s
+  `_constant_actions(len(test_rows), LOCAL/OFFLOAD)` calls for
+  always-local/always-offload, which really are constant arrays.
+- Moving `_ACTION_DTYPE` up next to the LOCAL/OFFLOAD/ESCALATE labels
+  incidentally fixed the spacing problem the finding named too: the old
+  site (after `learned_score`, before `budget_only_actions`) had only one
+  blank line before it because the constant+comment sat between two
+  functions; deleting it from there and leaving `learned_score` followed
+  directly by `budget_only_actions` restores PEP 8's two-blank-line gap
+  with no separate spacing fix needed.
+- Confirmed pure refactor, not just by re-running the unit tests: captured
+  `python -m router.budget_experiment` stdout against the real database
+  before touching either file, diffed after — byte-identical — and `cmp`
+  on the regenerated figure PNG was also identical, consistent with every
+  earlier task/fix's finding that this script has no run-to-run metadata
+  drift.

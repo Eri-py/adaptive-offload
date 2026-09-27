@@ -25,6 +25,15 @@ LOCAL = "LOCAL"
 OFFLOAD = "OFFLOAD"
 ESCALATE = "ESCALATE"
 
+# <U8 fits "ESCALATE"; np.full would otherwise size the dtype from the fill value and truncate.
+_ACTION_DTYPE = "<U8"
+
+
+def constant_actions(n: int, action: str) -> npt.NDArray[np.str_]:
+    """`n`-length action array, every entry `action` (e.g. LOCAL or OFFLOAD)."""
+    return np.full(n, action, dtype=_ACTION_DTYPE)
+
+
 # The router decides using predicted conditions only — it never sees the true latency in advance.
 _OFFLOAD_LATENCY_FEATURE_COLUMNS = [
     "network_bandwidth_mbps",
@@ -83,9 +92,6 @@ def learned_score(model: Stage1Models, rows: pd.DataFrame) -> npt.NDArray[np.flo
     `router.two_stage.predict_stage1`)."""
     predicted = predict_stage1(model, rows)
     return np.asarray(predicted["p_local_good_enough"], dtype=np.float64)
-
-# <U8 fits "ESCALATE"; np.full would otherwise size the dtype from the fill value and truncate.
-_ACTION_DTYPE = "<U8"
 
 
 def budget_only_actions(

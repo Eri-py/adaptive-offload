@@ -35,6 +35,7 @@ from router.latency_policies import (
     RouterMetrics,
     budget_only_actions,
     cascade_actions,
+    constant_actions,
     learned_score,
     learned_score_model,
     metrics,
@@ -53,15 +54,6 @@ SCORE_NAMES = ("raw", "learned")
 # 0.00-1.00 in steps of 0.05 (21 values). `np.round` avoids the float
 # drift `np.arange(0, 1.05, 0.05)` would otherwise accumulate.
 THRESHOLDS: npt.NDArray[np.float64] = np.round(np.arange(21) * 0.05, 2)
-
-# Same fixed-width reason as `_ACTION_DTYPE` in latency_policies — see its comment.
-_ACTION_DTYPE = "<U8"
-
-
-def _constant_actions(n: int, action: str) -> npt.NDArray[np.str_]:
-    """`n`-length action array, every entry `action` (LOCAL or OFFLOAD) —
-    always-local/always-offload's "policy"."""
-    return np.full(n, action, dtype=_ACTION_DTYPE)
 
 
 def _policy_metrics(
@@ -305,8 +297,8 @@ def run_experiment(
     for raw_budget_ms in budgets:
         budget_ms = float(raw_budget_ms)
 
-        always_local_actions = _constant_actions(len(test_rows), LOCAL)
-        always_offload_actions = _constant_actions(len(test_rows), OFFLOAD)
+        always_local_actions = constant_actions(len(test_rows), LOCAL)
+        always_offload_actions = constant_actions(len(test_rows), OFFLOAD)
         budget_only_test_actions = budget_only_actions(test_ctx.predicted_offload_ms, budget_ms)
         oracle_test_actions = oracle_actions(test_rows, budget_ms)
 

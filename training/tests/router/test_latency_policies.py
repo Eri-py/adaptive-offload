@@ -18,6 +18,7 @@ import pandas as pd
 from router.latency_policies import (
     budget_only_actions,
     cascade_actions,
+    constant_actions,
     learned_score,
     learned_score_model,
     metrics,
@@ -46,6 +47,13 @@ def test_cascade_keeps_local_escalates_when_it_fits_and_falls_back_otherwise() -
     )
     # Row 0 stays local; rows 1-2 escalate (fits, incl. boundary); row 3 falls back (over budget).
     assert list(actions) == ["LOCAL", "ESCALATE", "ESCALATE", "LOCAL"]
+
+
+def test_constant_actions_fills_length_and_value_without_truncation() -> None:
+    actions = constant_actions(3, "ESCALATE")
+    assert len(actions) == 3
+    # "ESCALATE" (8 chars) must survive intact, not truncate to "ESCALAT".
+    assert list(actions) == ["ESCALATE", "ESCALATE", "ESCALATE"]
 
 
 def test_cascade_threshold_zero_never_escalates() -> None:

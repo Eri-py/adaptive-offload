@@ -149,7 +149,7 @@ None.
 - **File:** `training/router/budget_experiment.py:60-66`, `training/router/latency_policies.py:88-93`
 - **Issue:** The private constant is copied between modules. In `latency_policies.py` it sits after the Task 3 functions, with a single blank line after `learned_score`.
 - **Fix:** Move the constant to the top of `latency_policies.py` next to the labels. Expose a `constant_actions(n, action)` helper there and use it in `budget_experiment.py`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: share one action-array helper"
 
 #### N4 — `_tuned_threshold` duplicates the `_threshold_sweep` loop
 
