@@ -571,13 +571,24 @@ differently.
 Six panels, one per budget, each plotting on-time accuracy against mean
 latency: the raw and learned threshold-sweep curves, their tuned points,
 and single markers for budget-only, always-local, always-offload and the
-oracle, with a dashed vertical line at the budget. At 100 ms and 150 ms the
-sweep curves collapse to a near-single point (escalation rarely changes
-the outcome at those budgets, per the mechanism above); from 200 ms up the
-curves spread out visibly between the always-local cluster and the
-budget-only/oracle points, with always-offload's marker sitting far to the
-right and low on the y-axis until the budget is loose enough (500 ms) for
-it to catch up.
+oracle, with a dashed vertical line at the budget. Each panel's axis limits
+are clipped to that panel's own points rather than shared across panels —
+always-offload's mean latency stays near a network-bound ~299 ms almost
+regardless of budget, and sharing one wide axis across all six panels to
+fit it would otherwise collapse the other markers into a single
+indistinguishable cluster in the tight 100/150/200 ms panels. When
+always-offload's true (latency, accuracy) falls outside a panel's clipped
+range — every budget from 100 through 300 ms, since its on-time accuracy
+stays low (0.06 to 0.36) even at 300 ms where its latency is right next to
+the budget — it is drawn as a marker clamped to the panel's edge and
+labelled with its real value (e.g. "always-offload → 299 ms, 0.36" at
+300 ms) instead of being hidden or forcing the axes wide. At 100 ms and
+150 ms the sweep curves collapse to a near-single point (escalation rarely
+changes the outcome at those budgets, per the mechanism above); from
+200 ms up the curves spread out visibly between the always-local cluster
+and the budget-only/oracle points. Always-offload only appears at its true
+in-panel position from 400 ms onward, catching up to the rest of the
+cluster by 500 ms.
 
 ### Related work
 

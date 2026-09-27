@@ -117,7 +117,7 @@ None.
   - Draw always-offload as an edge arrow or annotation when it falls outside that range.
   - Consider dropping `sharey=True` so the small gaps are visible.
   - Update the description at `findings.md:550-559` to match.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S5: make the tight-budget figure panels readable"
 
 #### S6 — Train-only threshold tuning and its tie-break have no test
 

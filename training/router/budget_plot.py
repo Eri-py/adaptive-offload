@@ -62,6 +62,57 @@ _SINGLE_POINT_STYLE: dict[str, tuple[str, str]] = {
 }
 _SINGLE_POINT_ORDER = ("budget-only", "always-local", "always-offload", "oracle")
 
+# Fraction of the data span reserved as padding on each axis, with a floor so a
+# near-zero span (e.g. every x value equal) still gets a visible margin.
+_AXIS_PAD_FRAC = 0.08
+_X_PAD_FLOOR_MS = 5.0
+_Y_PAD_FLOOR = 0.02
+# Fraction of the (already padded) axis span an edge-clamped marker/annotation
+# is inset from the border, so it never sits on or past the frame.
+_EDGE_INSET_FRAC = 0.04
+
+
+def _padded_range(values: Sequence[float], pad_floor: float) -> tuple[float, float]:
+    """Min/max of `values` expanded by `_AXIS_PAD_FRAC` of the span (or
+    `pad_floor` if that span is ~0)."""
+    low, high = min(values), max(values)
+    pad = max((high - low) * _AXIS_PAD_FRAC, pad_floor)
+    return low - pad, high + pad
+
+
+def _panel_axis_limits(
+    panel: BudgetPanelData,
+) -> tuple[tuple[float, float], tuple[float, float], bool]:
+    """x/y limits sized to every point except always-offload plus the budget
+    line (for x only), and whether always-offload's true (latency, accuracy)
+    falls outside the resulting x or y range and needs edge treatment instead
+    of being plotted at its true, possibly off-panel (and so invisibly
+    clipped), position."""
+    xs: list[float] = [panel.budget_ms]
+    ys: list[float] = []
+    for points in panel.sweep_curves.values():
+        xs.extend(p.mean_latency_ms for p in points)
+        ys.extend(p.on_time_accuracy for p in points)
+    for point in panel.tuned_points.values():
+        xs.append(point.mean_latency_ms)
+        ys.append(point.on_time_accuracy)
+    for name, point in panel.single_points.items():
+        if name == "always-offload":
+            continue
+        xs.append(point.mean_latency_ms)
+        ys.append(point.on_time_accuracy)
+
+    xlim = _padded_range(xs, _X_PAD_FLOOR_MS)
+    ylim = _padded_range(ys, _Y_PAD_FLOOR) if ys else (0.0, 1.0)
+
+    offload = panel.single_points.get("always-offload")
+    offload_off_panel = offload is not None and (
+        offload.mean_latency_ms > xlim[1]
+        or offload.on_time_accuracy < ylim[0]
+        or offload.on_time_accuracy > ylim[1]
+    )
+    return xlim, ylim, offload_off_panel
+
 
 def _score_color(score_name: str, all_score_names: Sequence[str]) -> str:
     """Fixed color per score name; a name beyond the known two gets a
@@ -74,6 +125,7 @@ def _score_color(score_name: str, all_score_names: Sequence[str]) -> str:
 
 
 def _plot_panel(ax: Axes, panel: BudgetPanelData, handles_by_label: dict[str, Artist]) -> None:
+    xlim, ylim, offload_off_panel = _panel_axis_limits(panel)
     score_names = sorted(panel.sweep_curves)  # deterministic order, independent of dict insertion
 
     for score_name in score_names:
@@ -114,9 +166,23 @@ def _plot_panel(ax: Axes, panel: BudgetPanelData, handles_by_label: dict[str, Ar
         if point is None:
             continue
         marker, color = _SINGLE_POINT_STYLE[name]
+        plot_x, plot_y = point.mean_latency_ms, point.on_time_accuracy
+        if name == "always-offload" and offload_off_panel:
+            # True (latency, accuracy) is off-panel on at least one axis:
+            # clamp only the axis that's actually out of range to its inset
+            # edge, and label it with the real values, instead of it silently
+            # vanishing past the axis limits.
+            x_inset = (xlim[1] - xlim[0]) * _EDGE_INSET_FRAC
+            y_inset = (ylim[1] - ylim[0]) * _EDGE_INSET_FRAC
+            if plot_x > xlim[1]:
+                plot_x = xlim[1] - x_inset
+            if plot_y < ylim[0]:
+                plot_y = ylim[0] + y_inset
+            elif plot_y > ylim[1]:
+                plot_y = ylim[1] - y_inset
         scatter = ax.scatter(
-            [point.mean_latency_ms],
-            [point.on_time_accuracy],
+            [plot_x],
+            [plot_y],
             marker=marker,
             color=color,
             edgecolor="black",
@@ -125,12 +191,26 @@ def _plot_panel(ax: Axes, panel: BudgetPanelData, handles_by_label: dict[str, Ar
             label=name,
         )
         handles_by_label.setdefault(name, scatter)
+        if name == "always-offload" and offload_off_panel:
+            ax.annotate(
+                f"always-offload → {point.mean_latency_ms:.0f} ms, "
+                f"{point.on_time_accuracy:.2f}",
+                xy=(plot_x, plot_y),
+                xytext=(-6, 6),
+                textcoords="offset points",
+                ha="right",
+                va="bottom",
+                fontsize=7,
+                color=color,
+            )
 
     budget_line = ax.axvline(
         panel.budget_ms, color="#999999", linestyle="--", linewidth=1, label="budget"
     )
     handles_by_label.setdefault("budget", budget_line)
 
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
     ax.set_title(f"{panel.budget_ms:g} ms budget")
     ax.set_xlabel("Mean latency (ms)")
     ax.set_ylabel("On-time accuracy")
@@ -144,9 +224,9 @@ def plot_budget_curves(panels: Sequence[BudgetPanelData], output_path: str | Pat
 
     ncols = min(3, len(panels))
     nrows = math.ceil(len(panels) / ncols)
-    fig, axes = plt.subplots(
-        nrows, ncols, figsize=(5 * ncols, 4 * nrows), sharey=True, squeeze=False
-    )
+    # No sharey: each panel's y-range is now clipped to its own points (see
+    # `_panel_axis_limits`), so a shared y-axis would defeat that clipping.
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows), squeeze=False)
     axes_flat = axes.flatten()
 
     handles_by_label: dict[str, Artist] = {}

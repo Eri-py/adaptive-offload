@@ -338,3 +338,40 @@
   wrapped in `float(...)` triggered no line-length or type complaint; no
   stub gaps for these two `sklearn.metrics` functions in this project's
   mypy config, unlike some `sklearn.ensemble` types elsewhere in the repo.
+
+## Review fix S5 — per-panel axis clipping so the tight-budget panels are readable
+
+- The reviewer's finding described the always-offload marker forcing the
+  x-axis wide (its mean latency is ~299 ms, near-network-bound, almost
+  regardless of budget). Clipping x to the non-offload points + budget line
+  fixed that half, but exposed a **second, independent** way the same
+  marker can silently disappear: at the 300 ms budget, always-offload's
+  *latency* (299 ms) is already within the clipped x-range (close to the
+  300 ms budget line), but its *accuracy* (0.36) is far below every other
+  point's accuracy (0.62-0.70) — so with `_panel_axis_limits` checking only
+  x, the marker would silently vanish off the bottom of the y-axis with no
+  error, the exact same failure mode the finding flagged, just on the other
+  axis. This is a coincidence worth remembering: the "300 ms, 0.36" example
+  value the finding's own guidance text uses for the annotation label is
+  this exact panel — it's the one case where offload is x-in-range but
+  y-out-of-range, so a fix that only checks x silently fails the finding's
+  own worked example. Fixed by checking both `mean_latency_ms > xlim[1]`
+  and `on_time_accuracy` outside `ylim` in `_panel_axis_limits`, and, when
+  clamping the marker to an edge, clamping **only** the axis that's
+  actually out of range (so the 300 ms panel's marker keeps its true
+  x-position near the budget line and only its y is clamped to the bottom
+  edge) rather than always snapping both coordinates to a corner.
+- Caught this only by opening the regenerated PNG and checking each panel
+  individually against its printed on-time-accuracy value — a "PNG is
+  non-empty" smoke test can't catch a marker that silently clipped off an
+  axis, same lesson as Task 4's legend-clipping gotcha. Added a dedicated
+  test (`test_panel_axis_limits_clips_far_off_always_offload_accuracy`)
+  that reproduces exactly this shape (in-range x, out-of-range y) so a
+  future regression here has a fast, non-visual test rather than relying on
+  eyeballing the figure again.
+- Confirmed "stdout unchanged" mechanically the same way S2/S3/S4 did:
+  captured `python -m router.budget_experiment` stdout before touching
+  `budget_plot.py`, diffed after — byte-identical, since this fix only
+  touches plotting/axis code, never the computed metrics. Two post-fix runs
+  produced `cmp`-identical PNGs (no metadata drift, consistent with every
+  earlier task/fix touching this script).
