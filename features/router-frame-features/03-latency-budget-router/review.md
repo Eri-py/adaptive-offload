@@ -96,7 +96,7 @@ None.
   - Rewrite the mechanism bullets around the offload-dominance fact, and consider having the script print the local ≥ offload share.
   - Say explicitly that the raw/learned tie says nothing about the scores' ranking quality.
   - Scope the verdict to the spec's local-first cascade: a hybrid that can also offload directly was not tested.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: explain the cascade result by offload dominance"
 
 #### S4 — State that budget-only's near-oracle result rests on almost perfectly predictable simulated latency
 

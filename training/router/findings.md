@@ -495,30 +495,35 @@ significantly *worse* than the simpler budget-only policy everywhere it
 was tested, though it does beat always-local at every budget from 150 ms
 up (CI entirely above zero) and ties it at 100 ms (CI straddles zero).
 
-The mechanism is structural, not a tuning or modeling failure, and it
-comes down to the cascade being forced into one of two extremes rather
-than finding a genuinely selective middle:
+The mechanism is structural, not a tuning or modeling failure, and the
+held-out data shows there is almost nothing for either score to
+discriminate: offload accuracy is at least local accuracy on 98.00% of
+held-out test rows, and local is strictly better on only 2.00% of them.
+The best any cascade could gain over always-offloading is confined to
+that 2%, so the comparison against budget-only is decided mainly by the
+local-first latency cost, not by how well a score ranks frames:
 
-- **At 200-500 ms, the tuned thresholds are 0.95 or 1.00** — high enough
-  that the local result is kept only when the raw/learned score is at or
-  near its maximum, so the cascade escalates on almost every request that
-  fits the remaining budget. That makes it behave like "run local, then
-  offload anyway whenever there's room" rather than a genuinely selective
-  cascade: confidence isn't separating "local is good enough" frames from
-  the rest well enough for the tuning search to find a threshold in
-  between, so it saturates toward "escalate nearly always." Since an
-  escalated request is charged local *plus* offload latency while
-  budget-only's offloads pay only offload latency, the cascade pays for
-  the local pass on nearly every request without reliably earning it
-  back in accuracy — at 300 ms this shows up as cascade-raw's mean latency
-  (119.03 ms) actually being *lower* than budget-only's (128.66 ms)
-  because it's forced to escalate less often to stay under budget, trading
-  accuracy for it (0.6578 vs 0.6839 on-time); at 400-500 ms the pattern
-  flips and cascade's mean latency tracks close to or above budget-only's
-  while its accuracy still trails, because the local pass eats into the
-  same budget budget-only can spend entirely on the offload path.
-- **At 100-150 ms, the tuned thresholds drop instead (0.65/0.45 and
-  0.85/0.70)** — not because confidence becomes more selective, but
+- **At 200-500 ms, the tuned thresholds are 0.95 or 1.00, and almost no
+  row clears them.** Only 1.00% of test rows have a raw score at or above
+  its tuned threshold at 200-500 ms, and 0.00% have a learned score at or
+  above its tuned threshold of 1.00 (it escalates every row). Given that
+  offload wins on 98.00% of rows, this is the tuning search finding the
+  policy the data actually rewards — "run local, then offload whenever it
+  fits" — not evidence that confidence fails to separate "local is good
+  enough" frames from the rest. Since an escalated request is charged
+  local *plus* offload latency while budget-only's offloads pay only
+  offload latency, the cascade pays for the local pass on nearly every
+  request without reliably earning it back in accuracy — at 300 ms this
+  shows up as cascade-raw's mean latency (119.03 ms) actually being
+  *lower* than budget-only's (128.66 ms) because it's forced to escalate
+  less often to stay under budget, trading accuracy for it (0.6578 vs
+  0.6839 on-time); at 400-500 ms the pattern flips and cascade's mean
+  latency tracks close to or above budget-only's while its accuracy still
+  trails, because the local pass eats into the same budget budget-only can
+  spend entirely on the offload path.
+- **At 100-150 ms, the tuned thresholds drop instead (0.65/0.45, keeping
+  40.00%/51.00% of rows local, and 0.85/0.70, keeping 12.00%/19.00% of
+  rows local)** — not because confidence becomes more selective, but
   because local-then-offload almost never fits inside so tight a budget
   once the local pass is paid for, so the search finds that keeping local
   more often is the least-bad option. The result is the cascade collapsing
@@ -530,18 +535,28 @@ than finding a genuinely selective middle:
   cascade-ceiling analysis made: "escalating adds the local pass's latency
   ... which a cascade router can never avoid paying once it decides to
   escalate."
-- **Raw and learned scores perform equivalently.** At every budget the two
-  scores' tuned metrics agree to at least 3 decimal places in accuracy
-  (e.g. 0.6248 vs 0.6248 at 100 ms mean accuracy; identical to 4 decimals
-  at 200-500 ms) despite picking different tuned thresholds and despite
-  the learned score using six confidence features against the raw score's
-  one. Training a classifier on more inputs doesn't buy the cascade
-  design anything here — the bottleneck is the local-first latency tax
-  above, not which frames get flagged for escalation.
+- **Raw and learned scores tie because both cascades collapse to the same
+  policy, not because the two scores rank frames equally well.** At every
+  budget the two scores' tuned metrics agree to at least 3 decimal places
+  in accuracy (e.g. 0.6248 vs 0.6248 at 100 ms mean accuracy; identical to
+  4 decimals at 200-500 ms), and at 200-500 ms both tuned cascades keep
+  essentially the same near-empty share of rows local (1.00% for raw,
+  0.00% for learned) despite the learned score using six confidence
+  features against the raw score's one. With almost nothing separable left
+  for either score to find, both searches land on "run local, then offload
+  whenever it fits" regardless of how the underlying score ranks frames —
+  the tie says nothing about the two scores' relative ranking quality, and
+  a setting with more separable rows would be needed to test that.
 - The oracle's headroom above the cascade (~0.03-0.04 on-time accuracy
   throughout) is consistently larger than its headroom above budget-only
   (0.0014-0.0160, per the table above) — confirming budget-only, not the
   cascade, is the policy actually capturing most of what's available.
+
+This verdict is scoped to the local-first cascade the spec defines, which
+always pays for a local pass before it may escalate. A hybrid router that
+could also offload directly, without running locally first, was not
+tested here, and nothing above rules out that such a hybrid could behave
+differently.
 
 ### Figure
 

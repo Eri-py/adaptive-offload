@@ -158,6 +158,10 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
     assert first.train_frame_count > 0
     assert first.test_frame_count > 0
 
+    for share in (first.offload_dominance_share, first.local_strictly_better_share):
+        assert math.isfinite(share)
+        assert 0.0 <= share <= 1.0
+
     assert len(first.budgets) == len(DEFAULT_BUDGETS_MS)
     assert [budget.budget_ms for budget in first.budgets] == list(DEFAULT_BUDGETS_MS)
 
@@ -180,6 +184,8 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
         for score_name in SCORE_NAMES:
             score_result = budget.scores[score_name]
             assert math.isfinite(score_result.tuned_threshold)
+            assert math.isfinite(score_result.share_score_ge_tuned_threshold)
+            assert 0.0 <= score_result.share_score_ge_tuned_threshold <= 1.0
             for threshold, sweep_metrics in score_result.sweep:
                 assert math.isfinite(threshold)
                 assert math.isfinite(sweep_metrics.on_time_accuracy)

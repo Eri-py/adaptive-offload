@@ -150,7 +150,11 @@ class ScoreBudgetResult:
     threshold's metrics on the test rows, and bootstrap 95% CIs for the
     tuned cascade's on-time accuracy minus budget-only's and minus
     always-local's (both over the test rows). `useful` mirrors
-    `vs_budget_only.useful` — the spec's usefulness rule."""
+    `vs_budget_only.useful` — the spec's usefulness rule.
+
+    `share_score_ge_tuned_threshold` is the share of test rows whose score
+    is at or above the tuned threshold — the share the cascade keeps LOCAL
+    on confidence grounds alone, before the budget fit check."""
 
     sweep: list[tuple[float, RouterMetrics]]
     tuned_threshold: float
@@ -158,6 +162,7 @@ class ScoreBudgetResult:
     vs_budget_only: BootstrapResult
     vs_always_local: BootstrapResult
     useful: bool
+    share_score_ge_tuned_threshold: float
 
 
 def _score_budget_result(
@@ -187,6 +192,9 @@ def _score_budget_result(
     vs_always_local = bootstrap_mean_difference(
         test_ctx.rows["frame_id"], tuned_on_time - always_local_on_time, seed=42
     )
+    share_score_ge_tuned_threshold = float(
+        (test_ctx.scores[score_name] >= tuned_threshold).mean()
+    )
 
     return ScoreBudgetResult(
         sweep=sweep,
@@ -195,6 +203,7 @@ def _score_budget_result(
         vs_budget_only=vs_budget_only,
         vs_always_local=vs_always_local,
         useful=vs_budget_only.useful,
+        share_score_ge_tuned_threshold=share_score_ge_tuned_threshold,
     )
 
 
@@ -218,13 +227,17 @@ class BudgetResult:
 @dataclass(frozen=True)
 class BudgetExperimentResult:
     """Everything the experiment prints: the held-out split's photo counts,
-    and every budget's result, in budget order. Holds no `pd.DataFrame`
-    field, unlike `feature_experiment.ExperimentResult` — plain `==` between
-    two runs works without pandas's "truth value of a DataFrame is
-    ambiguous" trap."""
+    the offload-dominance shares (computed once over the test rows, not per
+    budget — a row's local/offload accuracy don't depend on the budget), and
+    every budget's result, in budget order. Holds no `pd.DataFrame` field,
+    unlike `feature_experiment.ExperimentResult` — plain `==` between two
+    runs works without pandas's "truth value of a DataFrame is ambiguous"
+    trap."""
 
     train_frame_count: int
     test_frame_count: int
+    offload_dominance_share: float
+    local_strictly_better_share: float
     budgets: list[BudgetResult]
 
 
@@ -258,6 +271,13 @@ def run_experiment(
 
     train_ctx = _make_context(train_rows, latency_model, score_model)
     test_ctx = _make_context(test_rows, latency_model, score_model)
+
+    # Once over the test rows, not per budget: a row's local/offload
+    # accuracy is fixed regardless of the budget being evaluated.
+    test_local_accuracy = np.asarray(test_rows["local_accuracy"], dtype=np.float64)
+    test_offload_accuracy = np.asarray(test_rows["offload_accuracy"], dtype=np.float64)
+    offload_dominance_share = float((test_offload_accuracy >= test_local_accuracy).mean())
+    local_strictly_better_share = float((test_local_accuracy > test_offload_accuracy).mean())
 
     budget_results = []
     for raw_budget_ms in budgets:
@@ -304,6 +324,8 @@ def run_experiment(
     return BudgetExperimentResult(
         train_frame_count=len(train_frame_ids),
         test_frame_count=len(test_frame_ids),
+        offload_dominance_share=offload_dominance_share,
+        local_strictly_better_share=local_strictly_better_share,
         budgets=budget_results,
     )
 
@@ -359,6 +381,11 @@ def _print_report(result: BudgetExperimentResult) -> None:
         f"Held-out split: {result.train_frame_count} train photos / "
         f"{result.test_frame_count} test photos.\n"
     )
+    print(
+        f"Held-out test rows: offload accuracy >= local accuracy on "
+        f"{result.offload_dominance_share:.2%}; local is strictly better on "
+        f"{result.local_strictly_better_share:.2%}.\n"
+    )
 
     for budget in result.budgets:
         print(f"--- Budget: {budget.budget_ms:g} ms ---")
@@ -391,6 +418,10 @@ def _print_report(result: BudgetExperimentResult) -> None:
                 f"vs budget-only 95% CI [{bo.ci_low:.4f}, {bo.ci_high:.4f}] "
                 f"useful={bo.useful}  |  "
                 f"vs always-local 95% CI [{al.ci_low:.4f}, {al.ci_high:.4f}]"
+            )
+            print(
+                f"{score_name} share of test rows with score >= tuned threshold: "
+                f"{s.share_score_ge_tuned_threshold:.2%}"
             )
         print()
 

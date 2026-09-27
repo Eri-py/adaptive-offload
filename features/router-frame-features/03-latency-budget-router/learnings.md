@@ -263,3 +263,41 @@
   (stdout diff clean), and the figure PNGs `cmp`-identical, consistent with
   Task 6's finding that this script's `Agg` output has no run-to-run
   metadata drift.
+
+## Review fix S3 — offload-dominance shares replace the untested "confidence
+   isn't separating" claim
+
+- The reviewer's suspicion was exactly right: on the real held-out set,
+  offload accuracy >= local accuracy on 98.00% of test rows (local
+  strictly better on only 2.00%), and the tuned raw threshold at every
+  budget from 200-500 ms keeps only 1.00% of rows local (learned's tuned
+  threshold of 1.00 keeps 0.00%) — the cascades weren't failing to
+  discriminate, there was essentially nothing left to discriminate.
+- Added `share_score_ge_tuned_threshold` to `ScoreBudgetResult` (computed
+  for every score/budget — cheap, one extra `.mean()` on arrays already in
+  hand in `_score_budget_result`, no reason to special-case it to only
+  200-500 ms/raw in the code even though the findings prose only cites
+  those values) and `offload_dominance_share`/`local_strictly_better_share`
+  on `BudgetExperimentResult` (computed once outside the budget loop, since
+  a row's local/offload accuracy doesn't depend on the budget being
+  evaluated). Both are plain `float` dataclass fields, so the integration
+  test's existing `assert first == second` covers their determinism for
+  free — only needed to add finite/[0,1] assertions.
+- Confirmed the "only new lines added" constraint mechanically, the same
+  way S2's fix did: captured full stdout from the unmodified script first
+  (`python -m router.budget_experiment` against the real database, since
+  worktrees don't work here per Task 1's learning), diffed it against
+  post-fix stdout, and every previously-printed number was byte-identical
+  — the only diff lines were the new offload-dominance line (once, right
+  after the held-out split line) and one new `{score} share of test rows
+  with score >= tuned threshold: ...` line per score per budget. Two
+  consecutive post-fix runs were stdout-identical and produced `cmp`-
+  identical figure PNGs, consistent with S2's and Task 6's findings that
+  this script has no run-to-run metadata drift.
+- When rewriting the findings prose, resisted the temptation to also
+  soften the 100-150 ms bullet (it never made the "confidence isn't
+  separating" claim the reviewer flagged — it already correctly attributed
+  the low tuned thresholds there to the tight budget, not to confidence
+  quality) — only added the new share numbers to it for consistency,
+  without changing its causal claim, matching the fix's "everything else
+  unchanged" instruction.
