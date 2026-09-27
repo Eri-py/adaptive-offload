@@ -303,10 +303,10 @@ relevant question once the objective changes.
 
 Under the soft utility above (`accuracy − 0.3 × latency in seconds`),
 nothing beat always-offload: the best cost-aware routers only reached a
-statistical tie. Latency is nearly free under that weighting — 300 ms of
-extra latency costs only 0.09 utility, far less than a single accuracy
-point is worth — so a router has almost nothing to gain by ever avoiding
-it. Published systems that route between local and remote inference don't
+statistical tie. Latency is nearly free under that weighting — offload's
+~15-point accuracy advantage (0.7709 vs. always-local's 0.6243) outweighs
+the ~0.07 utility its extra ~225 ms costs (0.225 s × the 0.3 weight), so a
+router has almost nothing to gain by ever avoiding it. Published systems that route between local and remote inference don't
 use a soft blended score; they either treat latency as a hard constraint
 (DeepDecision) or cascade on confidence and report a trade-off curve
 (DDNN, Big/LITTLE) rather than a single weighted number. This experiment

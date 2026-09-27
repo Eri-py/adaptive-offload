@@ -69,7 +69,7 @@ None.
 - **File:** `training/router/findings.md:306-309`
 - **Issue:** The text says "300 ms of extra latency costs only 0.09 utility, far less than a single accuracy point is worth". Accuracy is on a 0–1 scale, so 0.09 utility equals 9 accuracy points. The sentence is factually wrong. The real reason always-offload wins under the soft utility is that offload's mean accuracy gain (0.7709 − 0.6243 ≈ 0.147) outweighs its latency cost (≈225 ms extra × 0.3 ≈ 0.068).
 - **Fix:** Rewrite the sentence along those lines. For example: "offload's ~15-point accuracy advantage outweighs the ~0.07 utility its extra ~225 ms costs, so a router has little to gain by avoiding it."
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: fix the misstated soft-utility latency cost"
 
 #### S2 — Budget-only vs the static baselines should be bootstrap-tested in the script, not argued from magnitude
 
