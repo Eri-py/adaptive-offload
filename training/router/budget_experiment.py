@@ -22,6 +22,7 @@ import pandas as pd
 from common.db import get_engine
 from dotenv import load_dotenv
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
 from sqlalchemy import Engine
 
 from router.budget_plot import BudgetPanelData, BudgetPoint, plot_budget_curves
@@ -212,7 +213,12 @@ class BudgetResult:
     """Everything one latency budget needs: the four baseline/oracle
     policies' metrics on the test rows, each confidence score's tuned
     cascade result, and bootstrap 95% CIs for budget-only's on-time accuracy
-    minus each static baseline's (both over the test rows)."""
+    minus each static baseline's (both over the test rows).
+
+    `budget_only_true_on_time` is budget-only's on-time accuracy if it acted
+    on each row's *true* offload latency instead of the predicted one —
+    quantifies how much the offload-latency predictor's error costs, since
+    the routing rule itself (`budget_only_actions`) is unchanged."""
 
     budget_ms: float
     always_local: RouterMetrics
@@ -222,13 +228,16 @@ class BudgetResult:
     scores: dict[str, ScoreBudgetResult]
     budget_only_vs_always_local: BootstrapResult
     budget_only_vs_always_offload: BootstrapResult
+    budget_only_true_on_time: float
 
 
 @dataclass(frozen=True)
 class BudgetExperimentResult:
     """Everything the experiment prints: the held-out split's photo counts,
     the offload-dominance shares (computed once over the test rows, not per
-    budget — a row's local/offload accuracy don't depend on the budget), and
+    budget — a row's local/offload accuracy don't depend on the budget), the
+    offload-latency predictor's test/train R2 and MAE (also budget-
+    independent — the model is trained once, before the budget loop), and
     every budget's result, in budget order. Holds no `pd.DataFrame` field,
     unlike `feature_experiment.ExperimentResult` — plain `==` between two
     runs works without pandas's "truth value of a DataFrame is ambiguous"
@@ -238,6 +247,10 @@ class BudgetExperimentResult:
     test_frame_count: int
     offload_dominance_share: float
     local_strictly_better_share: float
+    offload_latency_test_r2: float
+    offload_latency_test_mae: float
+    offload_latency_train_r2: float
+    offload_latency_train_mae: float
     budgets: list[BudgetResult]
 
 
@@ -272,6 +285,21 @@ def run_experiment(
     train_ctx = _make_context(train_rows, latency_model, score_model)
     test_ctx = _make_context(test_rows, latency_model, score_model)
 
+    # Offload-latency predictor accuracy, once, on the predictions already
+    # computed above for each split's context — not a new fit or predict.
+    test_true_offload_ms = np.asarray(test_rows["offload_latency_ms"], dtype=np.float64)
+    train_true_offload_ms = np.asarray(train_rows["offload_latency_ms"], dtype=np.float64)
+    offload_latency_test_r2 = float(r2_score(test_true_offload_ms, test_ctx.predicted_offload_ms))
+    offload_latency_test_mae = float(
+        mean_absolute_error(test_true_offload_ms, test_ctx.predicted_offload_ms)
+    )
+    offload_latency_train_r2 = float(
+        r2_score(train_true_offload_ms, train_ctx.predicted_offload_ms)
+    )
+    offload_latency_train_mae = float(
+        mean_absolute_error(train_true_offload_ms, train_ctx.predicted_offload_ms)
+    )
+
     # Once over the test rows, not per budget: a row's local/offload
     # accuracy is fixed regardless of the budget being evaluated.
     test_local_accuracy = np.asarray(test_rows["local_accuracy"], dtype=np.float64)
@@ -291,6 +319,13 @@ def run_experiment(
         always_local_on_time = _on_time_per_row(test_rows, always_local_actions, budget_ms)
         always_offload_on_time = _on_time_per_row(test_rows, always_offload_actions, budget_ms)
         budget_only_on_time = _on_time_per_row(test_rows, budget_only_test_actions, budget_ms)
+
+        # Same rule, fed the row's true offload latency instead of the
+        # predicted one — isolates what the predictor's error costs.
+        budget_only_true_actions = budget_only_actions(test_true_offload_ms, budget_ms)
+        budget_only_true_on_time = float(
+            _on_time_per_row(test_rows, budget_only_true_actions, budget_ms).mean()
+        )
 
         scores = {
             score_name: _score_budget_result(
@@ -318,6 +353,7 @@ def run_experiment(
                 budget_only_vs_always_offload=bootstrap_mean_difference(
                     test_rows["frame_id"], budget_only_on_time - always_offload_on_time, seed=42
                 ),
+                budget_only_true_on_time=budget_only_true_on_time,
             )
         )
 
@@ -326,6 +362,10 @@ def run_experiment(
         test_frame_count=len(test_frame_ids),
         offload_dominance_share=offload_dominance_share,
         local_strictly_better_share=local_strictly_better_share,
+        offload_latency_test_r2=offload_latency_test_r2,
+        offload_latency_test_mae=offload_latency_test_mae,
+        offload_latency_train_r2=offload_latency_train_r2,
+        offload_latency_train_mae=offload_latency_train_mae,
         budgets=budget_results,
     )
 
@@ -382,6 +422,12 @@ def _print_report(result: BudgetExperimentResult) -> None:
         f"{result.test_frame_count} test photos.\n"
     )
     print(
+        f"Offload-latency predictor: test R2={result.offload_latency_test_r2:.4f} "
+        f"MAE={result.offload_latency_test_mae:.2f}ms  |  "
+        f"train R2={result.offload_latency_train_r2:.4f} "
+        f"MAE={result.offload_latency_train_mae:.2f}ms.\n"
+    )
+    print(
         f"Held-out test rows: offload accuracy >= local accuracy on "
         f"{result.offload_dominance_share:.2%}; local is strictly better on "
         f"{result.local_strictly_better_share:.2%}.\n"
@@ -407,6 +453,11 @@ def _print_report(result: BudgetExperimentResult) -> None:
         print(
             f"budget-only vs always-local 95% CI [{bo_al.ci_low:.4f}, {bo_al.ci_high:.4f}]  |  "
             f"budget-only vs always-offload 95% CI [{bo_ao.ci_low:.4f}, {bo_ao.ci_high:.4f}]"
+        )
+        print(
+            f"budget-only on-time accuracy with true offload latency: "
+            f"{budget.budget_only_true_on_time:.4f} (predicted: "
+            f"{budget.budget_only.on_time_accuracy:.4f})"
         )
         print()
 

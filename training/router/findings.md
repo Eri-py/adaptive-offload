@@ -441,6 +441,12 @@ within-budget oracle:
 | 400 ms | 0.7294 | 0.7454 | 0.0160 |
 | 500 ms | 0.7651 | 0.7727 | 0.0076 |
 
+The offload-latency predictor driving budget-only's decisions is itself
+highly accurate: on the held-out test rows it reaches R2 = 0.9951 and
+MAE = 6.60 ms (train rows: R2 = 0.9952, MAE = 6.47 ms — tuning on train
+rows adds no meaningful optimism, since train and test accuracy are
+essentially the same).
+
 And it beats both static baselines on on-time accuracy at every budget,
 sometimes by a wide margin:
 
@@ -619,9 +625,18 @@ condition-based (budget-only) form.** Routing purely on predicted network
 latency, decided before any inference runs, gets within 0.4-1.6 points of
 the within-budget oracle and clearly beats both always-local and
 always-offload on on-time accuracy at every budget tested, in simulation.
-That is a real result, not a tie or a near-miss the way most of spec 02's
-routers were. **Resuming `features/server-served-benchmark/` is justified**
-— but to validate budget-only, not the cascade.
+The gap to the oracle is this small largely because simulated offload
+latency is nearly deterministic given the network/device conditions — the
+offload-latency predictor reaches R2 = 0.9951 and MAE = 6.60 ms on
+held-out rows — and because offload is at least as accurate as local on
+98.00% of held-out rows (see "Held-out test rows" above). Together these
+mean "offload iff it fits" is close to optimal almost by construction of
+the simulator, not because the router discovered a subtle policy. Whether
+real-network latency is anywhere near this predictable is exactly what
+the phone/server work needs to test — it is the central risk this
+simulated result carries, not a secondary check. **Resuming
+`features/server-served-benchmark/` is justified** — but to validate
+budget-only, not the cascade.
 
 The policy's simulated value rests on two things only real hardware can
 confirm, and the phone/server work is exactly the way to check them:

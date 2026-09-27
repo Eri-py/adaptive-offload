@@ -106,7 +106,7 @@ None.
   - Add the predictor's test R²/MAE to the headline section.
   - Replace "a real result" with a sentence saying the gap to the oracle is small in simulation because latency is nearly deterministic given the conditions. Present real-network predictability as the key thing the phone/server work must test.
   - The recommendation itself can stay as is.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: state that the near-oracle result rests on predictable simulated latency"
 
 #### S5 — Three of the six figure panels can't be read
 

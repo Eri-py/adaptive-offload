@@ -162,6 +162,16 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
         assert math.isfinite(share)
         assert 0.0 <= share <= 1.0
 
+    for value in (
+        first.offload_latency_test_r2,
+        first.offload_latency_test_mae,
+        first.offload_latency_train_r2,
+        first.offload_latency_train_mae,
+    ):
+        assert math.isfinite(value)
+    assert first.offload_latency_test_mae >= 0.0
+    assert first.offload_latency_train_mae >= 0.0
+
     assert len(first.budgets) == len(DEFAULT_BUDGETS_MS)
     assert [budget.budget_ms for budget in first.budgets] == list(DEFAULT_BUDGETS_MS)
 
@@ -200,6 +210,9 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
             assert math.isfinite(bootstrap.ci_low)
             assert math.isfinite(bootstrap.ci_high)
 
+        assert math.isfinite(budget.budget_only_true_on_time)
+        assert 0.0 <= budget.budget_only_true_on_time <= 1.0
+
         # The oracle knows every row's true latencies/accuracies, so its
         # on-time accuracy is at least every other policy's at every budget.
         oracle_on_time = budget.oracle.on_time_accuracy
@@ -207,3 +220,7 @@ def test_run_experiment_is_deterministic_with_every_budget_and_policy_finite(
             if name == "oracle":
                 continue
             assert oracle_on_time >= m.on_time_accuracy - 1e-9, f"{name} at {budget.budget_ms}ms"
+        # Budget-only with true offload latency also only ever picks among
+        # LOCAL/OFFLOAD, never ESCALATE, so the oracle's max over all three
+        # options bounds it the same way.
+        assert oracle_on_time >= budget.budget_only_true_on_time - 1e-9

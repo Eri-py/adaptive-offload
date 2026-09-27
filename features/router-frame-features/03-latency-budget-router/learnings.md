@@ -301,3 +301,40 @@
   quality) — only added the new share numbers to it for consistency,
   without changing its causal claim, matching the fix's "everything else
   unchanged" instruction.
+
+## Review fix S4 — quantify why budget-only is near-oracle instead of just
+   asserting it
+
+- `sklearn.metrics.r2_score`/`mean_absolute_error` need no new model fit or
+  predict call: `_SplitContext.predicted_offload_ms` (train and test) was
+  already computed by `_make_context` before the budget loop runs, so the
+  new R2/MAE block in `run_experiment` just feeds those existing arrays
+  plus each split's `offload_latency_ms` column straight into the two
+  sklearn functions — one extra `import`, four `float(...)` calls, no
+  behavior change to the model or the routing.
+- On the real database: test R2 = 0.9951, MAE = 6.60 ms; train R2 = 0.9952,
+  MAE = 6.47 ms — train and test are essentially identical, confirming the
+  reviewer's "tuning on train rows adds no meaningful optimism" point
+  mechanically rather than by assertion.
+- Added an optional one-line-per-budget diagnostic (`budget_only_true_on_time`
+  on `BudgetResult`) that reruns `budget_only_actions` with each row's
+  *true* `offload_latency_ms` instead of the predicted one — same function,
+  different input array, so it needed no new routing logic. The predicted
+  vs. true gap this exposes is tiny everywhere (largest at 400 ms: 0.7395
+  true vs. 0.7294 predicted, a ~1-point difference) — direct, printed
+  evidence for the "prediction error costs almost nothing here" claim,
+  distinct from the R2/MAE numbers (which describe the predictor in
+  isolation, not what its error costs the policy).
+- Confirmed "only new lines added" the same mechanical way S2/S3 did:
+  captured `python -m router.budget_experiment` stdout before editing
+  (worktrees don't work here, per Task 1's learning), diffed after — every
+  previously-printed number was byte-identical; the only new lines were
+  one predictor R2/MAE line in the preamble and one true-vs-predicted
+  on-time-accuracy line per budget. Two post-fix runs were stdout-identical
+  and the figure PNG was `cmp`-identical to the pre-fix run (the plotting
+  code and its inputs are untouched — only new dataclass fields and print
+  lines were added).
+- `mypy`'s two-line-per-call style for `r2_score(...)`/`mean_absolute_error(...)`
+  wrapped in `float(...)` triggered no line-length or type complaint; no
+  stub gaps for these two `sklearn.metrics` functions in this project's
+  mypy config, unlike some `sklearn.ensemble` types elsewhere in the repo.
