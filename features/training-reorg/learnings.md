@@ -88,3 +88,70 @@
   `tests/coco/datagen/sampling/test_complexity.py`, 2×
   `tests/coco/datagen/cli/test_score_complexity.py`), just at the new paths —
   confirms the move introduced no new type errors.
+
+## Task 3 — Verify behaviour is unchanged
+
+- Every byte-for-byte comparison matched: both experiments' stdout, both
+  stderr captures (still empty), the figure (`cmp` clean, same sha256
+  `908cbe1c...5fe55` before/after/committed), `ruff.txt`, and both `--help`
+  outputs (identical text — argparse's `usage:` line uses the installed
+  entry-point name `run-simulation`/`score-complexity`, not a file path, so
+  the move didn't touch it at all, not even trivially).
+- The only two captures that differed in raw bytes both have fully
+  explained, expected causes, not regressions:
+  - `pytest.txt`: only the wall-clock duration in the summary line differs
+    ("174 passed in 9.62s" vs "7.78s"); the pass count and dot-progress
+    output are identical.
+  - `mypy.txt`: the per-error lines are identical once you normalise the
+    moved path prefixes (`router/` → `coco/router/`,
+    `tests/datagen/` → `tests/coco/datagen/`) — same 9 messages at the same
+    line numbers. Only the summary line's file count changed, "checked 68
+    source files" → "checked 72 source files". The +4 is exactly the four
+    new package-marker files the plan added
+    (`training/coco/__init__.py`, `training/flowers/__init__.py`,
+    `training/tests/coco/__init__.py`, `training/tests/flowers/__init__.py`)
+    — mypy counts them as source files it checked even though they contain
+    only a docstring, so the count is expected to grow by exactly the number
+    of new `__init__.py` files, not a sign anything was miscounted or missed.
+- Running `budget_experiment` once with no `--figure` writes straight to the
+  committed path (`training/coco/router/latency_budget_curves.png`, resolved
+  from `__file__` same as before the move) and reproduced the exact same
+  bytes; `git status` showed it untouched (not even in the "modified" list),
+  confirming the file-relative output path survived the move correctly.
+
+## Task 4 — Update layout documentation
+
+- `findings.md`'s old-path references weren't uniform: some were single-line
+  backtick module refs (`` `router.evaluation.cascade_ceiling_utility` ``,
+  easy), but two were a module path split across a line wrap
+  (`` `router.dataset\n.frame_level_split` ``) — the `coco.` prefix has to go
+  on the first line even though `.frame_level_split` is on the next, and a
+  naive per-line regex would miss the join. Also found one plain path
+  reference (`` `training/router/two_stage.py` ``) alongside the module-path
+  ones, needing the `coco/` insertion rule instead of the `coco.` prefix
+  rule — same two-pattern distinction Task 2's learnings already flagged for
+  docstrings. The prose word "router" on its own (as in "per-condition-vector
+  router.") is not a module reference and must not be touched.
+- Grepping the whole repo for old paths (excluding `features/`, `.venv`,
+  `node_modules`, `.egg-info`, `.git`) turned up one hit this task's Files
+  list doesn't cover: `database/migrations/env.py` line 25, a comment
+  mentioning `training/datagen/run_simulation.py` by way of explaining why
+  `env.py` also calls `load_dotenv`. It's a genuine remaining old-path
+  reference and the plan's Task 4 success criterion ("grep finds no
+  remaining old-path references outside `features/` and `*.egg-info`")
+  technically isn't met while it stands — but it's a comment in
+  `database/migrations/`, which is explicitly out of scope for this spec
+  (per the spec's "Out of Scope": "Moving ... the database layer
+  (`database/`)"), and outside Task 4's Files list
+  (`.claude/coding-guidelines.md`, `.claude/agents/implementer.md`,
+  `training/coco/router/findings.md`). Left unedited and reported to the
+  orchestrator rather than silently expanding scope past the Files list.
+- `.claude/agents/reviewer.md` and the rest of `.claude/` (commands,
+  settings, other agents) have no old-path references at all — only
+  `implementer.md` named the old paths, in its quality-gate bullet for
+  training changes, confirming the plan's "only if it names the old paths"
+  qualifier applied to just that one file.
+- `HANDOFF.md` (repo root) and `CLAUDE.md` have no old-path references
+  either, so there was nothing to report-but-not-edit there for this reorg
+  specifically (the task notes call out `HANDOFF.md` as a dated snapshot to
+  leave alone if it did have hits).

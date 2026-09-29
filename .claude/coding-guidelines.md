@@ -30,13 +30,18 @@ security hardening, or exhaustive production robustness.
       (~ Extensions/ServiceRegistrations).
   - `server/tests/` — mirrors `server/api/`'s structure, grouped by the same
     domain folders (e.g. `tests/services/detection/`).
-- `training/` — all research/training code in one place, with subfolders by
-  concern:
-  - `training/datagen/` — the data-gen simulator: frame set, condition
-    sweep, per-(frame, config) logging, dataset export.
-  - `training/router/` — decision-layer code: feature extraction,
-    direct-classifier and utility-regression models, training/eval scripts,
-    saved model artifacts.
+- `training/` — all research/training code in one place, organized by
+  attempt:
+  - `training/coco/` — attempt 1 (COCO object detection), with subfolders by
+    concern:
+    - `training/coco/datagen/` — the data-gen simulator: frame set, condition
+      sweep, per-(frame, config) logging, dataset export.
+    - `training/coco/router/` — decision-layer code: feature extraction,
+      direct-classifier and utility-regression models, training/eval scripts,
+      saved model artifacts.
+  - `training/flowers/` — attempt 2 (flower species identification).
+  - Code reused by both attempts moves into a shared location when it's
+    first reused; no shared folder exists yet.
 
 Each top-level area (`app/`, `database/`, `server/`, `training/`) owns its
 own dependency manifest and lint/type config — don't share one config
@@ -67,9 +72,9 @@ config applies where.
   models. Both `server/api/services/` and `training/` import from there
   rather than opening their own connections or redefining tables — neither
   owns it, both depend on it the same way.
-- The data-gen simulator (`training/datagen/`) writes each (frame, config) row
-  straight to its Postgres table as it's produced.
-- Training code (`training/router/`) builds its working DataFrame with a SQL
+- The data-gen simulator (`training/coco/datagen/`) writes each (frame, config)
+  row straight to its Postgres table as it's produced.
+- Training code (`training/coco/router/`) builds its working DataFrame with a SQL
   query against that table (`pd.read_sql(query, engine)`), not by reading
   files off disk.
 - Schema changes go through a migration script (Alembic, authored in
@@ -112,7 +117,7 @@ config applies where.
   second top-level `common/` under `server/`, or it will silently shadow
   the DB layer on `sys.path`.
 
-## Data-gen / router training code (`training/datagen/`, `training/router/`)
+## Data-gen / router training code (`training/coco/datagen/`, `training/coco/router/`)
 
 - Every simulation run logs enough to reproduce it: frame id, condition
   params, path(s) run, latency, accuracy, scene-complexity proxy, timestamp —
@@ -125,15 +130,15 @@ config applies where.
   locally (`--annotations`/`--images`), and fails clearly rather than trying
   to top up anything missing. Acquiring/downloading a dataset, if ever
   needed again, is a separate, explicitly-run concern outside this pipeline.
-- `training/datagen/cli/`'s standalone entry points are registered as
+- `training/coco/datagen/cli/`'s standalone entry points are registered as
   `[project.scripts]` in `training/pyproject.toml` — once the shared venv is
   activated, run them by name (e.g. `run-simulation --preset baseline`), not
-  `python -m datagen.cli.<name>`. The CLI surface is deliberately kept to
+  `python -m coco.datagen.cli.<name>`. The CLI surface is deliberately kept to
   just two tools — `run-simulation` (the actual simulation run) and
   `score-complexity` (scores images for scene complexity) — rather than
   accumulating preview/debug/one-off tools; don't add a third without a real
   need. If a new one is genuinely warranted, it goes in both places: the
-  module under `training/datagen/cli/` and an entry in
+  module under `training/coco/datagen/cli/` and an entry in
   `training/pyproject.toml`'s `[project.scripts]` (then `pip install -e
   ./training` again to regenerate the installed script).
 - Seed all randomness (condition sampling, train/test split) for

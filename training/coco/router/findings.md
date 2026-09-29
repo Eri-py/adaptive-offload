@@ -82,7 +82,7 @@ another model architecture on the same ones.
 
 ## Feature-router experiment (spec 01 image/confidence features)
 
-`python -m router.feature_experiment` tests whether the frame-level features
+`python -m coco.router.feature_experiment` tests whether the frame-level features
 computed in spec 01 — five image statistics plus scene complexity, and six
 local-model confidence/detection statistics — close the headroom the section
 above identified. Two runs on the real database produced byte-identical
@@ -153,12 +153,12 @@ reports about a frame, not in the frame's raw image statistics.
 
 `casc ceiling` (cascade rows only, added for review finding S2): the cascade
 design's own ceiling, `max(local_utility, escalated_utility)` per row
-(`router.evaluation.cascade_ceiling_utility`), averaged over the held-out
+(`coco.router.evaluation.cascade_ceiling_utility`), averaged over the held-out
 rows — identical across all four cascade routers since it depends only on
 the held-out rows, not on any router's picks.
 
-Held-out split: 400 train photos / 100 test photos (`router.dataset
-.frame_level_split`, seed 42). Two runs of `python -m router.feature_experiment`
+Held-out split: 400 train photos / 100 test photos (`coco.router.dataset
+.frame_level_split`, seed 42). Two runs of `python -m coco.router.feature_experiment`
 on the real database produced byte-identical output for all eight rows,
 including the `casc ceiling` column and the always-escalate figure below.
 
@@ -172,7 +172,7 @@ LOCAL pick loses 0.220 — so the break-even predicted probability is about
 0.71, not 0.5. A classifier thresholded at 0.5 picks LOCAL far more often
 than that asymmetry justifies. `decide_first_linear`'s 0.6575 is not a
 *stronger*, more negative result than the three baseline routers above — it
-reproduces `router.baseline`'s logistic classifier almost exactly (0.6574,
+reproduces `coco.router.baseline`'s logistic classifier almost exactly (0.6574,
 corrected above), the same classifier-loss artifact under a different
 feature set.
 
@@ -210,7 +210,7 @@ regressor) now fits with `min_samples_leaf` set to `STAGE2_MIN_LEAF_PHOTOS`
 hard-coded row count — 4,000 rows on this dataset's 200 rows/photo. A leaf
 that must hold 20 photos' rows can never isolate one photo's `predicted_gap`
 value, so the near-unique-per-photo split that caused the memorization is no
-longer available. The linear family is untouched (`training/router/two_stage.py`).
+longer available. The linear family is untouched (`training/coco/router/two_stage.py`).
 After the fix, GBT stage 2's train/test accuracy is 0.8157/0.5847
 (decide-first) and 0.8394/0.5594 (cascade) — the train/test gap roughly
 halves (0.427 → 0.231 decide-first, 0.465 → 0.280 cascade) instead of
@@ -314,15 +314,15 @@ reframes the router that way: each request has a hard latency budget,
 routing must maximize accuracy inside it, and results are reported as
 accuracy-vs-latency curves per budget instead of one utility figure.
 
-`python -m router.budget_experiment` ran twice on the real database; both
+`python -m coco.router.budget_experiment` ran twice on the real database; both
 runs produced byte-identical stdout and byte-identical PNGs. Re-running
-`python -m router.feature_experiment` afterward reproduced every number in
+`python -m coco.router.feature_experiment` afterward reproduced every number in
 the "Feature-router experiment" section above exactly (the Spearman table
 and all eight router rows, including the `casc ceiling` column), confirming
 the generic-bootstrap refactor in `router/evaluation.py` changed nothing
 about spec 02's results.
 
-Held-out split: 400 train photos / 100 test photos (`router.dataset
+Held-out split: 400 train photos / 100 test photos (`coco.router.dataset
 .frame_level_split`, seed 42) — the same split spec 02 uses.
 
 ### Per-budget results
