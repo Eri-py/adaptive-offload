@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eriol.adaptiveoffload.bench"
+      "bundleIdentifier": "com.eriol.adaptiveoffload.bench",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "plugins": [
       [
@@ -18,6 +21,11 @@
         }
       ],
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8417b149-da6c-4786-9069-dd602eaf474d"
+      }
+    }
   }
 }
