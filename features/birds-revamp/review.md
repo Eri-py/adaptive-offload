@@ -266,7 +266,7 @@ None.
   `RuntimeError` deep in the loop.
 - **Fix:** Either add `model.to(device)` at the top, or say it in the
   docstring: `"""... `model` must already be on `device`."""`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: document the device precondition on top1_accuracy"
 
 #### N2 — `evaluate.main` checks the GPU before the dataset, unlike `train.main`
 
@@ -277,7 +277,7 @@ None.
   reason, and the comment at `evaluate.py:75` claims the same intent. Nothing
   is downloaded either way, so this is consistency, not a spec violation.
 - **Fix:** Move the `test_loaders` construction above `require_cuda()`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: check the dataset before the GPU in evaluate"
 
 #### N3 — The validation loop trusts `NUM_CLASSES` rather than the labels present
 
@@ -291,7 +291,7 @@ None.
   data should do.
 - **Fix:** Iterate `sorted(set(labels.values()))` instead, dropping the
   `NUM_CLASSES` import from the split path and the monkeypatch from the fixture.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: derive validation species from the labels present"
 
 #### N4 — Two commits cannot stand on their own
 
@@ -305,7 +305,7 @@ None.
 - **Fix:** Before opening the PR, `git rebase -i` to fixup `1e7eab7` into
   `73ed47e` and `aae8aa0` into `943775f`. The branch is unpushed, so this is
   free. (Moot if the PR is squash-merged.)
-- **Decision:** — _(pending)_
+- **Decision:** Declined — The branch tip is correct and the implementation report explains the split; a squash-merge makes it moot, and the user chose not to rewrite history.
 
 #### N5 — `download` has no timeout on a multi-hundred-megabyte fetch
 
@@ -315,7 +315,7 @@ None.
   "downloading …" line.
 - **Fix:** Pass `timeout=60`. A progress line per N chunks would also help,
   but is not required.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — Prototype bar: a single-user, explicitly-run download step.
 
 ## Tests
 

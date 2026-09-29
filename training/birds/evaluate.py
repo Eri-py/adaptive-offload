@@ -68,17 +68,17 @@ def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
 
 
 def main() -> None:
-    gpu_device = require_cuda()
-    cpu_device = torch.device("cpu")
-    thread_count = torch.get_num_threads()
-
-    # Loaders come first: a missing dataset must fail before any checkpoint loads.
+    # Loaders come first: a missing dataset must fail before the GPU check or any checkpoint load.
     test_loaders = {
         name: make_data_loader(
             "test", eval_transform(name), TRAIN_SETTINGS[name].batch_size, shuffle=False
         )
         for name in _MODEL_NAMES
     }
+
+    gpu_device = require_cuda()
+    cpu_device = torch.device("cpu")
+    thread_count = torch.get_num_threads()
 
     rows: list[tuple[str, float, float, str]] = []
     for name in _MODEL_NAMES:

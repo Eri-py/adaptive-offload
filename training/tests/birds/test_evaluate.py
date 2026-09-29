@@ -70,3 +70,26 @@ def test_main_uses_each_models_own_eval_transform(monkeypatch: pytest.MonkeyPatc
 
     assert loader_transforms == ["transform-small", "transform-large"]
     assert transform_names.count("small") == 2 and transform_names.count("large") == 2
+
+
+def test_main_builds_data_loaders_before_checking_for_a_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_make_data_loader(*args: Any, **kwargs: Any) -> str:
+        calls.append("loader")
+        return "loader"
+
+    def fake_require_cuda() -> torch.device:
+        calls.append("require_cuda")
+        raise RuntimeError("no gpu")
+
+    monkeypatch.setattr(ev, "eval_transform", lambda name: name)
+    monkeypatch.setattr(ev, "make_data_loader", fake_make_data_loader)
+    monkeypatch.setattr(ev, "require_cuda", fake_require_cuda)
+
+    with pytest.raises(RuntimeError, match="no gpu"):
+        ev.main()
+
+    assert calls == ["loader", "loader", "require_cuda"]
