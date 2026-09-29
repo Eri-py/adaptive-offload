@@ -34,7 +34,7 @@ Record = tuple[str, str, int]  # (photo id, path relative to images/, label 0-19
 
 _DOWNLOAD_COMMAND = "python -m birds.download"
 _DATASET_FOLDER = "CUB_200_2011"
-_INDEX_FILES = ("images.txt", "image_class_labels.txt", "train_test_split.txt")
+INDEX_FILES = ("images.txt", "image_class_labels.txt", "train_test_split.txt")
 
 # ImageNet statistics shared by both models' pretrained weights (confirmed
 # equal for MobileNet_V3_Large_Weights.IMAGENET1K_V2 and
@@ -72,7 +72,7 @@ def _read_pairs(path: Path) -> dict[str, str]:
 def _read_index() -> tuple[dict[str, str], dict[str, int], dict[str, bool]]:
     """Reads (id -> path, id -> 0-based label, id -> is official train)."""
     root = dataset_root()
-    missing = [str(root / name) for name in _INDEX_FILES if not (root / name).is_file()]
+    missing = [str(root / name) for name in INDEX_FILES if not (root / name).is_file()]
     if not root.is_dir() or missing:
         raise FileNotFoundError(
             f"CUB-200-2011 dataset not found or incomplete at {root}"

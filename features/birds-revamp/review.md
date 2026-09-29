@@ -215,7 +215,7 @@ None.
   download path runs. Importing `_INDEX_FILES` from `birds.data` keeps the two
   modules' definition of "complete" in one place, as `dataset_root()` already
   does.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: check the index files in the download completeness check"
 
 #### S2 — The two `config.py` spots flowers S4 cited by line number are untouched
 

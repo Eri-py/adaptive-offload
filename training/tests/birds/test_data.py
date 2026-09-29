@@ -11,6 +11,7 @@ import torch
 from PIL import Image
 
 from birds import data as data_module
+from birds import download as download_module
 
 # species index -> (official-train photos, official-test photos)
 _LAYOUT = {0: (25, 2), 1: (12, 2), 2: (5, 1)}
@@ -120,3 +121,14 @@ def test_make_data_loader_returns_the_named_split(
     assert loader.batch_size == 2
     assert sum(len(labels) for _, labels in loader) == len(val)
     assert len(loader.dataset) == len(val)  # type: ignore[arg-type]
+
+
+def test_download_treats_a_missing_index_file_as_incomplete(fake_cub: Path) -> None:
+    total, missing = download_module._missing_files(fake_cub)
+    assert (total, missing) == (sum(sum(v) for v in _LAYOUT.values()), 0)
+
+    (fake_cub / "image_class_labels.txt").unlink()
+    (fake_cub / "train_test_split.txt").unlink()
+    total, missing = download_module._missing_files(fake_cub)
+    assert total > 0
+    assert missing == 2

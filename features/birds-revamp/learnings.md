@@ -18,3 +18,6 @@
 - Test on all 5,794 photos: small 0.7798 (5.713 ms/photo, cpu 6 threads), large 0.8699 (6.701 ms/photo, cuda). Both above the 60% floor.
 - Vs pilot (val 0.8047@26 / 0.8855@9; test 0.7727 / 0.8676): small val -1.7 pts but test +0.7; large val +1.2 but test +0.2. Differences are checkpoint-selection noise on the 594-photo val split.
 - Nothing under training/models/birds/ is tracked (gitignored); `git status` shows training/models/ untracked only because of pre-existing yolov8 files there.
+
+## Review fix S1
+- `data.INDEX_FILES` is now public; `download._missing_files` counts absent index files alongside absent photos, so both the "already present" check and post-extraction verification share `data.py`'s definition of complete.

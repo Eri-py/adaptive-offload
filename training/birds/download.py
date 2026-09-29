@@ -11,20 +11,21 @@ import urllib.request
 from pathlib import Path
 
 from birds.config import CUB_URL, DATA_DIR
-from birds.data import dataset_root
+from birds.data import INDEX_FILES, dataset_root
 
 _ARCHIVE_NAME = "CUB_200_2011.tgz"
 _CHUNK_BYTES = 1 << 20
 
 
-def _missing_images(root: Path) -> tuple[int, int]:
-    """Returns (photos listed in images.txt, how many of them are absent)."""
+def _missing_files(root: Path) -> tuple[int, int]:
+    """Returns (photos listed in images.txt, missing photos plus missing index files)."""
+    missing_indexes = sum(1 for name in INDEX_FILES if not (root / name).is_file())
     index = root / "images.txt"
     if not index.is_file():
-        return 0, 1
+        return 0, missing_indexes
     relative_paths = [line.split()[1] for line in index.read_text().splitlines() if line.strip()]
-    missing = sum(1 for path in relative_paths if not (root / "images" / path).is_file())
-    return len(relative_paths), missing
+    missing_photos = sum(1 for path in relative_paths if not (root / "images" / path).is_file())
+    return len(relative_paths), missing_photos + missing_indexes
 
 
 def _download(archive: Path) -> None:
@@ -36,7 +37,7 @@ def _download(archive: Path) -> None:
 
 def main() -> None:
     root = dataset_root()
-    total, missing = _missing_images(root)
+    total, missing = _missing_files(root)
     if total and not missing:
         print(f"CUB-200-2011 already present: {total} images at {root}")
         return
@@ -48,10 +49,10 @@ def main() -> None:
         tar.extractall(DATA_DIR, filter="data")
     archive.unlink()
 
-    total, missing = _missing_images(root)
+    total, missing = _missing_files(root)
     if not total or missing:
         raise RuntimeError(
-            f"CUB-200-2011 incomplete after extraction: {missing} of {total} missing"
+            f"CUB-200-2011 incomplete after extraction: {missing} files missing of {total} images"
         )
     print(f"CUB-200-2011 ready: {total} images at {root}")
 
