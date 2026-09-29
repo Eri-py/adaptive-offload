@@ -8,7 +8,10 @@ from torch.utils.data import DataLoader
 
 
 def top1_accuracy(model: nn.Module, loader: "DataLoader[Any]", device: torch.device) -> float:
-    """Top-1 accuracy over `loader`, in plain fp32 so val and test are measured alike."""
+    """Top-1 accuracy over `loader`, in plain fp32 so val and test are measured alike.
+
+    `model` must already be on `device`; only the batches are moved.
+    """
     model.eval()
     correct = 0
     total = 0
