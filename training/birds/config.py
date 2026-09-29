@@ -18,7 +18,10 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "cub200"
 WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "models" / "birds"
 
 SEED = 42
-NUM_CLASSES = 102
+NUM_CLASSES = 200
+NUM_WORKERS = 6
+VAL_FRACTION = 0.1
+CUB_URL = "https://data.caltech.edu/records/65de6-vp158/files/CUB_200_2011.tgz?download=1"
 
 ModelName = Literal["small", "large"]
 

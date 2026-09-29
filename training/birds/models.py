@@ -2,7 +2,7 @@
 
 Both torchvision backbones ship with a 1000-way ImageNet head; `build_model`
 swaps it for a fresh `Linear(in_features, NUM_CLASSES)` classifying the
-102 Oxford Flowers species instead.
+200 CUB-200-2011 bird species instead.
 """
 
 from typing import cast
@@ -20,13 +20,13 @@ def weights_for(name: ModelName) -> WeightsEnum:
 
 
 def _replace_head(classifier: nn.Sequential, index: int) -> None:
-    """Swaps the `Linear` layer at `index` for a fresh 102-way one, in place."""
+    """Swaps the `Linear` layer at `index` for a fresh NUM_CLASSES-way one, in place."""
     old_head = cast(nn.Linear, classifier[index])
     classifier[index] = nn.Linear(old_head.in_features, NUM_CLASSES)
 
 
 def build_model(name: ModelName, pretrained: bool = True) -> nn.Module:
-    """Builds the named torchvision model with a 102-way classifier head."""
+    """Builds the named torchvision model with a NUM_CLASSES-way classifier head."""
     weights = weights_for(name) if pretrained else None
 
     if name == "small":
