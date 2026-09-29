@@ -151,6 +151,18 @@ config applies where.
   reproducibility.
 - The frame-level train/test split is enforced by a helper function that
   guarantees no frame appears in both sets — not by convention.
+- Every birds training run is tracked in MLflow (params, per-epoch metrics,
+  evaluation results). The store is the gitignored `training/mlruns/`. Only
+  `training/birds/tracking.py` calls MLflow; callers use its `run(...)` context
+  manager and `log_metrics(...)`. Evaluation attaches to the training run via the
+  `<checkpoint>.run.json` sidecar holding the run id.
+- Tracking must never break a run: failures print a warning and continue with a
+  no-op handle. Tests must not write run history (`training/tests/conftest.py`
+  sets `BIRDS_TRACKING=off` for the whole suite); new training code keeps that.
+- To view history, the user runs (never the agent; see `CLAUDE.md`):
+  `MLFLOW_ALLOW_FILE_STORE=true mlflow ui --backend-store-uri training/mlruns`.
+  MLflow 3.x refuses a plain-directory store without that variable
+  (`tracking.run` sets it internally; the UI does not).
 
 ## Code organization (all areas)
 
