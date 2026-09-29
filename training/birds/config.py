@@ -1,11 +1,4 @@
-"""Paths, seed and shared per-model settings for the birds training pipeline.
-
-Centralizes filesystem locations (resolved from `__file__`, not cwd, so a
-missing dataset/checkpoint fails clearly instead of reading from or writing
-to wherever a command happens to be run from) and the small/large model
-name-to-weights mapping, so `data.py`'s eval transform and `models.py`'s
-`weights_for`/`build_model` (Task 2) share one definition instead of two.
-"""
+"""Paths, seed and the small/large weights mapping shared by the birds pipeline."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,9 +34,7 @@ class TrainSettings:
     batch_size: int
 
 
-# Per-model training recipe (Task 3): the large model gets fewer epochs and a
-# smaller learning rate/batch since ConvNeXt-Base is far more prone to
-# overfitting/instability than MobileNetV3 on this small a dataset.
+# Large model: fewer epochs, smaller lr/batch, since ConvNeXt-Base overfits this small dataset.
 TRAIN_SETTINGS: dict[ModelName, TrainSettings] = {
     "small": TrainSettings(epochs=30, lr=1e-3, weight_decay=0.05, batch_size=64),
     "large": TrainSettings(epochs=15, lr=1e-4, weight_decay=0.05, batch_size=32),

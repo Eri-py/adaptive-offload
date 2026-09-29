@@ -1,10 +1,4 @@
-"""Explicit dataset download step: `python -m birds.download`.
-
-The only place in this package that downloads anything. Training and
-evaluation (`data.py`) never download and fail with a message pointing back
-here, per the coding guidelines' rule that acquiring a dataset is a separate,
-explicitly run concern from the pipeline that uses it.
-"""
+"""Explicit dataset download step (`python -m birds.download`); data.py never downloads."""
 
 import tarfile
 import urllib.request

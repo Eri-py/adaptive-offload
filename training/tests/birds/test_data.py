@@ -1,7 +1,4 @@
-"""Tests for `birds.data` against a tiny fake CUB tree in `tmp_path`.
-
-No network, GPU or real dataset: a few species with a handful of 4x4 photos.
-"""
+"""Tests for `birds.data` against a tiny fake CUB tree in `tmp_path` (no network or GPU)."""
 
 from pathlib import Path
 from typing import Any

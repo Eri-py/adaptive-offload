@@ -1,12 +1,4 @@
-"""Loads CUB-200-2011 splits and builds their transforms/data loaders.
-
-Never downloads: `birds.download` is the only place that does. A missing
-dataset raises `FileNotFoundError` naming that command.
-
-The official train split is divided into train and validation (a stratified
-10% per species, for checkpoint selection); the official test split is the
-test split untouched.
-"""
+"""Loads CUB-200-2011 splits (train/val carved from the official train) and their loaders."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -36,9 +28,7 @@ _DOWNLOAD_COMMAND = "python -m birds.download"
 _DATASET_FOLDER = "CUB_200_2011"
 INDEX_FILES = ("images.txt", "image_class_labels.txt", "train_test_split.txt")
 
-# ImageNet statistics shared by both models' pretrained weights (confirmed
-# equal for MobileNet_V3_Large_Weights.IMAGENET1K_V2 and
-# ConvNeXt_Base_Weights.IMAGENET1K_V1's own `transforms()`).
+# ImageNet stats, identical in both models' pretrained-weights `transforms()`.
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
 

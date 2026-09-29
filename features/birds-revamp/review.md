@@ -236,7 +236,7 @@ None.
   small/large weights mapping shared by the birds pipeline."""`), drop the
   "(Task 2)"/"(Task 3)" references, and trim `:44-46` to its one load-bearing
   reason. Trim `data.py:1-9` the same way.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: trim the config and data module docstrings"
 
 #### S3 — No test asserts that validation and test share one accuracy function
 
