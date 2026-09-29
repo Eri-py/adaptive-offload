@@ -150,7 +150,9 @@ config applies where.
   need. If a new one is genuinely warranted, it goes in both places: the
   module under `training/coco/datagen/cli/` and an entry in
   `training/pyproject.toml`'s `[project.scripts]` (then `pip install -e
-  ./training` again to regenerate the installed script).
+  ./training` again to regenerate the installed script). This two-tool limit is
+  about the *datagen* surface; entry points that aren't datagen concerns live in
+  `training/shared/cli/` instead (e.g. `mlflow-ui`).
 - Seed all randomness (condition sampling, train/test split) for
   reproducibility.
 - The frame-level train/test split is enforced by a helper function that
@@ -184,12 +186,12 @@ config applies where.
   no-op handle. Tests must not write real run history
   (`training/tests/conftest.py` sets `BIRDS_TRACKING=off` for the whole suite);
   tests that need a real store opt in and use a disposable database.
-- To view history, the user runs it (never the agent; see `CLAUDE.md`):
-
-  ```bash
-  set -a; source training/.env; set +a
-  mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
-  ```
+- To view history, the user runs `mlflow-ui` (never the agent; see `CLAUDE.md`).
+  It reads `MLFLOW_TRACKING_URI` from `training/.env` itself and passes any extra
+  arguments through, so `mlflow-ui --port 5001` works. The module is
+  `training/shared/cli/mlflow_ui.py`, registered in `training/pyproject.toml`'s
+  `[project.scripts]` — a new entry point goes in both places, then
+  `pip install -e ./training` to regenerate it.
 
 ## Code organization (all areas)
 

@@ -44,7 +44,7 @@ def _tracking_off() -> bool:
     return os.environ.get("TRAINING_TRACKING", "").strip().lower() == "off"
 
 
-def _tracking_uri() -> str:
+def tracking_uri() -> str:
     """Resolve the tracking database URL, mirroring `common.db`'s no-silent-default rule."""
     load_dotenv(TRAINING_DIR / ".env")
     url = os.environ.get("MLFLOW_TRACKING_URI")
@@ -123,7 +123,7 @@ def run(
     handle = NOOP_HANDLE
     active = False
     try:
-        mlflow.set_tracking_uri(_tracking_uri())
+        mlflow.set_tracking_uri(tracking_uri())
         if mlflow.get_experiment_by_name(experiment) is None:
             mlflow.create_experiment(experiment, artifact_location=ARTIFACTS_DIR.as_uri())
         mlflow.set_experiment(experiment)
@@ -196,7 +196,7 @@ def log_to_run(
     stay the duration of the training.
     """
     try:
-        client = MlflowClient(tracking_uri=_tracking_uri())
+        client = MlflowClient(tracking_uri=tracking_uri())
         for key, value in (params or {}).items():
             client.log_param(run_id, key, value)
         for key, tag_value in (tags or {}).items():

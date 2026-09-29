@@ -28,6 +28,7 @@ dependencies = [
 [project.scripts]
 run-simulation = "coco.datagen.cli.run_simulation:main"
 score-complexity = "coco.datagen.cli.score_complexity:main"
+mlflow-ui = "shared.cli.mlflow_ui:main"
 
 [project.optional-dependencies]
 dev = [
