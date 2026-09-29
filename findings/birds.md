@@ -3,7 +3,10 @@
 The small/large classification pair (MobileNetV3-Large / ConvNeXt-Base) was
 first built on Oxford 102 Flowers. A pilot compared it against CUB-200-2011
 birds to see which dataset leaves more for an adaptive router to gain. Numbers
-below are copied from `training/scratch/pilot_results.txt`.
+below are copied from the pilot's output. That output lived in the gitignored
+`training/scratch/`, which has since been cleared, so this file is now the
+record: the flowers half cannot be regenerated at all (its dataset and
+checkpoints were deleted), and the birds half would need a re-run.
 
 ## Pilot settings
 
