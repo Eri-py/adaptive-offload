@@ -80,14 +80,14 @@ None.
 - **File:** `training/flowers/train.py:521`
 - **Issue:** `build_model(..., pretrained=True)` runs before `make_data_loader`. On a fresh machine with no dataset, training downloads ImageNet weights and only then fails. This contradicts AC1's "downloads nothing".
 - **Fix:** Build `train_loader` / `val_loader` before calling `build_model` in `main()`. Loading the dataset is what raises the `FileNotFoundError`, so this surfaces the error before any network access.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — carried into the birds revamp (features/birds-revamp/spec.md), which rewrites this code for CUB-200 and fixes this there
 
 #### S2 — Duplicate top-1 accuracy function
 
 - **File:** `training/flowers/train.py:432-445`, `training/flowers/evaluate.py:206-223`
 - **Issue:** `train._evaluate_accuracy` and `evaluate.test_accuracy` are the same loop; the only difference is that the second calls `model.to(device)`. If one is later changed (for example, to add autocast), validation and test accuracy would silently be measured differently.
 - **Fix:** Keep one implementation and import it in the other module. For example, `train.fit` could call `evaluate.test_accuracy`. `train.py` would then import from `evaluate.py`, which is fine because `evaluate.py` doesn't import `train`. Alternatively, move the function into a small `flowers/metrics.py`. Update the monkeypatch target in `test_train.py` to match.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — carried into the birds revamp (features/birds-revamp/spec.md), which rewrites this code for CUB-200 and fixes this there
 
 #### S3 — Paths that don't need a GPU are untested
 
@@ -102,7 +102,7 @@ None.
   - Add a `test_evaluate.py` test that points `WEIGHTS_DIR` at `tmp_path` and asserts the error message names `python -m flowers.train --model small`.
   - Add a `test_data.py` test that `eval_transform("small")` / `("large")` have crop size 224 and resize size 232, matching `MODEL_WEIGHTS[name].transforms()`.
   - If S1 is accepted, a `train.main` test with `Flowers102` patched to raise, and `build_model` patched to fail if it is called.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — carried into the birds revamp (features/birds-revamp/spec.md), which rewrites this code for CUB-200 and fixes this there
 
 #### S4 — Multi-line comments and docstrings break the comment guideline
 
@@ -111,7 +111,7 @@ None.
 - **Fix:** Cut each one to a single "why" line. Examples:
   - `evaluate.py:232`: `"""Mean batch-1 forward-pass ms over `dataset`; warm-up cycles items, CUDA synced."""`
   - `evaluate.py:277-279`: `# Weights are overwritten by the checkpoint, so skip the ImageNet download.`
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — carried into the birds revamp (features/birds-revamp/spec.md), which rewrites this code for CUB-200 and fixes this there
 
 ## Nitpicks
 
@@ -120,14 +120,14 @@ None.
 - **File:** `training/tests/flowers/test_train.py:866-880`
 - **Issue:** The test swaps `train_module._evaluate_accuracy` by hand, with `try/finally`. The other flower test files use `pytest.MonkeyPatch`, so this one is inconsistent.
 - **Fix:** Take a `monkeypatch` fixture and call `monkeypatch.setattr(train_module, "_evaluate_accuracy", fake_evaluate_accuracy)`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — carried into the birds revamp (features/birds-revamp/spec.md), which rewrites this code for CUB-200 and fixes this there
 
 #### N2 — `torch.load` without `weights_only`
 
 - **File:** `training/flowers/evaluate.py:281`, `training/tests/flowers/test_train.py:885`
 - **Issue:** `pyproject.toml` allows `torch>=2.4`. On 2.4 and 2.5, `torch.load` defaults to `weights_only=False` and prints a FutureWarning. The installed 2.14 defaults to `True`, so behaviour depends on the version.
 - **Fix:** Pass `weights_only=True` explicitly.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — The installed torch already defaults to `weights_only=True`, and the checkpoints are self-produced.
 
 ## Tests
 
