@@ -1,0 +1,59 @@
+"""Single tunable config module for the data-gen simulator.
+
+Every simulator invocation reads its frame count, condition-sampling
+parameters, seed, and utility-function weighting from here — no hardcoded
+tunables elsewhere in `training/coco/datagen/`, per the feature spec. Named
+condition-scenario presets live separately in `coco.datagen.presets`, since a
+preset is a scenario definition rather than a single tunable knob.
+"""
+
+from pathlib import Path
+
+# --- Sampling / run-shape tunables -----------------------------------------
+
+# Frames sampled (stratified by scene complexity) from the run's image pool.
+FRAME_COUNT = 500
+
+# Space-filling condition vectors sampled per run; crossed with every frame.
+CONDITION_VECTOR_COUNT = 50
+
+# Number of complexity-based strata the frame sample is drawn evenly across.
+STRATIFICATION_BUCKET_COUNT = 5
+
+# Seed for both frame stratified-sampling and condition-vector sampling.
+SEED = 42
+
+# Default utility-function weight: score = accuracy - DEFAULT_LAMBDA * (latency_ms / 1000),
+# i.e. per second of latency (see labeling.py's `_utility`). At 0.3, a 300ms
+# latency gap moves utility by 0.09 — comparable in magnitude to a realistic
+# accuracy gap between the local/offload stub paths (~0.07-0.1) — so neither
+# term structurally dominates the label.
+DEFAULT_LAMBDA = 0.3
+
+DATASET_NAME = "coco_val2017"
+
+# --- Model weight locations --------------------------------------------------
+# Resolved relative to this file, not cwd, so a missing file fails clearly
+# instead of `YOLO(...)` silently downloading to wherever the CLI was run from.
+LOCAL_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[2] / "models" / "yolov8n.pt"
+OFFLOAD_MODEL_WEIGHTS_PATH = Path(__file__).resolve().parents[2] / "models" / "yolov8x.pt"
+
+# --- Condition-driven latency-overhead coefficients -------------------------
+# Illustrative only (no real network/device measurements yet, per the spec's
+# Out of Scope) — picked to produce plausible-shaped latency overhead curves
+# on top of a real measured base latency, not measured from a real device or
+# network. Accuracy is no longer condition-modeled: `DetectionResult.accuracy`
+# comes from real IoU-based scoring against a real model's predictions
+# (`score_accuracy`), so no synthetic accuracy coefficients live here anymore.
+
+# Local path: latency overhead scales with device load (a smaller on-device
+# model degrading under contention).
+LOCAL_LATENCY_DEVICE_LOAD_COEFFICIENT_MS = 1.2  # added ms per device-load pct point
+LOCAL_LATENCY_NOISE_STD_MS = 5.0
+
+# Offload path: latency overhead scales with bandwidth (inverse), round-trip
+# network latency (~1:1 passthrough), and packet loss (retransmit penalty).
+OFFLOAD_LATENCY_BANDWIDTH_COEFFICIENT_MS = 40.0  # scales as 1/bandwidth_mbps
+OFFLOAD_LATENCY_NETWORK_LATENCY_COEFFICIENT = 1.0  # ms added per ms of RTT
+OFFLOAD_LATENCY_PACKET_LOSS_PENALTY_COEFFICIENT_MS = 3.0  # ms added per pct point
+OFFLOAD_LATENCY_NOISE_STD_MS = 8.0

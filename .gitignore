@@ -11,5 +11,32 @@ venv/
 # Env
 .env
 
+# Editor config — per-developer, not project setup
+.vscode/
+
 # Downloaded/cached datasets — large binary data, not source
 training/data/
+
+# Downloaded pretrained model weights — large binary data, not source
+*.pt
+
+# Everything under models/ is derived: downloaded weights, trained checkpoints and
+# any export made from them. None of it is source, so the folder stays out of git.
+training/models/
+
+# Trained router model artifacts — build output, not source
+*.joblib
+*.pkl
+
+# Generated explainers/exports dropped in the repo root
+/*.pdf
+
+*/node_modules
+*/.expo
+# Local experiment scratch space — pilots, logs, throwaway checkpoints
+training/scratch/
+
+# MLflow: run history lives in Postgres; these are local by-products, not source.
+# The run-id sidecars point at rows in a machine-local database, so they never belong in git.
+training/mlartifacts/
+*.run.json
