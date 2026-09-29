@@ -63,7 +63,7 @@ STAGE2_FEATURE_COLUMNS = ["predicted_gap", "p_local_good_enough", *STAGE2_NETWOR
 # `p_local_good_enough` are constant within a photo's rows, so an
 # unconstrained tree can split on them to memorise each photo's own outcome
 # instead of learning a generalizable relationship (train accuracy ~98%,
-# test ~55% — see findings.md's S1 section). Requiring at least this many
+# test ~55% — see findings/coco-router.md's S1 section). Requiring at least this many
 # photos' worth of rows per leaf makes that impossible by construction.
 STAGE2_MIN_LEAF_PHOTOS = 20
 

@@ -42,6 +42,12 @@ security hardening, or exhaustive production robustness.
   - `training/birds/` — attempt 2 (bird species identification, CUB-200-2011).
   - Code reused by both attempts moves into a shared location when it's
     first reused; no shared folder exists yet.
+- `findings/` — research findings, one file per line of investigation
+  (`coco-router.md`, `birds.md`), kept out of the code tree because they
+  accumulate across features and are what the write-up draws on. A spec that
+  produces results appends to the relevant file here rather than adding a
+  `findings.md` next to its code. Generated figures stay wherever the script
+  writes them and are linked by relative path.
 
 Each top-level area (`app/`, `database/`, `server/`, `training/`) owns its
 own dependency manifest and lint/type config — don't share one config
