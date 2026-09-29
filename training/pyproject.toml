@@ -17,6 +17,8 @@ dependencies = [
     "pandas>=2.2",
     "scikit-learn>=1.5",
     "matplotlib>=3.8",
+    "torch>=2.4",
+    "torchvision>=0.19",
 ]
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once
@@ -78,4 +80,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "joblib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torchvision.*"
 ignore_missing_imports = true
