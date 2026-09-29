@@ -54,7 +54,7 @@ None.
 - **File:** `training/coco/router/findings.md:322`
 - **Issue:** "the generic-bootstrap refactor in `router/evaluation.py`" still uses the old path. Every other module or file reference in the file was prefixed, including the similar `training/coco/router/two_stage.py` at line 213. The learnings note that the implementer's rewrite rules targeted backtick-dotted and `training/`-prefixed forms, and this bare `router/x.py` form falls outside both.
 - **Fix:** Change it to `coco/router/evaluation.py` (matching the `coco/router/baseline.py` style used in `evaluation.py:64` and `feature_experiment.py:5`).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: fix the missed old path in findings.md"
 
 ## Tests
 

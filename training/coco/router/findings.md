@@ -319,7 +319,7 @@ runs produced byte-identical stdout and byte-identical PNGs. Re-running
 `python -m coco.router.feature_experiment` afterward reproduced every number in
 the "Feature-router experiment" section above exactly (the Spearman table
 and all eight router rows, including the `casc ceiling` column), confirming
-the generic-bootstrap refactor in `router/evaluation.py` changed nothing
+the generic-bootstrap refactor in `coco/router/evaluation.py` changed nothing
 about spec 02's results.
 
 Held-out split: 400 train photos / 100 test photos (`coco.router.dataset
