@@ -45,7 +45,7 @@ None.
 - **File:** `database/migrations/env.py:25`
 - **Issue:** The comment names `training/datagen/run_simulation.py`, which doesn't exist after this move (and was already missing `cli/` before it). The plan's own Task 4 success criterion ("grep finds no remaining old-path references outside `features/` and `*.egg-info`") is therefore not met.
 - **Fix:** Change the comment's path to `training/coco/datagen/cli/run_simulation.py`. This only edits a comment. It doesn't move the database layer or change `database/` behaviour, so it stays within the spirit of the spec's out-of-scope line.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: fix the stale simulator path in the migrations comment"
 
 ## Nitpicks
 
