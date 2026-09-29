@@ -79,3 +79,46 @@ classifier's exact submodule types change later.
   produces a mypy `arg-type` error at the `DataLoader(...)` call. Left
   uninferred (no explicit annotation), mypy infers the correct variadic type
   on its own with no error — simpler than fighting the stub.
+
+## Task 5 — Real training/evaluation run: results and observations
+
+- **Both models cleared the 70% floor by a wide margin**, so no accuracy
+  troubleshooting was needed:
+  - small (MobileNetV3-Large): best val accuracy 94.41% at epoch 25/30
+    (`train.py`'s "keep best-so-far checkpoint" meant epochs 26-30, which
+    dipped slightly to 94.31%, correctly left the epoch-25/27/29 checkpoint
+    in place — val accuracy oscillated between 94.31% and 94.41% across the
+    last ~10 epochs rather than monotonically improving, expected behavior
+    once `CosineAnnealingLR` has decayed the LR close to zero). Test
+    accuracy: 92.21% on all 6,149 photos.
+  - large (ConvNeXt-Base): best val accuracy 96.47% at epoch 13/15 (also
+    plateaued for epochs 13-15, all reporting 96.47%). Test accuracy: 94.67%
+    on all 6,149 photos.
+  - Both models' test accuracy came in a couple points below their best val
+    accuracy (94.41% val -> 92.21% test for small; 96.47% val -> 94.67% test
+    for large) — expected since val is only 1,020 images used to pick a
+    checkpoint (some optimistic bias) while test is the untouched, 6x-larger
+    6,149-image split.
+- **Training was fast on this hardware/dataset size**: small model's full 30
+  epochs took ~2m50s wall clock; large model's full 15 epochs took ~2m41s
+  wall clock, both on an RTX 5070 (12 GB). GPU memory headroom was
+  comfortable throughout: ~4.4 GB used training the small model, ~7.2 GB
+  training the large one, well under the 12 GB card — no OOM risk at the
+  current batch sizes (64 small / 32 large). No DataLoader-speed complaints;
+  epochs were GPU-bound, not data-loading-bound, at this dataset size (1,020
+  train images).
+- **stdout buffering**: `train.py`'s per-epoch `print()` lines don't appear
+  in a redirected log file until the process exits (Python fully buffers
+  stdout when it isn't a TTY) — the log looked empty for the whole run, then
+  the complete history appeared at once at exit. If per-epoch progress needs
+  to be watched live in a future run, launch with `python -u` or set
+  `PYTHONUNBUFFERED=1` rather than assuming the log is stalled.
+- **Evaluation timing**: small model's CPU latency used 6 threads
+  (`torch.get_num_threads()` on this machine) and measured 5.560 ms/photo;
+  the large model measured 6.630 ms/photo on CUDA. Both numbers are
+  plausible and close to each other despite the large model being far
+  bigger, because the large model runs on GPU (parallel) while the small
+  model's CPU number stands in for the phone deployment target per the spec
+  — they aren't meant to be compared directly to each other.
+- **Checkpoint sizes**: `small.pt` is ~17.5 MB, `large.pt` is ~350.8 MB —
+  useful context if `training/models/flowers/` disk usage ever comes up.

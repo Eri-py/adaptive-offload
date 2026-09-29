@@ -25,13 +25,13 @@
 - Notes: evaluate.py (test_accuracy fp32, mean_latency_ms batch-1 forward with warm-up and cuda sync, checkpoint loading, two-row report). 3 new tests, 189 pass.
 
 ## Task 5 — Train and evaluate the real models
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 22:26:44
+- Completed: 2026-09-28 22:36:39
+- Notes: small (MobileNetV3-Large): best val 94.41% @ epoch 25/30, test 92.21%, 5.56 ms/photo CPU (6 threads), train ~2m50s. large (ConvNeXt-Base): best val 96.47% @ epoch 13/15, test 94.67%, 6.63 ms/photo CUDA, train ~2m41s. Checkpoints untracked.
 
 ## Task 6 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 22:36:39
+- Completed: 2026-09-28 22:36:52
+- Notes: training: ruff clean, mypy 9 known, 189 passed; database: 1 passed. No files changed.
