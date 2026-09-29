@@ -1,11 +1,13 @@
 """Shared ORM models for the data-gen simulator and (later) the offload API.
 
-Four tables, all owned here per `.claude/coding-guidelines.md`'s Database
+Five tables, all owned here per `.claude/coding-guidelines.md`'s Database
 section: `simulation_runs` (one row per simulator invocation, holding the
 resolved config snapshot), `simulation_results` (one row per frame ×
 condition pair, FK'd to its run), `scene_complexity` (one row per frame,
-computed once and reused across runs), and `model_inference` (one row per
-(dataset, frame, model) triple, caching real inference results).
+computed once and reused across runs), `model_inference` (one row per
+(dataset, frame, model) triple, caching real inference results), and
+`frame_features` (one row per (dataset, frame), holding candidate router
+features).
 """
 
 import enum
@@ -99,6 +101,29 @@ class ModelInference(Base):
     model_path: Mapped[Label] = mapped_column(Enum(Label), primary_key=True)
     latency_ms: Mapped[float] = mapped_column(Float, nullable=False)
     accuracy: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class FrameFeatures(Base):
+    """One row per (dataset, file_name): candidate image and confidence router features."""
+
+    __tablename__ = "frame_features"
+
+    dataset: Mapped[str] = mapped_column(String, primary_key=True)
+    file_name: Mapped[str] = mapped_column(String, primary_key=True)
+    sharpness: Mapped[float] = mapped_column(Float, nullable=False)
+    brightness: Mapped[float] = mapped_column(Float, nullable=False)
+    contrast: Mapped[float] = mapped_column(Float, nullable=False)
+    colorfulness: Mapped[float] = mapped_column(Float, nullable=False)
+    entropy: Mapped[float] = mapped_column(Float, nullable=False)
+    detection_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    mean_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    min_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    mean_box_area: Mapped[float] = mapped_column(Float, nullable=False)
+    min_box_area: Mapped[float] = mapped_column(Float, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

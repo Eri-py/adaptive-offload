@@ -16,6 +16,7 @@ dependencies = [
     "ultralytics>=8.0",
     "pandas>=2.2",
     "scikit-learn>=1.5",
+    "matplotlib>=3.8",
 ]
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once

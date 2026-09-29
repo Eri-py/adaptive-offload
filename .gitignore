@@ -20,3 +20,6 @@ training/data/
 # Trained router model artifacts — build output, not source
 *.joblib
 *.pkl
+
+*/node_modules
+*/.expo
