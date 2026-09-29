@@ -21,10 +21,10 @@ dependencies = [
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once
 # the shared venv is activated, e.g. `run-simulation --preset baseline`
-# works from any directory, no `python -m datagen.cli.<name>` needed.
+# works from any directory, no `python -m coco.datagen.cli.<name>` needed.
 [project.scripts]
-run-simulation = "datagen.cli.run_simulation:main"
-score-complexity = "datagen.cli.score_complexity:main"
+run-simulation = "coco.datagen.cli.run_simulation:main"
+score-complexity = "coco.datagen.cli.score_complexity:main"
 
 [project.optional-dependencies]
 dev = [
@@ -38,7 +38,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["datagen*", "router*"]
+include = ["coco*", "flowers*"]
 
 [tool.ruff]
 line-length = 100
