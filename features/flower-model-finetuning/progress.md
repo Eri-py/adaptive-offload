@@ -7,10 +7,10 @@
 - Notes: config/download/data added; torch+torchvision declared, torchvision mypy override. Real download: train 1020 / val 1020 / test 6149 (676 MB, gitignored). 5 new tests, 179 pass.
 
 ## Task 2 — Model builders and GPU check
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 22:10:40
+- Completed: 2026-09-28 22:19:05
+- Notes: models.py (weights_for, build_model with 102-way head, require_cuda). Pretrained sanity check OK on RTX 5070. 4 new tests, 183 pass.
 
 ## Task 3 — Training loop with validation-based checkpointing
 - Status: not started
