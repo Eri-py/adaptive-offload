@@ -23,3 +23,5 @@ training/data/
 
 */node_modules
 */.expo
+# Local experiment scratch space — pilots, logs, throwaway checkpoints
+training/scratch/
