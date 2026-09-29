@@ -1,6 +1,9 @@
 """Tests for `birds.evaluate`: missing checkpoint, per-model transform, timing sanity."""
 
+import json
 import math
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +13,7 @@ from torch import nn
 from torch.utils.data import TensorDataset
 
 from birds import evaluate as ev
+from birds import tracking
 
 
 def test_mean_latency_ms_is_positive_and_finite() -> None:
@@ -93,3 +97,65 @@ def test_main_builds_data_loaders_before_checking_for_a_gpu(
         ev.main()
 
     assert calls == ["loader", "loader", "require_cuda"]
+
+
+def _patch_main_for_tracking(monkeypatch: pytest.MonkeyPatch, weights_dir: Path) -> list[Any]:
+    """Stubs main's heavy steps; returns the list that records each tracking.run call."""
+    calls: list[Any] = []
+
+    @contextmanager
+    def fake_run(
+        run_name: str, params: Mapping[str, Any], *, run_id: str | None = None
+    ) -> Iterator[tracking.RunHandle]:
+        calls.append((run_name, dict(params), run_id))
+        yield tracking.RunHandle(id=run_id)
+
+    monkeypatch.setattr(ev, "WEIGHTS_DIR", weights_dir)
+    monkeypatch.setattr(ev, "require_cuda", lambda: torch.device("cpu"))
+    monkeypatch.setattr(ev, "eval_transform", lambda name: name)
+    monkeypatch.setattr(ev, "make_data_loader", lambda *args, **kwargs: "loader")
+    monkeypatch.setattr(ev, "load_test", lambda transform: transform)
+    monkeypatch.setattr(ev, "_load_checkpoint", lambda name, device: nn.Identity())
+    monkeypatch.setattr(ev, "top1_accuracy", lambda *args: 0.9)
+    monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 2.0)
+    monkeypatch.setattr(tracking, "run", fake_run)
+    monkeypatch.setattr(tracking, "log_metrics", lambda handle, metrics: calls.append(metrics))
+    return calls
+
+
+def test_main_attaches_results_to_the_training_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _patch_main_for_tracking(monkeypatch, tmp_path)
+    (tmp_path / "small.pt.run.json").write_text(json.dumps({"run_id": "abc"}))
+    (tmp_path / "large.pt.run.json").write_text(json.dumps({"run_id": "def"}))
+
+    ev.main()
+
+    runs = [c for c in calls if isinstance(c, tuple)]
+    assert [r[2] for r in runs] == ["abc", "def"]
+    assert {"test_accuracy": 0.9, "mean_latency_ms": 2.0} in calls
+    assert "not attached" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "sidecar", [None, "not json", "{}", '{"run_id": 5}', "[]", '{"run_id": ""}']
+)
+def test_main_without_a_usable_sidecar_runs_standalone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    sidecar: str | None,
+) -> None:
+    calls = _patch_main_for_tracking(monkeypatch, tmp_path)
+    if sidecar is not None:
+        (tmp_path / "small.pt.run.json").write_text(sidecar)
+
+    ev.main()
+
+    out = capsys.readouterr().out
+    runs = [c for c in calls if isinstance(c, tuple)]
+    assert runs[0][0] == "evaluate-small" and runs[0][2] is None
+    assert "test accuracy" in out and "0.9000" in out
+    assert "small results are not attached to a training run" in out
+    assert "large results are not attached to a training run" in out

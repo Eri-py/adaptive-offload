@@ -16,3 +16,10 @@
 - Suite-wide off switch is an autouse fixture in tests/conftest.py (monkeypatch.setenv), so a test
   can still opt in with monkeypatch.setenv; `run_sidecar_path` lives in birds/train.py.
 - mypy strict rejects `train_module.tracking` (implicit re-export); import `birds.tracking` in tests.
+
+## Task 3
+- Resuming a run with `mlflow.start_run(run_id=..., run_name=X)` renames it to X (fluent.py updates
+  the name on resume), so evaluate resumes with the training run's own name ("train-<model>").
+- evaluate imports `run_sidecar_path` from birds.train (no cycle; train never imports evaluate).
+- Patch `tracking.run` / `tracking.log_metrics` on the `birds.tracking` module in tests; `ev.tracking`
+  fails mypy strict (implicit re-export).

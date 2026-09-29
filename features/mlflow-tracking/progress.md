@@ -13,10 +13,10 @@
 - Notes: fit gains keyword-only on_epoch_end (default None); main logs params, per-epoch train_loss/val_accuracy with step, best val+epoch; run_sidecar_path helper writes <ckpt>.run.json and removes a stale one when tracking is off; autouse conftest fixture sets BIRDS_TRACKING=off. 4 new tests, 208 pass, no mlruns/ created.
 
 ## Task 3 — Attach evaluation results to the training run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-29 11:09:54
+- Completed: 2026-09-29 11:13:42
+- Notes: evaluate.main resumes the training run from the sidecar and logs test_accuracy/mean_latency_ms metrics plus an eval_device param; absent or malformed sidecar falls back to a standalone run and prints a note. 7 new tests, 215 pass, no mlruns/.
 
 ## Task 4 — Retrain both models under tracking
 - Status: not started
