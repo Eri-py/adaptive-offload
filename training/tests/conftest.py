@@ -20,6 +20,12 @@ from sqlalchemy import Engine
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
+@pytest.fixture(autouse=True)
+def _tracking_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the suite from writing `mlruns/`; tests that want tracking opt in explicitly."""
+    monkeypatch.setenv("BIRDS_TRACKING", "off")
+
+
 @pytest.fixture
 def postgres_engine() -> Iterator[Engine]:
     """Function-scoped engine bound to a freshly created, uniquely-named test DB.

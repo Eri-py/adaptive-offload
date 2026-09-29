@@ -2,6 +2,9 @@
 
 import copy
 import inspect
+import json
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +13,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from birds import tracking
 from birds import train as train_module
+from birds.tracking import RunHandle
 
 _NUM_CLASSES = 3
 _NUM_FEATURES = 4
@@ -101,10 +106,13 @@ def test_fit_signature_has_no_test_split_parameter() -> None:
         "lr",
         "weight_decay",
         "checkpoint_path",
+        "on_epoch_end",
     ]
 
 
-def _patch_main(monkeypatch: pytest.MonkeyPatch, calls: list[str], *, data_missing: bool) -> None:
+def _patch_main(
+    monkeypatch: pytest.MonkeyPatch, calls: list[str], weights_dir: Path, *, data_missing: bool
+) -> None:
     def fake_make_data_loader(split: str, *args: Any, **kwargs: Any) -> str:
         calls.append(f"data:{split}")
         if data_missing:
@@ -120,27 +128,104 @@ def _patch_main(monkeypatch: pytest.MonkeyPatch, calls: list[str], *, data_missi
         return _tiny_model()
 
     monkeypatch.setattr("sys.argv", ["train", "--model", "small"])
+    monkeypatch.setattr(train_module, "WEIGHTS_DIR", weights_dir)
     monkeypatch.setattr(train_module, "make_data_loader", fake_make_data_loader)
     monkeypatch.setattr(train_module, "require_cuda", fake_require_cuda)
     monkeypatch.setattr(train_module, "build_model", fake_build_model)
-    monkeypatch.setattr(train_module, "fit", lambda *args, **kwargs: calls.append("fit"))
+
+    def fake_fit(*args: Any, **kwargs: Any) -> train_module.FitResult:
+        calls.append("fit")
+        return train_module.FitResult(best_val_accuracy=0.5, best_epoch=1)
+
+    monkeypatch.setattr(train_module, "fit", fake_fit)
 
 
-def test_main_builds_data_loaders_before_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_builds_data_loaders_before_the_model(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls: list[str] = []
-    _patch_main(monkeypatch, calls, data_missing=False)
+    _patch_main(monkeypatch, calls, tmp_path, data_missing=False)
 
     train_module.main()
 
     assert calls == ["data:train", "data:val", "cuda", "model", "fit"]
 
 
-def test_main_builds_no_model_when_the_dataset_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_builds_no_model_when_the_dataset_is_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls: list[str] = []
-    _patch_main(monkeypatch, calls, data_missing=True)
+    _patch_main(monkeypatch, calls, tmp_path, data_missing=True)
 
     with pytest.raises(FileNotFoundError, match="birds.download"):
         train_module.main()
 
     assert "model" not in calls
     assert "cuda" not in calls
+
+
+def test_fit_calls_on_epoch_end_once_per_epoch_with_that_epochs_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    accuracies = iter([0.1, 0.4, 0.3])
+    monkeypatch.setattr(train_module, "top1_accuracy", lambda *args, **kwargs: next(accuracies))
+    seen: list[train_module.EpochResult] = []
+
+    result = train_module.fit(
+        _tiny_model(),
+        _synthetic_loader(num_samples=8, batch_size=4),
+        _synthetic_loader(num_samples=4, batch_size=4),
+        device=torch.device("cpu"),
+        epochs=3,
+        lr=1e-3,
+        weight_decay=0.0,
+        checkpoint_path=tmp_path / "small.pt",
+        on_epoch_end=seen.append,
+    )
+
+    assert seen == result.history
+    assert [e.epoch for e in seen] == [1, 2, 3]
+    assert [e.val_accuracy for e in seen] == [0.1, 0.4, 0.3]
+
+
+def test_run_sidecar_path_sits_next_to_the_checkpoint() -> None:
+    assert train_module.run_sidecar_path(Path("/w/small.pt")) == Path("/w/small.pt.run.json")
+
+
+def test_main_writes_the_run_id_sidecar_when_tracking_is_on(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_main(monkeypatch, [], tmp_path, data_missing=False)
+    logged: list[dict[str, float]] = []
+
+    @contextmanager
+    def fake_run(name: str, params: Mapping[str, Any]) -> Iterator[RunHandle]:
+        assert params["model"] == "small"
+        assert params["dataset"] == "cub200"
+        yield RunHandle(id="abc123")
+
+    def fake_log_metrics(
+        handle: RunHandle, metrics: Mapping[str, float], *, step: int | None = None
+    ) -> None:
+        logged.append(dict(metrics))
+
+    monkeypatch.setattr(tracking, "run", fake_run)
+    monkeypatch.setattr(tracking, "log_metrics", fake_log_metrics)
+
+    train_module.main()
+
+    sidecar = tmp_path / "small.pt.run.json"
+    assert json.loads(sidecar.read_text()) == {"run_id": "abc123"}
+    assert logged == [{"best_val_accuracy": 0.5, "best_epoch": 1.0}]
+
+
+def test_main_writes_no_sidecar_and_removes_a_stale_one_when_tracking_is_off(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_main(monkeypatch, [], tmp_path, data_missing=False)
+    stale = tmp_path / "small.pt.run.json"
+    stale.write_text('{"run_id": "old"}')
+
+    train_module.main()  # the suite-wide BIRDS_TRACKING=off applies
+
+    assert not stale.exists()

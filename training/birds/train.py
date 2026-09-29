@@ -1,7 +1,9 @@
 """Trains one bird classifier, keeping its best validation checkpoint (never sees test)."""
 
 import argparse
+import json
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-from birds.config import SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds import tracking
+from birds.config import NUM_CLASSES, SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, make_data_loader, train_transform
 from birds.metrics import top1_accuracy
 from birds.models import build_model, require_cuda
@@ -49,8 +52,13 @@ def fit(
     lr: float,
     weight_decay: float,
     checkpoint_path: Path,
+    *,
+    on_epoch_end: Callable[[EpochResult], None] | None = None,
 ) -> FitResult:
-    """Trains `model`, saving the best-validation state dict; bf16 autocast on CUDA, no scaler."""
+    """Trains `model`, saving the best-validation state dict; bf16 autocast on CUDA, no scaler.
+
+    `on_epoch_end`, if given, is called with each epoch's result after its validation.
+    """
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
@@ -83,7 +91,10 @@ def fit(
             f"epoch {epoch}/{epochs} - train loss {train_loss:.4f} - "
             f"val accuracy {val_accuracy:.4f}"
         )
-        history.append(EpochResult(epoch=epoch, train_loss=train_loss, val_accuracy=val_accuracy))
+        epoch_result = EpochResult(epoch=epoch, train_loss=train_loss, val_accuracy=val_accuracy)
+        history.append(epoch_result)
+        if on_epoch_end is not None:
+            on_epoch_end(epoch_result)
 
         if val_accuracy > best_val_accuracy:
             best_val_accuracy = val_accuracy
@@ -92,6 +103,20 @@ def fit(
             torch.save(model.state_dict(), checkpoint_path)
 
     return FitResult(best_val_accuracy=best_val_accuracy, best_epoch=best_epoch, history=history)
+
+
+def run_sidecar_path(checkpoint_path: Path) -> Path:
+    """Where the MLflow run id for `checkpoint_path` is recorded (`<checkpoint>.run.json`)."""
+    return checkpoint_path.with_name(checkpoint_path.name + ".run.json")
+
+
+def _record_run_id(checkpoint_path: Path, run_id: str | None) -> None:
+    """Write the sidecar for `run_id`; with no id, remove any stale one so it can't mislead."""
+    sidecar = run_sidecar_path(checkpoint_path)
+    if run_id is None:
+        sidecar.unlink(missing_ok=True)
+        return
+    sidecar.write_text(json.dumps({"run_id": run_id}))
 
 
 def _parse_args() -> argparse.Namespace:
@@ -124,16 +149,47 @@ def main() -> None:
     model = build_model(model_name, pretrained=True)
 
     checkpoint_path = WEIGHTS_DIR / f"{model_name}.pt"
-    result = fit(
-        model,
-        train_loader,
-        val_loader,
-        device,
-        epochs=settings.epochs,
-        lr=settings.lr,
-        weight_decay=settings.weight_decay,
-        checkpoint_path=checkpoint_path,
-    )
+    params = {
+        "model": model_name,
+        "epochs": settings.epochs,
+        "lr": settings.lr,
+        "weight_decay": settings.weight_decay,
+        "batch_size": settings.batch_size,
+        "seed": SEED,
+        "dataset": "cub200",
+        "num_classes": NUM_CLASSES,
+    }
+    with tracking.run(f"train-{model_name}", params) as handle:
+
+        def log_epoch(epoch_result: EpochResult) -> None:
+            tracking.log_metrics(
+                handle,
+                {
+                    "train_loss": epoch_result.train_loss,
+                    "val_accuracy": epoch_result.val_accuracy,
+                },
+                step=epoch_result.epoch,
+            )
+
+        result = fit(
+            model,
+            train_loader,
+            val_loader,
+            device,
+            epochs=settings.epochs,
+            lr=settings.lr,
+            weight_decay=settings.weight_decay,
+            checkpoint_path=checkpoint_path,
+            on_epoch_end=log_epoch,
+        )
+        tracking.log_metrics(
+            handle,
+            {
+                "best_val_accuracy": result.best_val_accuracy,
+                "best_epoch": float(result.best_epoch),
+            },
+        )
+        _record_run_id(checkpoint_path, handle.id)
     print(result)
 
 

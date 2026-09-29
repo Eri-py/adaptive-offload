@@ -9,3 +9,10 @@
   same env var (or a sqlite store instead).
 - Patch MLflow in tests via the string path "birds.tracking.mlflow.start_run"; mypy strict rejects
   `tracking.mlflow` as a non-exported attribute.
+
+## Task 2
+- `train.main` now touches WEIGHTS_DIR (sidecar write/unlink) even with tracking off, so main-level
+  tests must monkeypatch `train_module.WEIGHTS_DIR` to tmp_path or they would delete a real sidecar.
+- Suite-wide off switch is an autouse fixture in tests/conftest.py (monkeypatch.setenv), so a test
+  can still opt in with monkeypatch.setenv; `run_sidecar_path` lives in birds/train.py.
+- mypy strict rejects `train_module.tracking` (implicit re-export); import `birds.tracking` in tests.
