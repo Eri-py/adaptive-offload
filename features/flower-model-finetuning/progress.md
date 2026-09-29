@@ -19,10 +19,10 @@
 - Notes: train.py fit (AdamW, cosine, label smoothing, bf16 autocast, best-val checkpoint, no test loader) + main; TRAIN_SETTINGS in config.py; optional generator in make_data_loader (pre-authorised small extensions). 3 new tests, 186 pass.
 
 ## Task 4 — Evaluation
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 22:22:51
+- Completed: 2026-09-28 22:26:44
+- Notes: evaluate.py (test_accuracy fp32, mean_latency_ms batch-1 forward with warm-up and cuda sync, checkpoint loading, two-row report). 3 new tests, 189 pass.
 
 ## Task 5 — Train and evaluate the real models
 - Status: not started
