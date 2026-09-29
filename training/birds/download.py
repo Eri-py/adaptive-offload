@@ -1,4 +1,4 @@
-"""Explicit dataset download step: `python -m flowers.download`.
+"""Explicit dataset download step: `python -m birds.download`.
 
 The only place in this package that downloads anything. Training and
 evaluation (`data.py`) always load with `download=False` and fail with a
@@ -8,7 +8,7 @@ dataset is a separate, explicitly run concern from the pipeline that uses it.
 
 from torchvision.datasets import Flowers102
 
-from flowers.config import DATA_DIR
+from birds.config import DATA_DIR
 
 _SPLITS = ("train", "val", "test")
 

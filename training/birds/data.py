@@ -1,6 +1,6 @@
 """Loads Oxford 102 Flowers splits and builds their transforms/data loaders.
 
-Never downloads: `flowers.download` is the only place that does. A missing
+Never downloads: `birds.download` is the only place that does. A missing
 dataset raises `FileNotFoundError` naming that command, instead of
 torchvision's generic "not found or corrupted" `RuntimeError`.
 """
@@ -13,12 +13,12 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import Flowers102
 
-from flowers.config import DATA_DIR, MODEL_WEIGHTS, ModelName
+from birds.config import DATA_DIR, MODEL_WEIGHTS, ModelName
 
 Split = Literal["train", "val", "test"]
 Transform = Callable[[Any], Any]
 
-_DOWNLOAD_COMMAND = "python -m flowers.download"
+_DOWNLOAD_COMMAND = "python -m birds.download"
 
 # ImageNet statistics shared by both models' pretrained weights (confirmed
 # equal for MobileNet_V3_Large_Weights.IMAGENET1K_V2 and

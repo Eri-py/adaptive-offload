@@ -39,7 +39,7 @@ security hardening, or exhaustive production robustness.
     - `training/coco/router/` — decision-layer code: feature extraction,
       direct-classifier and utility-regression models, training/eval scripts,
       saved model artifacts.
-  - `training/flowers/` — attempt 2 (flower species identification).
+  - `training/birds/` — attempt 2 (bird species identification, CUB-200-2011).
   - Code reused by both attempts moves into a shared location when it's
     first reused; no shared folder exists yet.
 

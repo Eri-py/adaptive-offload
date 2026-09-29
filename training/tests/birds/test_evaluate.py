@@ -1,7 +1,7 @@
-"""Tests for `flowers.evaluate`: accuracy on known predictions, timing sanity.
+"""Tests for `birds.evaluate`: accuracy on known predictions, timing sanity.
 
 No GPU, no real dataset, no downloaded weights. `evaluate` is imported as a
-module (not `from flowers.evaluate import test_accuracy`) so pytest never
+module (not `from birds.evaluate import test_accuracy`) so pytest never
 mistakes `evaluate.test_accuracy` for a test function of this file's own.
 """
 
@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from flowers import evaluate as ev
+from birds import evaluate as ev
 
 
 def test_top1_accuracy_matches_hand_computed_value() -> None:

@@ -1,4 +1,4 @@
-"""Tests for `flowers.data`: the missing-dataset error and per-split wiring.
+"""Tests for `birds.data`: the missing-dataset error and per-split wiring.
 
 `Flowers102` is always patched here — these tests never touch the network or
 a real dataset on disk.
@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from flowers import data as data_module
+from birds import data as data_module
 
 
 class _FakeFlowers102:
@@ -34,7 +34,7 @@ class _FakeFlowers102:
 
 
 def _patch_flowers102(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Patches `flowers.data.Flowers102`, returning the list of splits it's called with."""
+    """Patches `birds.data.Flowers102`, returning the list of splits it's called with."""
     recorded_splits: list[str] = []
 
     def fake_flowers102(*args: Any, **kwargs: Any) -> _FakeFlowers102:
@@ -53,7 +53,7 @@ def test_missing_dataset_raises_helpful_error(
 ) -> None:
     monkeypatch.setattr(data_module, "DATA_DIR", tmp_path)
 
-    with pytest.raises(FileNotFoundError, match="python -m flowers.download"):
+    with pytest.raises(FileNotFoundError, match="python -m birds.download"):
         data_module.load_train(transform=_identity_transform)
 
 

@@ -1,1 +1,1 @@
-"""Tests for attempt 2: flower species identification training code."""
+"""Tests for attempt 2: bird species identification training code."""

@@ -1,4 +1,4 @@
-"""Tests for `flowers.train`: best-validation checkpointing, not last-epoch.
+"""Tests for `birds.train`: best-validation checkpointing, not last-epoch.
 
 Uses a tiny CPU model and synthetic tensors — no GPU, no real dataset, no
 downloaded weights.
@@ -13,7 +13,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from flowers import train as train_module
+from birds import train as train_module
 
 _NUM_CLASSES = 3
 _NUM_FEATURES = 4

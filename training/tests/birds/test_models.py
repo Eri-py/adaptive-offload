@@ -1,4 +1,4 @@
-"""Tests for `flowers.models`: classifier head shape and the GPU gate.
+"""Tests for `birds.models`: classifier head shape and the GPU gate.
 
 `build_model` is always called with `pretrained=False` here so these tests
 never download ImageNet weights.
@@ -7,8 +7,8 @@ never download ImageNet weights.
 import pytest
 import torch
 
-from flowers import models as models_module
-from flowers.config import NUM_CLASSES
+from birds import models as models_module
+from birds.config import NUM_CLASSES
 
 
 def test_build_small_model_outputs_102_classes() -> None:

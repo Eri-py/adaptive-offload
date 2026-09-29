@@ -26,7 +26,7 @@ You will be given:
 4. Build the project and fix any errors your changes introduced. Before reporting back, run the full quality gate and fix everything until it passes clean:
    - **App changes (React Native/TypeScript):** `cd app && npm run lint && npx tsc --noEmit` — ESLint rules + full type checking. If the task touches native iOS code, also confirm `npx pod-install ios` and a `xcodebuild -workspace ios/*.xcworkspace -scheme <scheme> -configuration Debug build` succeed.
    - **Server changes (Python/FastAPI, `server/api|common|tests`):** `cd server && ruff check . && mypy .` — linting + static type checking.
-   - **Training changes (`training/coco/datagen`, `training/coco/router`, `training/flowers`):** `cd training && ruff check . && mypy .` — same gate, separate package/dependency set from `server/`.
+   - **Training changes (`training/coco/datagen`, `training/coco/router`, `training/birds`):** `cd training && ruff check . && mypy .` — same gate, separate package/dependency set from `server/`.
    Do not report back with a failing quality gate.
 5. Add or update tests as the task's success criteria require. Run them and fix anything that fails. Do not skip tests.
 6. Append any useful learnings — problems and fixes, patterns that worked, surprises — to `learnings.md` in the feature directory.

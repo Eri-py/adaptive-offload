@@ -1,4 +1,4 @@
-"""Trains one flower classifier, keeping only its best validation checkpoint.
+"""Trains one bird classifier, keeping only its best validation checkpoint.
 
 `fit` never receives a test-split loader — by construction, this module has
 no way to touch the test split, satisfying the spec's train/val/test
@@ -18,9 +18,9 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-from flowers.config import SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
-from flowers.data import eval_transform, make_data_loader, train_transform
-from flowers.models import build_model, require_cuda
+from birds.config import SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.data import eval_transform, make_data_loader, train_transform
+from birds.models import build_model, require_cuda
 
 
 @dataclass
@@ -120,7 +120,7 @@ def fit(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fine-tune a flower classifier.")
+    parser = argparse.ArgumentParser(description="Fine-tune a bird classifier.")
     parser.add_argument("--model", choices=["small", "large"], required=True)
     return parser.parse_args()
 

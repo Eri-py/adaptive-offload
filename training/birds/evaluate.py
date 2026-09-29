@@ -1,4 +1,4 @@
-"""Reports test accuracy and per-photo inference time for a trained flower model.
+"""Reports test accuracy and per-photo inference time for a trained bird model.
 
 Accuracy is measured in batches on the GPU for both models (accuracy doesn't
 depend on the deployment device, only latency does). Latency is measured one
@@ -14,11 +14,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from flowers.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
-from flowers.data import eval_transform, load_test, make_data_loader
-from flowers.models import build_model, require_cuda
+from birds.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.data import eval_transform, load_test, make_data_loader
+from birds.models import build_model, require_cuda
 
-_TRAIN_COMMAND = "python -m flowers.train --model {name}"
+_TRAIN_COMMAND = "python -m birds.train --model {name}"
 
 
 def test_accuracy(model: nn.Module, loader: "DataLoader[Any]", device: torch.device) -> float:

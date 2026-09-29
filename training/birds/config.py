@@ -1,4 +1,4 @@
-"""Paths, seed and shared per-model settings for the flowers training pipeline.
+"""Paths, seed and shared per-model settings for the birds training pipeline.
 
 Centralizes filesystem locations (resolved from `__file__`, not cwd, so a
 missing dataset/checkpoint fails clearly instead of reading from or writing
@@ -14,8 +14,8 @@ from typing import Literal
 from torchvision.models import ConvNeXt_Base_Weights, MobileNet_V3_Large_Weights, WeightsEnum
 
 # --- Filesystem locations ----------------------------------------------------
-DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "flowers102"
-WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "models" / "flowers"
+DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "cub200"
+WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "models" / "birds"
 
 SEED = 42
 NUM_CLASSES = 102

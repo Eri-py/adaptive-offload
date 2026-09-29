@@ -1,4 +1,4 @@
-"""Builds the small/large flower classifiers and gates training on a GPU.
+"""Builds the small/large bird classifiers and gates training on a GPU.
 
 Both torchvision backbones ship with a 1000-way ImageNet head; `build_model`
 swaps it for a fresh `Linear(in_features, NUM_CLASSES)` classifying the
@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torchvision.models import WeightsEnum, convnext_base, mobilenet_v3_large
 
-from flowers.config import MODEL_WEIGHTS, NUM_CLASSES, ModelName
+from birds.config import MODEL_WEIGHTS, NUM_CLASSES, ModelName
 
 
 def weights_for(name: ModelName) -> WeightsEnum:
