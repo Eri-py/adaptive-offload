@@ -17,6 +17,8 @@ dependencies = [
     "pandas>=2.2",
     "scikit-learn>=1.5",
     "matplotlib>=3.8",
+    "torch>=2.4",
+    "torchvision>=0.19",
 ]
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once
@@ -38,7 +40,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["coco*", "flowers*"]
+include = ["coco*", "birds*"]
 
 [tool.ruff]
 line-length = 100
@@ -52,7 +54,7 @@ python_version = "3.12"
 strict = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
-exclude = ["build/"]
+exclude = ["build/", "scratch/"]
 # `common` (from `database/common`, installed via `pip install -e ../database`)
 # is only resolvable at runtime through that install's editable-install import
 # hook, not through mypy's static filesystem-based module search. Point mypy
@@ -78,4 +80,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "joblib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "torchvision.*"
 ignore_missing_imports = true

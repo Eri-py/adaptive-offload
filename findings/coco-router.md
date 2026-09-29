@@ -566,7 +566,7 @@ differently.
 
 ### Figure
 
-![Accuracy vs. latency under a hard budget](latency_budget_curves.png)
+![Accuracy vs. latency under a hard budget](../training/coco/router/latency_budget_curves.png)
 
 Six panels, one per budget, each plotting on-time accuracy against mean
 latency: the raw and learned threshold-sweep curves, their tuned points,
