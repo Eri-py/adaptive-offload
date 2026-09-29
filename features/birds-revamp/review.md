@@ -251,7 +251,7 @@ None.
   test measured differently.
 - **Fix:** One assertion, e.g. in `test_metrics.py`:
   `assert train.top1_accuracy is evaluate.top1_accuracy is metrics.top1_accuracy`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: assert validation and test share one accuracy function"
 
 ## Nitpicks
 
