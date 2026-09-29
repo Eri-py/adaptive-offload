@@ -23,3 +23,11 @@
 - evaluate imports `run_sidecar_path` from birds.train (no cycle; train never imports evaluate).
 - Patch `tracking.run` / `tracking.log_metrics` on the `birds.tracking` module in tests; `ev.tracking`
   fails mypy strict (implicit re-export).
+
+## Task 4
+- Retraining is deterministic here: val/test accuracies reproduced the recorded values exactly
+  (small 0.7879@27 / 0.7798; large 0.8973@13 / 0.8699). Runs took ~3 min (small, 30 epochs) and
+  ~5.5 min (large, 15 epochs), evaluation ~2 min.
+- The "birds" experiment is created on first tracked run; the store also has an empty "Default" experiment.
+- Latency is noisy run to run (small 5.71 -> 7.40 ms CPU, large 6.70 -> 7.73 ms CUDA); accuracy is not.
+- Read-back needs MLFLOW_ALLOW_FILE_STORE=true plus set_tracking_uri(MLRUNS_DIR.as_uri()).

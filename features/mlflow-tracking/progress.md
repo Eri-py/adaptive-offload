@@ -19,10 +19,10 @@
 - Notes: evaluate.main resumes the training run from the sidecar and logs test_accuracy/mean_latency_ms metrics plus an eval_device param; absent or malformed sidecar falls back to a standalone run and prints a note. 7 new tests, 215 pass, no mlruns/.
 
 ## Task 4 — Retrain both models under tracking
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-29 11:13:42
+- Completed: 2026-09-29 11:26:03
+- Notes: Retrained both under tracking. Results identical to pre-tracking: small best val 0.7879@27 test 0.7798; large best val 0.8973@13 test 0.8699. Store read back: 2 runs, all params, 30/15 epochs of metrics, test_accuracy+mean_latency_ms+eval_device on the SAME run, git_commit tag, sidecars match run ids, no standalone evaluate-* runs. Latency differs (7.40/7.73 vs 5.71/6.70 ms) — machine-load noise.
 
 ## Task 5 — Document the convention
 - Status: not started
