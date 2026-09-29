@@ -7,6 +7,7 @@ name-to-weights mapping, so `data.py`'s eval transform and `models.py`'s
 `weights_for`/`build_model` (Task 2) share one definition instead of two.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -26,4 +27,21 @@ ModelName = Literal["small", "large"]
 MODEL_WEIGHTS: dict[ModelName, WeightsEnum] = {
     "small": MobileNet_V3_Large_Weights.IMAGENET1K_V2,
     "large": ConvNeXt_Base_Weights.IMAGENET1K_V1,
+}
+
+
+@dataclass(frozen=True)
+class TrainSettings:
+    epochs: int
+    lr: float
+    weight_decay: float
+    batch_size: int
+
+
+# Per-model training recipe (Task 3): the large model gets fewer epochs and a
+# smaller learning rate/batch since ConvNeXt-Base is far more prone to
+# overfitting/instability than MobileNetV3 on this small a dataset.
+TRAIN_SETTINGS: dict[ModelName, TrainSettings] = {
+    "small": TrainSettings(epochs=30, lr=1e-3, weight_decay=0.05, batch_size=64),
+    "large": TrainSettings(epochs=15, lr=1e-4, weight_decay=0.05, batch_size=32),
 }

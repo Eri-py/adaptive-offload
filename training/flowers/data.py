@@ -8,6 +8,7 @@ torchvision's generic "not found or corrupted" `RuntimeError`.
 from collections.abc import Callable
 from typing import Any, Literal
 
+import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import Flowers102
@@ -76,7 +77,12 @@ def eval_transform(model_name: ModelName) -> Transform:
 
 
 def make_data_loader(
-    split: Split, transform: Transform, batch_size: int, shuffle: bool
+    split: Split,
+    transform: Transform,
+    batch_size: int,
+    shuffle: bool,
+    generator: "torch.Generator | None" = None,
 ) -> "DataLoader[Any]":
+    """`generator` seeds the shuffling order; only meaningful when `shuffle=True`."""
     dataset = _SPLIT_LOADERS[split](transform)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, generator=generator)

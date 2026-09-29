@@ -13,10 +13,10 @@
 - Notes: models.py (weights_for, build_model with 102-way head, require_cuda). Pretrained sanity check OK on RTX 5070. 4 new tests, 183 pass.
 
 ## Task 3 — Training loop with validation-based checkpointing
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 22:19:05
+- Completed: 2026-09-28 22:22:51
+- Notes: train.py fit (AdamW, cosine, label smoothing, bf16 autocast, best-val checkpoint, no test loader) + main; TRAIN_SETTINGS in config.py; optional generator in make_data_loader (pre-authorised small extensions). 3 new tests, 186 pass.
 
 ## Task 4 — Evaluation
 - Status: not started
