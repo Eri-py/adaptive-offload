@@ -25,13 +25,13 @@
 - Notes: birds/findings.md: pilot settings, flowers-vs-birds table, cascade table, label-smoothing caveat, 2-sentence interpretation. All numbers checked against pilot_results.txt/cub_pilot.log.
 
 ## Task 5 — Train and evaluate on birds
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 23:32:00
+- Completed: 2026-09-28 23:43:31
+- Notes: small: best val 0.7879 @ 27/30, test 0.7798, 5.713 ms/photo CPU (6 threads), ~2m54s. large: best val 0.8973 @ 13/15, test 0.8699, 6.701 ms/photo CUDA, ~5m27s. Pilot test was 0.7727 / 0.8676. Checkpoints untracked.
 
 ## Task 6 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 23:43:31
+- Completed: 2026-09-28 23:43:47
+- Notes: training: ruff clean, mypy 9 known, 196 passed; database: 1 passed.
