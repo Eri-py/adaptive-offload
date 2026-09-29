@@ -1,9 +1,4 @@
-"""Trains one bird classifier, keeping only its best validation checkpoint.
-
-`fit` never receives a test-split loader — by construction, this module has
-no way to touch the test split, satisfying the spec's train/val/test
-isolation rule (the test split is used once, in `evaluate.py`).
-"""
+"""Trains one bird classifier, keeping its best validation checkpoint (never sees test)."""
 
 import argparse
 import random
@@ -20,6 +15,7 @@ from torch.utils.data import DataLoader
 
 from birds.config import SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, make_data_loader, train_transform
+from birds.metrics import top1_accuracy
 from birds.models import build_model, require_cuda
 
 
@@ -44,22 +40,6 @@ def _seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def _evaluate_accuracy(
-    model: nn.Module, loader: "DataLoader[Any]", device: torch.device
-) -> float:
-    """Top-1 accuracy of `model` over every batch in `loader`."""
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.inference_mode():
-        for images, labels in loader:
-            images, labels = images.to(device), labels.to(device)
-            predictions = model(images).argmax(dim=1)
-            correct += int((predictions == labels).sum().item())
-            total += int(labels.size(0))
-    return correct / total
-
-
 def fit(
     model: nn.Module,
     train_loader: "DataLoader[Any]",
@@ -70,12 +50,7 @@ def fit(
     weight_decay: float,
     checkpoint_path: Path,
 ) -> FitResult:
-    """Trains `model`, saving the state dict with the best validation accuracy.
-
-    Mixed precision uses bf16 (no `GradScaler`: unlike fp16, bf16's exponent
-    range matches fp32's, so it needs no loss scaling) when `device` is CUDA;
-    it's a no-op autocast on CPU.
-    """
+    """Trains `model`, saving the best-validation state dict; bf16 autocast on CUDA, no scaler."""
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
@@ -103,7 +78,7 @@ def fit(
         scheduler.step()
 
         train_loss = running_loss / num_batches
-        val_accuracy = _evaluate_accuracy(model, val_loader, device)
+        val_accuracy = top1_accuracy(model, val_loader, device)
         print(
             f"epoch {epoch}/{epochs} - train loss {train_loss:.4f} - "
             f"val accuracy {val_accuracy:.4f}"
@@ -130,10 +105,9 @@ def main() -> None:
     model_name: ModelName = args.model
 
     _seed_everything(SEED)
-    device = require_cuda()
     settings = TRAIN_SETTINGS[model_name]
 
-    model = build_model(model_name, pretrained=True)
+    # Loaders come first: a missing dataset must fail before any weights download.
     shuffle_generator = torch.Generator().manual_seed(SEED)
     train_loader = make_data_loader(
         "train",
@@ -145,6 +119,9 @@ def main() -> None:
     val_loader = make_data_loader(
         "val", eval_transform(model_name), settings.batch_size, shuffle=False
     )
+
+    device = require_cuda()
+    model = build_model(model_name, pretrained=True)
 
     checkpoint_path = WEIGHTS_DIR / f"{model_name}.pt"
     result = fit(

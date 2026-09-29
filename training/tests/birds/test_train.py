@@ -1,14 +1,11 @@
-"""Tests for `birds.train`: best-validation checkpointing, not last-epoch.
-
-Uses a tiny CPU model and synthetic tensors — no GPU, no real dataset, no
-downloaded weights.
-"""
+"""Tests for `birds.train`: best-validation checkpointing and data-before-model order."""
 
 import copy
 import inspect
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -50,7 +47,9 @@ def test_fit_saves_a_checkpoint(tmp_path: Path) -> None:
     assert len(result.history) == 2
 
 
-def test_fit_keeps_the_best_epoch_not_the_last(tmp_path: Path) -> None:
+def test_fit_keeps_the_best_epoch_not_the_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Scripted validation accuracies [0.5, 0.9, 0.7]: epoch 2 (1-based) wins."""
     model = _tiny_model()
     train_loader = _synthetic_loader(num_samples=8, batch_size=4)
@@ -61,7 +60,7 @@ def test_fit_keeps_the_best_epoch_not_the_last(tmp_path: Path) -> None:
     snapshots_by_epoch: dict[int, dict[str, torch.Tensor]] = {}
     call_count = 0
 
-    def fake_evaluate_accuracy(
+    def fake_top1_accuracy(
         model: nn.Module, loader: "DataLoader[Any]", device: torch.device
     ) -> float:
         nonlocal call_count
@@ -69,21 +68,17 @@ def test_fit_keeps_the_best_epoch_not_the_last(tmp_path: Path) -> None:
         snapshots_by_epoch[call_count] = copy.deepcopy(model.state_dict())
         return next(scripted_accuracies)
 
-    original_evaluate_accuracy = train_module._evaluate_accuracy
-    train_module._evaluate_accuracy = fake_evaluate_accuracy
-    try:
-        result = train_module.fit(
-            model,
-            train_loader,
-            val_loader,
-            device=torch.device("cpu"),
-            epochs=3,
-            lr=1e-3,
-            weight_decay=0.0,
-            checkpoint_path=checkpoint_path,
-        )
-    finally:
-        train_module._evaluate_accuracy = original_evaluate_accuracy
+    monkeypatch.setattr(train_module, "top1_accuracy", fake_top1_accuracy)
+    result = train_module.fit(
+        model,
+        train_loader,
+        val_loader,
+        device=torch.device("cpu"),
+        epochs=3,
+        lr=1e-3,
+        weight_decay=0.0,
+        checkpoint_path=checkpoint_path,
+    )
 
     assert result.best_epoch == 2
     assert result.best_val_accuracy == 0.9
@@ -107,3 +102,45 @@ def test_fit_signature_has_no_test_split_parameter() -> None:
         "weight_decay",
         "checkpoint_path",
     ]
+
+
+def _patch_main(monkeypatch: pytest.MonkeyPatch, calls: list[str], *, data_missing: bool) -> None:
+    def fake_make_data_loader(split: str, *args: Any, **kwargs: Any) -> str:
+        calls.append(f"data:{split}")
+        if data_missing:
+            raise FileNotFoundError("run `python -m birds.download`")
+        return split
+
+    def fake_require_cuda() -> torch.device:
+        calls.append("cuda")
+        return torch.device("cpu")
+
+    def fake_build_model(name: str, pretrained: bool = True) -> nn.Module:
+        calls.append("model")
+        return _tiny_model()
+
+    monkeypatch.setattr("sys.argv", ["train", "--model", "small"])
+    monkeypatch.setattr(train_module, "make_data_loader", fake_make_data_loader)
+    monkeypatch.setattr(train_module, "require_cuda", fake_require_cuda)
+    monkeypatch.setattr(train_module, "build_model", fake_build_model)
+    monkeypatch.setattr(train_module, "fit", lambda *args, **kwargs: calls.append("fit"))
+
+
+def test_main_builds_data_loaders_before_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    _patch_main(monkeypatch, calls, data_missing=False)
+
+    train_module.main()
+
+    assert calls == ["data:train", "data:val", "cuda", "model", "fit"]
+
+
+def test_main_builds_no_model_when_the_dataset_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    _patch_main(monkeypatch, calls, data_missing=True)
+
+    with pytest.raises(FileNotFoundError, match="birds.download"):
+        train_module.main()
+
+    assert "model" not in calls
+    assert "cuda" not in calls

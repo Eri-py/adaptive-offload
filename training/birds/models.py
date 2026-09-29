@@ -1,9 +1,4 @@
-"""Builds the small/large bird classifiers and gates training on a GPU.
-
-Both torchvision backbones ship with a 1000-way ImageNet head; `build_model`
-swaps it for a fresh `Linear(in_features, NUM_CLASSES)` classifying the
-200 CUB-200-2011 bird species instead.
-"""
+"""Builds the small/large bird classifiers (200-way head) and gates training on a GPU."""
 
 from typing import cast
 
@@ -20,7 +15,7 @@ def weights_for(name: ModelName) -> WeightsEnum:
 
 
 def _replace_head(classifier: nn.Sequential, index: int) -> None:
-    """Swaps the `Linear` layer at `index` for a fresh NUM_CLASSES-way one, in place."""
+    """Swaps the `Linear` at `index` for a fresh NUM_CLASSES-way one."""
     old_head = cast(nn.Linear, classifier[index])
     classifier[index] = nn.Linear(old_head.in_features, NUM_CLASSES)
 

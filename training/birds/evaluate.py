@@ -1,44 +1,19 @@
-"""Reports test accuracy and per-photo inference time for a trained bird model.
-
-Accuracy is measured in batches on the GPU for both models (accuracy doesn't
-depend on the deployment device, only latency does). Latency is measured one
-photo at a time, matching how the model would actually be deployed: the small
-model stands in for the phone (CPU), the large one for the server (GPU) — the
-same split the COCO simulator used for its two models.
-"""
+"""Reports test accuracy (GPU batches) and per-photo latency (small on CPU, large on GPU)."""
 
 import time
 from typing import Any
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 from birds.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, load_test, make_data_loader
+from birds.metrics import top1_accuracy
 from birds.models import build_model, require_cuda
 
+_MODEL_NAMES: tuple[ModelName, ModelName] = ("small", "large")
 _TRAIN_COMMAND = "python -m birds.train --model {name}"
-
-
-def test_accuracy(model: nn.Module, loader: "DataLoader[Any]", device: torch.device) -> float:
-    """Top-1 accuracy of `model` over every batch in `loader`.
-
-    Plain fp32, not autocast: this runs once per model over the full test
-    split, so there's no reason to trade the accuracy figure's precision for
-    autocast's speed (unlike training, which runs this every epoch).
-    """
-    model.eval()
-    model.to(device)
-    correct = 0
-    total = 0
-    with torch.inference_mode():
-        for images, labels in loader:
-            images, labels = images.to(device), labels.to(device)
-            predictions = model(images).argmax(dim=1)
-            correct += int((predictions == labels).sum().item())
-            total += int(labels.size(0))
-    return correct / total
 
 
 def mean_latency_ms(
@@ -47,15 +22,7 @@ def mean_latency_ms(
     device: torch.device,
     warmup: int = 10,
 ) -> float:
-    """Mean forward-pass latency (ms) over every item in `dataset`, batch of 1.
-
-    `warmup` forward passes run first and are discarded (they reuse the
-    dataset's own items, cycling with modulo so this works even when the
-    dataset is smaller than `warmup`, e.g. in tests). Only the forward pass
-    itself is timed, not moving the tensor to `device`. `torch.cuda
-    .synchronize()` brackets each timed forward pass on CUDA, since kernels
-    launch asynchronously there and would otherwise be measured incomplete.
-    """
+    """Mean batch-1 forward-pass ms over `dataset`; warm-up cycles items, CUDA synced."""
     model.eval()
     model.to(device)
     num_items = len(dataset)  # type: ignore[arg-type]
@@ -92,9 +59,7 @@ def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
             f"Missing checkpoint for the '{name}' model at {checkpoint_path}. "
             f"Run `{_TRAIN_COMMAND.format(name=name)}` first."
         )
-    # pretrained=False: we're about to overwrite every weight with the
-    # checkpoint's state dict, so there's no reason to also download the
-    # ImageNet weights first.
+    # Weights are overwritten by the checkpoint, so skip the ImageNet download.
     model = build_model(name, pretrained=False)
     state_dict = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(state_dict)
@@ -107,23 +72,26 @@ def main() -> None:
     cpu_device = torch.device("cpu")
     thread_count = torch.get_num_threads()
 
-    rows: list[tuple[str, float, float, str]] = []
-    for name in ("small", "large"):
-        model = _load_checkpoint(name, gpu_device)
-        settings = TRAIN_SETTINGS[name]
-        test_loader = make_data_loader(
-            "test", eval_transform(name), settings.batch_size, shuffle=False
+    # Loaders come first: a missing dataset must fail before any checkpoint loads.
+    test_loaders = {
+        name: make_data_loader(
+            "test", eval_transform(name), TRAIN_SETTINGS[name].batch_size, shuffle=False
         )
-        accuracy = test_accuracy(model, test_loader, gpu_device)
+        for name in _MODEL_NAMES
+    }
+
+    rows: list[tuple[str, float, float, str]] = []
+    for name in _MODEL_NAMES:
+        model = _load_checkpoint(name, gpu_device)
+        accuracy = top1_accuracy(model, test_loaders[name], gpu_device)
 
         if name == "small":
-            # Small model's latency stands in for the phone: CPU.
+            # Small model stands in for the phone: CPU.
             latency_model = _load_checkpoint(name, cpu_device)
             latency_device = cpu_device
             device_label = f"cpu ({thread_count} threads)"
         else:
-            # Large model's latency stands in for the server: GPU. Reuse the
-            # already-loaded, already-on-GPU model from the accuracy step.
+            # Large model stands in for the server: GPU, reusing the loaded model.
             latency_model = model
             latency_device = gpu_device
             device_label = "cuda"
@@ -134,8 +102,8 @@ def main() -> None:
 
     header = f"{'model':<8} {'test accuracy':>14} {'mean ms/photo':>15}  device"
     print(header)
-    for name, accuracy, latency_ms, device_label in rows:
-        print(f"{name:<8} {accuracy:>14.4f} {latency_ms:>15.3f}  {device_label}")
+    for row_name, row_accuracy, row_latency_ms, row_label in rows:
+        print(f"{row_name:<8} {row_accuracy:>14.4f} {row_latency_ms:>15.3f}  {row_label}")
 
 
 if __name__ == "__main__":

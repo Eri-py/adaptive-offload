@@ -13,10 +13,10 @@
 - Notes: CUB loader + split_ids (5400/594/5794, val identical to pilot) + download (already present, 11788). models.py prose fixed. 8 new data tests replace flowers ones; 192 pass.
 
 ## Task 3 — Flowers review fixes and 200-way models
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 23:29:11
+- Completed: 2026-09-28 23:31:27
+- Notes: metrics.top1_accuracy shared (S2); train/evaluate build data before model/checkpoints (S1); new tests: missing checkpoint, per-model eval transform, step order + missing dataset builds no model (S3); one-line docstrings (S4); monkeypatch (N1); 200-way model tests. 196 pass.
 
 ## Task 4 — Record the pilot rationale
 - Status: not started
