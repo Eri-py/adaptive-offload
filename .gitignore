@@ -25,3 +25,6 @@ training/data/
 */.expo
 # Local experiment scratch space — pilots, logs, throwaway checkpoints
 training/scratch/
+
+# MLflow local run store — experiment tracking output, not source
+training/mlruns/

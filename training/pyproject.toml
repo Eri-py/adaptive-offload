@@ -19,6 +19,7 @@ dependencies = [
     "matplotlib>=3.8",
     "torch>=2.4",
     "torchvision>=0.19",
+    "mlflow>=2.14",
 ]
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once

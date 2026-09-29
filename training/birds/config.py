@@ -9,6 +9,8 @@ from torchvision.models import ConvNeXt_Base_Weights, MobileNet_V3_Large_Weights
 # --- Filesystem locations ----------------------------------------------------
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "cub200"
 WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "models" / "birds"
+MLRUNS_DIR = Path(__file__).resolve().parents[1] / "mlruns"
+EXPERIMENT_NAME = "birds"
 
 SEED = 42
 NUM_CLASSES = 200
