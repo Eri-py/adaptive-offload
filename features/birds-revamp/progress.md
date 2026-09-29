@@ -19,10 +19,10 @@
 - Notes: metrics.top1_accuracy shared (S2); train/evaluate build data before model/checkpoints (S1); new tests: missing checkpoint, per-model eval transform, step order + missing dataset builds no model (S3); one-line docstrings (S4); monkeypatch (N1); 200-way model tests. 196 pass.
 
 ## Task 4 — Record the pilot rationale
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 23:31:27
+- Completed: 2026-09-28 23:32:00
+- Notes: birds/findings.md: pilot settings, flowers-vs-birds table, cascade table, label-smoothing caveat, 2-sentence interpretation. All numbers checked against pilot_results.txt/cub_pilot.log.
 
 ## Task 5 — Train and evaluate on birds
 - Status: not started
