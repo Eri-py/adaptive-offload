@@ -22,7 +22,7 @@ target_metadata = Base.metadata
 
 # Load DATABASE_URL from database/.env if it isn't already in the environment
 # (never overrides an explicit `export`) — mirrors the same pattern used by
-# the simulator CLI (training/datagen/run_simulation.py) and the test
+# the simulator CLI (training/coco/datagen/cli/run_simulation.py) and the test
 # fixtures, so this is the one consistent way DATABASE_URL gets resolved
 # across the whole project rather than migrations being the odd one out.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
