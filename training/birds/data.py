@@ -13,7 +13,6 @@ from torchvision import transforms
 from birds.config import (
     DATA_DIR,
     MODEL_WEIGHTS,
-    NUM_CLASSES,
     NUM_WORKERS,
     SEED,
     VAL_FRACTION,
@@ -80,10 +79,10 @@ def _split_from_index(
 ) -> tuple[list[str], list[str], list[str]]:
     official_train = sorted((k for k, t in is_train.items() if t), key=int)
     test_ids = sorted((k for k, t in is_train.items() if not t), key=int)
-    # Per species in class order, one shared rng: hold out max(1, n // 10).
+    # Per species in ascending label order, one shared rng: hold out max(1, n // 10).
     rng = np.random.default_rng(SEED)
     val_ids: list[str] = []
-    for species in range(NUM_CLASSES):
+    for species in sorted(set(labels.values())):
         species_ids = [k for k in official_train if labels[k] == species]
         rng.shuffle(species_ids)
         val_ids += species_ids[: max(1, int(len(species_ids) * VAL_FRACTION + 1e-9))]

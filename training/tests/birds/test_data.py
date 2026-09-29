@@ -42,7 +42,6 @@ def fake_cub(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (root / "image_class_labels.txt").write_text("\n".join(labels) + "\n")
     (root / "train_test_split.txt").write_text("\n".join(splits) + "\n")
     monkeypatch.setattr(data_module, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(data_module, "NUM_CLASSES", len(_LAYOUT))
     return root
 
 
