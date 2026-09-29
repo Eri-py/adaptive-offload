@@ -25,7 +25,7 @@
 - Notes: Guidelines (layout paragraph + paths), implementer.md quality-gate paths, findings.md run commands updated. One stale old-path comment remains in database/migrations/env.py (out of scope; was already wrong pre-move).
 
 ## Task 5 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-28 20:57:23
+- Completed: 2026-09-28 20:57:40
+- Notes: training: ruff clean, mypy 9 known, 174 passed; database: 1 passed. No files changed.
