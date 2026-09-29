@@ -31,7 +31,7 @@
 - Notes: Three bullets in coding-guidelines under the training-code section: what is tracked and where, tracking must never break a run plus the test off-switch, and the UI command. Orchestrator confirmed the MLFLOW_ALLOW_FILE_STORE requirement is enforced in the shared FileStore class, so the documented command is correct.
 
 ## Task 6 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-09-29 11:26:53
+- Completed: 2026-09-29 11:27:25
+- Notes: training: ruff clean, mypy 9 known, 215 passed; database: 1 passed. Test run created no new MLflow runs.
