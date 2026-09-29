@@ -26,5 +26,7 @@ training/data/
 # Local experiment scratch space — pilots, logs, throwaway checkpoints
 training/scratch/
 
-# MLflow local run store — experiment tracking output, not source
-training/mlruns/
+# MLflow: run history lives in Postgres; these are local by-products, not source.
+# The run-id sidecars point at rows in a machine-local database, so they never belong in git.
+training/mlartifacts/
+*.run.json

@@ -13,7 +13,7 @@ from torch import nn
 from torch.utils.data import TensorDataset
 
 from birds import evaluate as ev
-from birds import tracking
+from shared import tracking
 
 
 def test_mean_latency_ms_is_positive_and_finite() -> None:
@@ -105,7 +105,11 @@ def _patch_main_for_tracking(monkeypatch: pytest.MonkeyPatch, weights_dir: Path)
 
     @contextmanager
     def fake_run(
-        run_name: str, params: Mapping[str, Any], *, run_id: str | None = None
+        run_name: str,
+        params: Mapping[str, Any],
+        *,
+        experiment: str,
+        run_id: str | None = None,
     ) -> Iterator[tracking.RunHandle]:
         calls.append((run_name, dict(params), run_id))
         yield tracking.RunHandle(id=run_id)
@@ -120,6 +124,11 @@ def _patch_main_for_tracking(monkeypatch: pytest.MonkeyPatch, weights_dir: Path)
     monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 2.0)
     monkeypatch.setattr(tracking, "run", fake_run)
     monkeypatch.setattr(tracking, "log_metrics", lambda handle, metrics: calls.append(metrics))
+    monkeypatch.setattr(
+        tracking,
+        "log_to_run",
+        lambda run_id, **kwargs: calls.append((run_id, kwargs)),
+    )
     return calls
 
 
@@ -132,9 +141,12 @@ def test_main_attaches_results_to_the_training_run(
 
     ev.main()
 
-    runs = [c for c in calls if isinstance(c, tuple)]
-    assert [r[2] for r in runs] == ["abc", "def"]
-    assert {"test_accuracy": 0.9, "mean_latency_ms": 2.0} in calls
+    # Attached results are written straight to the run id, never by resuming the run.
+    attached = [c for c in calls if isinstance(c, tuple) and len(c) == 2]
+    assert [run_id for run_id, _ in attached] == ["abc", "def"]
+    assert attached[0][1]["metrics"] == {"test_accuracy": 0.9, "mean_latency_ms": 2.0}
+    assert "eval_device" in attached[0][1]["tags"]
+    assert not [c for c in calls if isinstance(c, tuple) and len(c) == 3]
     assert "not attached" not in capsys.readouterr().out
 
 
@@ -154,7 +166,7 @@ def test_main_without_a_usable_sidecar_runs_standalone(
     ev.main()
 
     out = capsys.readouterr().out
-    runs = [c for c in calls if isinstance(c, tuple)]
+    runs = [c for c in calls if isinstance(c, tuple) and len(c) == 3]
     assert runs[0][0] == "evaluate-small" and runs[0][2] is None
     assert "test accuracy" in out and "0.9000" in out
     assert "small results are not attached to a training run" in out

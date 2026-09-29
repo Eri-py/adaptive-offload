@@ -1,5 +1,12 @@
 # MLflow Experiment Tracking — Implementation Plan
 
+> **Superseded in part (2026-09-29).** The plan below describes the local file
+> store this feature originally shipped. After review, the backend moved to a
+> dedicated `mlflow` Postgres database and the module moved from
+> `training/birds/tracking.py` to `training/shared/tracking.py`. See the amendment
+> note in `spec.md` and the "Post-review changes" section of
+> `implementation-report.md`.
+
 ## Summary
 
 Add a small tracking module to `training/birds/` that records each training

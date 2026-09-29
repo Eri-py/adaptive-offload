@@ -1,20 +1,17 @@
 """Reports test accuracy (GPU batches) and per-photo latency (small on CPU, large on GPU)."""
 
-import json
 import time
-from pathlib import Path
 from typing import Any
 
 import torch
 from torch import nn
 from torch.utils.data import Dataset
 
-from birds import tracking
-from birds.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.config import EXPERIMENT_NAME, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, load_test, make_data_loader
 from birds.metrics import top1_accuracy
 from birds.models import build_model, require_cuda
-from birds.train import run_sidecar_path
+from shared import tracking
 
 _MODEL_NAMES: tuple[ModelName, ModelName] = ("small", "large")
 _TRAIN_COMMAND = "python -m birds.train --model {name}"
@@ -71,23 +68,21 @@ def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
     return model
 
 
-def _training_run_id(checkpoint_path: Path) -> str | None:
-    """The MLflow run id recorded beside the checkpoint; None if absent or unreadable."""
-    try:
-        run_id = json.loads(run_sidecar_path(checkpoint_path).read_text())["run_id"]
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
-    return run_id if isinstance(run_id, str) and run_id else None
-
-
 def _log_results(name: ModelName, accuracy: float, latency_ms: float, device_label: str) -> bool:
     """Logs the results to the model's training run; True if attached, else a standalone run."""
-    training_run_id = _training_run_id(WEIGHTS_DIR / f"{name}.pt")
-    # Resuming with the training run's own name leaves that run's name unchanged.
-    run_name = f"train-{name}" if training_run_id is not None else f"evaluate-{name}"
-    with tracking.run(run_name, {"eval_device": device_label}, run_id=training_run_id) as handle:
-        tracking.log_metrics(handle, {"test_accuracy": accuracy, "mean_latency_ms": latency_ms})
-    return training_run_id is not None
+    training_run_id = tracking.read_run_id(WEIGHTS_DIR / f"{name}.pt")
+    metrics = {"test_accuracy": accuracy, "mean_latency_ms": latency_ms}
+    if training_run_id is not None:
+        # Written into the finished run rather than resuming it, so its end time and status
+        # keep describing the training. The device is a tag because re-evaluating on another
+        # device may change it, and MLflow rejects a changed param.
+        tracking.log_to_run(training_run_id, metrics=metrics, tags={"eval_device": device_label})
+        return True
+    with tracking.run(
+        f"evaluate-{name}", {"eval_device": device_label}, experiment=EXPERIMENT_NAME
+    ) as handle:
+        tracking.log_metrics(handle, metrics)
+    return False
 
 
 def main() -> None:

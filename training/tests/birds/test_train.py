@@ -13,9 +13,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from birds import tracking
 from birds import train as train_module
-from birds.tracking import RunHandle
+from shared import tracking
+from shared.tracking import RunHandle
 
 _NUM_CLASSES = 3
 _NUM_FEATURES = 4
@@ -189,7 +189,7 @@ def test_fit_calls_on_epoch_end_once_per_epoch_with_that_epochs_values(
 
 
 def test_run_sidecar_path_sits_next_to_the_checkpoint() -> None:
-    assert train_module.run_sidecar_path(Path("/w/small.pt")) == Path("/w/small.pt.run.json")
+    assert tracking.run_sidecar_path(Path("/w/small.pt")) == Path("/w/small.pt.run.json")
 
 
 def test_main_writes_the_run_id_sidecar_when_tracking_is_on(
@@ -199,7 +199,7 @@ def test_main_writes_the_run_id_sidecar_when_tracking_is_on(
     logged: list[dict[str, float]] = []
 
     @contextmanager
-    def fake_run(name: str, params: Mapping[str, Any]) -> Iterator[RunHandle]:
+    def fake_run(name: str, params: Mapping[str, Any], *, experiment: str) -> Iterator[RunHandle]:
         assert params["model"] == "small"
         assert params["dataset"] == "cub200"
         yield RunHandle(id="abc123")
@@ -226,6 +226,6 @@ def test_main_writes_no_sidecar_and_removes_a_stale_one_when_tracking_is_off(
     stale = tmp_path / "small.pt.run.json"
     stale.write_text('{"run_id": "old"}')
 
-    train_module.main()  # the suite-wide BIRDS_TRACKING=off applies
+    train_module.main()  # the suite-wide TRAINING_TRACKING=off applies
 
     assert not stale.exists()

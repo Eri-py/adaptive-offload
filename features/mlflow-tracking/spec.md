@@ -1,5 +1,18 @@
 # MLflow Experiment Tracking
 
+> **Amended after review (2026-09-29).** Two requirements below were changed by
+> the user after the feature was first implemented and reviewed:
+> 1. **The store is Postgres, not a local folder.** The `mlflow` database on the
+>    existing instance replaces `training/mlruns/`; MLflow's file store is in
+>    maintenance mode upstream. "Run history is stored locally in a folder that
+>    git ignores" and the matching Out of Scope bullet no longer hold — nothing
+>    is uploaded off the machine, but the store is a database.
+> 2. **Tracking is not birds-specific.** It applies to every training attempt,
+>    so the module lives in `training/shared/`, not `training/birds/`.
+>
+> The remaining requirements, and every acceptance criterion except the
+> folder-store one, are unchanged.
+
 ## Overview
 
 Training runs currently leave no durable record: their numbers survive only in

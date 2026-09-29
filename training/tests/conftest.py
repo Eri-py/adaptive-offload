@@ -22,8 +22,8 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 @pytest.fixture(autouse=True)
 def _tracking_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the suite from writing `mlruns/`; tests that want tracking opt in explicitly."""
-    monkeypatch.setenv("BIRDS_TRACKING", "off")
+    """Keep the suite out of the real run store; tests that want tracking opt in explicitly."""
+    monkeypatch.setenv("TRAINING_TRACKING", "off")
 
 
 @pytest.fixture

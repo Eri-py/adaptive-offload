@@ -7,9 +7,14 @@ from typing import Literal
 from torchvision.models import ConvNeXt_Base_Weights, MobileNet_V3_Large_Weights, WeightsEnum
 
 # --- Filesystem locations ----------------------------------------------------
-DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "cub200"
-WEIGHTS_DIR = Path(__file__).resolve().parents[1] / "models" / "birds"
-MLRUNS_DIR = Path(__file__).resolve().parents[1] / "mlruns"
+TRAINING_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = TRAINING_DIR / "data" / "cub200"
+WEIGHTS_DIR = TRAINING_DIR / "models" / "birds"
+
+# Run history lives in its own Postgres database (MLFLOW_TRACKING_URI in training/.env),
+# separate from adaptive_offload because MLflow's Alembic would collide with the project's.
+# Artifacts are never logged; this path only keeps MLflow from littering the cwd.
+ARTIFACTS_DIR = TRAINING_DIR / "mlartifacts"
 EXPERIMENT_NAME = "birds"
 
 SEED = 42

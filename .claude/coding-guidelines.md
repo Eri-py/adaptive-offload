@@ -74,6 +74,10 @@ config applies where.
   sweep results. No SQLite, no separate CSV/Parquet store. There is no
   `docker-compose.yml` for this — the instance and database already exist
   outside the repo.
+- That instance holds two databases the project owns: `adaptive_offload` (the
+  research data, migrated by `database/migrations/`) and `mlflow` (experiment
+  tracking — see Experiment tracking below). They are deliberately separate;
+  don't merge them.
 - `database/` owns the SQLAlchemy engine/session setup and the shared table
   models. Both `server/api/services/` and `training/` import from there
   rather than opening their own connections or redefining tables — neither
@@ -151,18 +155,41 @@ config applies where.
   reproducibility.
 - The frame-level train/test split is enforced by a helper function that
   guarantees no frame appears in both sets — not by convention.
-- Every birds training run is tracked in MLflow (params, per-epoch metrics,
-  evaluation results). The store is the gitignored `training/mlruns/`. Only
-  `training/birds/tracking.py` calls MLflow; callers use its `run(...)` context
-  manager and `log_metrics(...)`. Evaluation attaches to the training run via the
-  `<checkpoint>.run.json` sidecar holding the run id.
+
+## Experiment tracking (`training/birds/`, and any training code added later)
+
+- Every training run is tracked in MLflow: params, per-epoch metrics and the
+  evaluation results. This is a standing requirement, not a birds-only one —
+  new training code tracks its runs the same way.
+- Only `training/birds/tracking.py` calls MLflow. Callers use its `run(...)`
+  context manager and `log_metrics(...)`, so there is one place to change if
+  the backend moves again.
+- **The store is Postgres, not a folder.** Run history lives in its own
+  `mlflow` database on the same instance as `adaptive_offload`, addressed by
+  `MLFLOW_TRACKING_URI` in the gitignored `training/.env`. It must stay a
+  *separate database*: MLflow keeps its own Alembic version in the default
+  `alembic_version` table, so sharing one database with `database/migrations/`
+  would have each clobber the other's schema version.
+- Checkpoints are never logged as artifacts (hundreds of MB, already on disk).
+  `training/mlartifacts/` exists only so MLflow doesn't default its artifact
+  root into the working directory.
+- Evaluation attaches to the run that produced the model via the
+  `<checkpoint>.run.json` sidecar holding the run id. `train.main` writes that
+  sidecar *before* fitting, because `fit` overwrites the checkpoint as soon as
+  an epoch improves — writing it afterwards means an interrupted run leaves a
+  new model beside the previous run's id, and the next evaluation silently
+  files its numbers under the wrong run. The sidecars are gitignored
+  (`*.run.json`): they name rows in a machine-local database.
 - Tracking must never break a run: failures print a warning and continue with a
-  no-op handle. Tests must not write run history (`training/tests/conftest.py`
-  sets `BIRDS_TRACKING=off` for the whole suite); new training code keeps that.
-- To view history, the user runs (never the agent; see `CLAUDE.md`):
-  `MLFLOW_ALLOW_FILE_STORE=true mlflow ui --backend-store-uri training/mlruns`.
-  MLflow 3.x refuses a plain-directory store without that variable
-  (`tracking.run` sets it internally; the UI does not).
+  no-op handle. Tests must not write real run history
+  (`training/tests/conftest.py` sets `BIRDS_TRACKING=off` for the whole suite);
+  tests that need a real store opt in and use a disposable database.
+- To view history, the user runs it (never the agent; see `CLAUDE.md`):
+
+  ```bash
+  set -a; source training/.env; set +a
+  mlflow ui --backend-store-uri "$MLFLOW_TRACKING_URI"
+  ```
 
 ## Code organization (all areas)
 

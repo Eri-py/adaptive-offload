@@ -111,7 +111,9 @@ is untouched, as the spec's Out of Scope requires.
   after entering the `with` block, before the `fit` call — the run id is already
   known there, and it makes the sidecar match whichever run is currently
   entitled to write that checkpoint at every instant, crash or not.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Move MLflow tracking to Postgres and a
+  shared module". Verified empirically mid-retrain: the sidecar named the
+  in-flight run while training was still running.
 
 #### B2 — The run-id sidecars are not gitignored, so `git status` now reports `training/models/`
 
@@ -126,7 +128,10 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Add `*.pt.run.json` (or `training/models/`) to `.gitignore`
   alongside the `training/mlruns/` entry, with the same one-line rationale
   comment.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — `*.run.json` ignored. One premise corrected:
+  `training/models/` was already reported before this branch, since
+  `yolov8n.onnx` and `yolov8n_saved_model/` are untracked and unignored. The
+  substance holds — a machine-local run id must not be committable.
 
 ## Suggestions
 
@@ -143,7 +148,8 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Only set `git_commit` when `run_id is None` (i.e. when the run is
   actually being created); if the evaluating commit is worth keeping, record it
   under a separate key such as `eval_git_commit`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — `git_commit` is now set only when the run is created
+  (`run_id is None`), so evaluation can no longer rewrite it.
 
 #### S2 — Resuming the run during evaluation rewrites its end time, so recorded training duration is wrong
 
@@ -158,7 +164,9 @@ is untouched, as the spec's Out of Scope requires.
   `MlflowClient().log_metric(run_id, ...)` / `log_param(run_id, ...)` instead of
   resuming the fluent run, e.g. a `tracking.log_to_run(run_id, metrics, params)`
   helper. That leaves the finished run's timing and status untouched.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — added `tracking.log_to_run`, which writes through
+  `MlflowClient` without resuming or re-ending the run. Evaluation uses it, so
+  recorded durations now describe the training.
 
 #### S3 — A teardown failure leaves the run globally active and silently disables tracking for the rest of the process
 
@@ -175,7 +183,8 @@ is untouched, as the spec's Out of Scope requires.
   continuing (a second best-effort `mlflow.end_run()`, or clearing
   `mlflow.tracking.fluent._active_run_stack`), so one bad teardown costs one
   run rather than the whole process.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — a teardown failure now drops the run from the fluent
+  stack (best-effort `end_run`, else clearing the thread-local stack).
 
 #### S4 — `log_metrics` ignores `handle.id` and writes to whichever run is globally active
 
@@ -190,7 +199,8 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Write through `MlflowClient(tracking_uri=...).log_metric(handle.id,
   key, value, step=step)` so the handle genuinely selects its run. This also
   gives S2 its fix for free.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — `log_metrics` now delegates to `log_to_run`, so the
+  handle genuinely selects its run instead of the globally active one.
 
 #### S5 — The convention was documented under the coco/router heading, which does not cover `training/birds/`
 
@@ -205,7 +215,10 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Either add a `## Birds training code (training/birds/)` heading above
   the new bullets, or widen the existing heading to `## Training code
   (training/)` and keep the per-area scoping in the bullets themselves.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted, and taken further — the user pointed out that tracking
+  is a standing requirement for *all* training, not just birds. The module moved
+  to `training/shared/tracking.py` and the guidelines gained an "Experiment
+  tracking" section covering `training/` as a whole.
 
 #### S6 — `evaluate.py` imports `run_sidecar_path` from `birds.train`
 
@@ -218,7 +231,9 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Move `run_sidecar_path` into `birds/tracking.py` (it is tracking
   metadata, not training logic) and have both entry points import it from
   there.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — `run_sidecar_path`, `record_run_id` and `read_run_id`
+  all live in `shared/tracking.py` now; evaluation no longer imports the
+  training module.
 
 #### S7 — MLflow moved shared dependencies in the venv that `server/` also uses
 
@@ -235,7 +250,9 @@ is untouched, as the spec's Out of Scope requires.
   `requirements.lock` or upper bounds on `fastapi`/`pydantic` in
   `server/pyproject.toml`) so a future `pip install` that moves them again is
   attributable rather than mysterious.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — out of the run-integrity scope the user chose for
+  this pass; `server/` has no tests to verify a pin against, so it belongs with
+  the work that gives `server/` a test suite.
 
 ## Nitpicks
 
@@ -248,7 +265,8 @@ is untouched, as the spec's Out of Scope requires.
   a reader has to stop and reason about, with no comment saying why.
 - **Fix:** Use an explicit constant (e.g. `config.TRAINING_DIR` or
   `Path(__file__).resolve().parents[1]`), or add the one-line why.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — now an explicit `TRAINING_DIR` constant in
+  `shared/tracking.py`.
 
 #### N2 — The `git_commit` tag duplicates MLflow's own `mlflow.source.git.commit`
 
@@ -262,7 +280,8 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Drop `_git_commit` and the tag, and note in the guidelines that
   MLflow records the commit itself. (Skip this if S1 is taken and the explicit
   tag is kept for its resume semantics.)
-- **Decision:** — _(pending)_
+- **Decision:** Declined — S1 was taken, so the explicit tag is kept for exactly
+  the resume semantics the reviewer's own parenthetical carves out.
 
 #### N3 — A param conflict on resume is reported as "setup failed"
 
@@ -276,7 +295,8 @@ is untouched, as the spec's Out of Scope requires.
 - **Fix:** Either name the failing step in the message (split the `except`
   around `start_run` from the one around `log_params`/`set_tag`), or log
   `eval_device` as a tag, which MLflow allows to change.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — both halves: param logging is a separate `except`
+  reporting "parameter logging", and `eval_device` is now a tag.
 
 #### N4 — `mlflow>=2.14` is looser than what was actually verified
 
@@ -286,7 +306,8 @@ is untouched, as the spec's Out of Scope requires.
   command are 3.x-specific. A fresh resolve landing on 2.x would still work but
   would not match the documentation.
 - **Fix:** Tighten to `mlflow>=3.16` to match what was tested.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — pinned `mlflow>=3.16`. The `MLFLOW_ALLOW_FILE_STORE`
+  half of the finding is moot: the file store is gone.
 
 ## Tests
 

@@ -19,7 +19,7 @@ dependencies = [
     "matplotlib>=3.8",
     "torch>=2.4",
     "torchvision>=0.19",
-    "mlflow>=2.14",
+    "mlflow>=3.16",
 ]
 
 # Installed as real executables in .venv/bin/ by `pip install -e .` — once
@@ -41,7 +41,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["coco*", "birds*"]
+include = ["coco*", "birds*", "shared*"]
 
 [tool.ruff]
 line-length = 100

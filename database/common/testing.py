@@ -57,6 +57,16 @@ def ephemeral_postgres_database(admin_url: str) -> Iterator[Engine]:
         finally:
             test_engine.dispose()
             with admin_engine.connect() as conn:
+                # Disposing our own engine isn't enough: a library handed the engine (MLflow,
+                # say) may hold its own pooled connections, and Postgres refuses to drop a
+                # database that still has any. Without this the database leaks.
+                conn.execute(
+                    text(
+                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                        "WHERE datname = :name AND pid <> pg_backend_pid()"
+                    ),
+                    {"name": db_name},
+                )
                 conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
     finally:
         admin_engine.dispose()

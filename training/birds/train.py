@@ -1,7 +1,6 @@
 """Trains one bird classifier, keeping its best validation checkpoint (never sees test)."""
 
 import argparse
-import json
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,11 +14,11 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
-from birds import tracking
-from birds.config import NUM_CLASSES, SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.config import EXPERIMENT_NAME, NUM_CLASSES, SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, make_data_loader, train_transform
 from birds.metrics import top1_accuracy
 from birds.models import build_model, require_cuda
+from shared import tracking
 
 
 @dataclass
@@ -105,20 +104,6 @@ def fit(
     return FitResult(best_val_accuracy=best_val_accuracy, best_epoch=best_epoch, history=history)
 
 
-def run_sidecar_path(checkpoint_path: Path) -> Path:
-    """Where the MLflow run id for `checkpoint_path` is recorded (`<checkpoint>.run.json`)."""
-    return checkpoint_path.with_name(checkpoint_path.name + ".run.json")
-
-
-def _record_run_id(checkpoint_path: Path, run_id: str | None) -> None:
-    """Write the sidecar for `run_id`; with no id, remove any stale one so it can't mislead."""
-    sidecar = run_sidecar_path(checkpoint_path)
-    if run_id is None:
-        sidecar.unlink(missing_ok=True)
-        return
-    sidecar.write_text(json.dumps({"run_id": run_id}))
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fine-tune a bird classifier.")
     parser.add_argument("--model", choices=["small", "large"], required=True)
@@ -159,7 +144,10 @@ def main() -> None:
         "dataset": "cub200",
         "num_classes": NUM_CLASSES,
     }
-    with tracking.run(f"train-{model_name}", params) as handle:
+    with tracking.run(f"train-{model_name}", params, experiment=EXPERIMENT_NAME) as handle:
+        # Before fit, not after: fit overwrites the checkpoint the moment an epoch improves,
+        # so an interrupted run would otherwise leave a new model beside the old run's id.
+        tracking.record_run_id(checkpoint_path, handle.id)
 
         def log_epoch(epoch_result: EpochResult) -> None:
             tracking.log_metrics(
@@ -189,7 +177,6 @@ def main() -> None:
                 "best_epoch": float(result.best_epoch),
             },
         )
-        _record_run_id(checkpoint_path, handle.id)
     print(result)
 
 
