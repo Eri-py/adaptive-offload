@@ -11,6 +11,9 @@ venv/
 # Env
 .env
 
+# Editor config — per-developer, not project setup
+.vscode/
+
 # Downloaded/cached datasets — large binary data, not source
 training/data/
 
@@ -24,6 +27,9 @@ training/models/
 # Trained router model artifacts — build output, not source
 *.joblib
 *.pkl
+
+# Generated explainers/exports dropped in the repo root
+/*.pdf
 
 */node_modules
 */.expo

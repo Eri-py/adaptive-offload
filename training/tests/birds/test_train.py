@@ -14,6 +14,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from birds import train as train_module
+from birds.metrics import EvalResult
 from shared import tracking
 from shared.tracking import RunHandle
 
@@ -65,15 +66,15 @@ def test_fit_keeps_the_best_epoch_not_the_last(
     snapshots_by_epoch: dict[int, dict[str, torch.Tensor]] = {}
     call_count = 0
 
-    def fake_top1_accuracy(
+    def fake_loss_and_accuracy(
         model: nn.Module, loader: "DataLoader[Any]", device: torch.device
-    ) -> float:
+    ) -> EvalResult:
         nonlocal call_count
         call_count += 1
         snapshots_by_epoch[call_count] = copy.deepcopy(model.state_dict())
-        return next(scripted_accuracies)
+        return EvalResult(loss=0.0, accuracy=next(scripted_accuracies))
 
-    monkeypatch.setattr(train_module, "top1_accuracy", fake_top1_accuracy)
+    monkeypatch.setattr(train_module, "loss_and_accuracy", fake_loss_and_accuracy)
     result = train_module.fit(
         model,
         train_loader,
@@ -167,8 +168,16 @@ def test_main_builds_no_model_when_the_dataset_is_missing(
 def test_fit_calls_on_epoch_end_once_per_epoch_with_that_epochs_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    accuracies = iter([0.1, 0.4, 0.3])
-    monkeypatch.setattr(train_module, "top1_accuracy", lambda *args, **kwargs: next(accuracies))
+    validations = iter(
+        [
+            EvalResult(loss=2.0, accuracy=0.1),
+            EvalResult(loss=1.5, accuracy=0.4),
+            EvalResult(loss=1.7, accuracy=0.3),
+        ]
+    )
+    monkeypatch.setattr(
+        train_module, "loss_and_accuracy", lambda *args, **kwargs: next(validations)
+    )
     seen: list[train_module.EpochResult] = []
 
     result = train_module.fit(
@@ -186,6 +195,7 @@ def test_fit_calls_on_epoch_end_once_per_epoch_with_that_epochs_values(
     assert seen == result.history
     assert [e.epoch for e in seen] == [1, 2, 3]
     assert [e.val_accuracy for e in seen] == [0.1, 0.4, 0.3]
+    assert [e.val_loss for e in seen] == [2.0, 1.5, 1.7]
 
 
 def test_run_sidecar_path_sits_next_to_the_checkpoint() -> None:

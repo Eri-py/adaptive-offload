@@ -1,4 +1,4 @@
-"""Reports test accuracy (GPU batches) and per-photo latency (small on CPU, large on GPU)."""
+"""Reports test loss/accuracy (GPU batches) and per-photo latency (small on CPU, large on GPU)."""
 
 import time
 from typing import Any
@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 from birds.config import EXPERIMENT_NAME, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, load_test, make_data_loader
-from birds.metrics import top1_accuracy
+from birds.metrics import EvalResult, loss_and_accuracy
 from birds.models import build_model, require_cuda
 from shared import tracking
 
@@ -60,7 +60,6 @@ def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
             f"Missing checkpoint for the '{name}' model at {checkpoint_path}. "
             f"Run `{_TRAIN_COMMAND.format(name=name)}` first."
         )
-    # Weights are overwritten by the checkpoint, so skip the ImageNet download.
     model = build_model(name, pretrained=False)
     state_dict = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(state_dict)
@@ -68,14 +67,17 @@ def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
     return model
 
 
-def _log_results(name: ModelName, accuracy: float, latency_ms: float, device_label: str) -> bool:
+def _log_results(
+    name: ModelName, result: EvalResult, latency_ms: float, device_label: str
+) -> bool:
     """Logs the results to the model's training run; True if attached, else a standalone run."""
     training_run_id = tracking.read_run_id(WEIGHTS_DIR / f"{name}.pt")
-    metrics = {"test_accuracy": accuracy, "mean_latency_ms": latency_ms}
+    metrics = {
+        "test_accuracy": result.accuracy,
+        "test_loss": result.loss,
+        "mean_latency_ms": latency_ms,
+    }
     if training_run_id is not None:
-        # Written into the finished run rather than resuming it, so its end time and status
-        # keep describing the training. The device is a tag because re-evaluating on another
-        # device may change it, and MLflow rejects a changed param.
         tracking.log_to_run(training_run_id, metrics=metrics, tags={"eval_device": device_label})
         return True
     with tracking.run(
@@ -86,7 +88,6 @@ def _log_results(name: ModelName, accuracy: float, latency_ms: float, device_lab
 
 
 def main() -> None:
-    # Loaders come first: a missing dataset must fail before the GPU check or any checkpoint load.
     test_loaders = {
         name: make_data_loader(
             "test", eval_transform(name), TRAIN_SETTINGS[name].batch_size, shuffle=False
@@ -98,33 +99,36 @@ def main() -> None:
     cpu_device = torch.device("cpu")
     thread_count = torch.get_num_threads()
 
-    rows: list[tuple[str, float, float, str]] = []
+    rows: list[tuple[str, EvalResult, float, str]] = []
     unattached: list[str] = []
     for name in _MODEL_NAMES:
         model = _load_checkpoint(name, gpu_device)
-        accuracy = top1_accuracy(model, test_loaders[name], gpu_device)
+        result = loss_and_accuracy(model, test_loaders[name], gpu_device)
 
         if name == "small":
-            # Small model stands in for the phone: CPU.
+            # Phone stand-in: CPU.
             latency_model = _load_checkpoint(name, cpu_device)
             latency_device = cpu_device
             device_label = f"cpu ({thread_count} threads)"
         else:
-            # Large model stands in for the server: GPU, reusing the loaded model.
+            # Server stand-in: GPU.
             latency_model = model
             latency_device = gpu_device
             device_label = "cuda"
 
         test_dataset = load_test(eval_transform(name))
         latency_ms = mean_latency_ms(latency_model, test_dataset, latency_device)
-        rows.append((name, accuracy, latency_ms, device_label))
-        if not _log_results(name, accuracy, latency_ms, device_label):
+        rows.append((name, result, latency_ms, device_label))
+        if not _log_results(name, result, latency_ms, device_label):
             unattached.append(name)
 
-    header = f"{'model':<8} {'test accuracy':>14} {'mean ms/photo':>15}  device"
+    header = f"{'model':<8} {'test accuracy':>14} {'test loss':>10} {'mean ms/photo':>15}  device"
     print(header)
-    for row_name, row_accuracy, row_latency_ms, row_label in rows:
-        print(f"{row_name:<8} {row_accuracy:>14.4f} {row_latency_ms:>15.3f}  {row_label}")
+    for row_name, row_result, row_latency_ms, row_label in rows:
+        print(
+            f"{row_name:<8} {row_result.accuracy:>14.4f} {row_result.loss:>10.4f} "
+            f"{row_latency_ms:>15.3f}  {row_label}"
+        )
     for unattached_name in unattached:
         print(f"note: {unattached_name} results are not attached to a training run.")
 

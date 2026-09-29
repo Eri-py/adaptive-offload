@@ -27,7 +27,7 @@ _DOWNLOAD_COMMAND = "python -m birds.download"
 _DATASET_FOLDER = "CUB_200_2011"
 INDEX_FILES = ("images.txt", "image_class_labels.txt", "train_test_split.txt")
 
-# ImageNet stats, identical in both models' pretrained-weights `transforms()`.
+# ImageNet stats.
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
 
@@ -79,7 +79,6 @@ def _split_from_index(
 ) -> tuple[list[str], list[str], list[str]]:
     official_train = sorted((k for k, t in is_train.items() if t), key=int)
     test_ids = sorted((k for k, t in is_train.items() if not t), key=int)
-    # Per species in ascending label order, one shared rng: hold out max(1, n // 10).
     rng = np.random.default_rng(SEED)
     val_ids: list[str] = []
     for species in sorted(set(labels.values())):

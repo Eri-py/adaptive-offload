@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 
 from birds.config import EXPERIMENT_NAME, NUM_CLASSES, SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.data import eval_transform, make_data_loader, train_transform
-from birds.metrics import top1_accuracy
+from birds.metrics import loss_and_accuracy, loss_criterion
 from birds.models import build_model, require_cuda
 from shared import tracking
 
@@ -25,6 +25,7 @@ from shared import tracking
 class EpochResult:
     epoch: int  # 1-based
     train_loss: float
+    val_loss: float
     val_accuracy: float
 
 
@@ -54,14 +55,11 @@ def fit(
     *,
     on_epoch_end: Callable[[EpochResult], None] | None = None,
 ) -> FitResult:
-    """Trains `model`, saving the best-validation state dict; bf16 autocast on CUDA, no scaler.
-
-    `on_epoch_end`, if given, is called with each epoch's result after its validation.
-    """
+    """Trains `model`, saving the best-validation state dict; `on_epoch_end` fires per epoch."""
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    criterion = loss_criterion()
     use_amp = device.type == "cuda"
 
     best_val_accuracy = -1.0
@@ -85,12 +83,18 @@ def fit(
         scheduler.step()
 
         train_loss = running_loss / num_batches
-        val_accuracy = top1_accuracy(model, val_loader, device)
+        validation = loss_and_accuracy(model, val_loader, device)
+        val_accuracy = validation.accuracy
         print(
             f"epoch {epoch}/{epochs} - train loss {train_loss:.4f} - "
-            f"val accuracy {val_accuracy:.4f}"
+            f"val loss {validation.loss:.4f} - val accuracy {val_accuracy:.4f}"
         )
-        epoch_result = EpochResult(epoch=epoch, train_loss=train_loss, val_accuracy=val_accuracy)
+        epoch_result = EpochResult(
+            epoch=epoch,
+            train_loss=train_loss,
+            val_loss=validation.loss,
+            val_accuracy=val_accuracy,
+        )
         history.append(epoch_result)
         if on_epoch_end is not None:
             on_epoch_end(epoch_result)
@@ -117,7 +121,6 @@ def main() -> None:
     _seed_everything(SEED)
     settings = TRAIN_SETTINGS[model_name]
 
-    # Loaders come first: a missing dataset must fail before any weights download.
     shuffle_generator = torch.Generator().manual_seed(SEED)
     train_loader = make_data_loader(
         "train",
@@ -145,8 +148,6 @@ def main() -> None:
         "num_classes": NUM_CLASSES,
     }
     with tracking.run(f"train-{model_name}", params, experiment=EXPERIMENT_NAME) as handle:
-        # Before fit, not after: fit overwrites the checkpoint the moment an epoch improves,
-        # so an interrupted run would otherwise leave a new model beside the old run's id.
         tracking.record_run_id(checkpoint_path, handle.id)
 
         def log_epoch(epoch_result: EpochResult) -> None:
@@ -154,6 +155,7 @@ def main() -> None:
                 handle,
                 {
                     "train_loss": epoch_result.train_loss,
+                    "val_loss": epoch_result.val_loss,
                     "val_accuracy": epoch_result.val_accuracy,
                 },
                 step=epoch_result.epoch,

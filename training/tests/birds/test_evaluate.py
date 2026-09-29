@@ -13,6 +13,7 @@ from torch import nn
 from torch.utils.data import TensorDataset
 
 from birds import evaluate as ev
+from birds.metrics import EvalResult
 from shared import tracking
 
 
@@ -67,7 +68,7 @@ def test_main_uses_each_models_own_eval_transform(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(ev, "make_data_loader", fake_make_data_loader)
     monkeypatch.setattr(ev, "load_test", lambda transform: transform)
     monkeypatch.setattr(ev, "_load_checkpoint", lambda name, device: nn.Identity())
-    monkeypatch.setattr(ev, "top1_accuracy", lambda *args: 1.0)
+    monkeypatch.setattr(ev, "loss_and_accuracy", lambda *args: EvalResult(loss=0.5, accuracy=1.0))
     monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 1.0)
 
     ev.main()
@@ -120,7 +121,7 @@ def _patch_main_for_tracking(monkeypatch: pytest.MonkeyPatch, weights_dir: Path)
     monkeypatch.setattr(ev, "make_data_loader", lambda *args, **kwargs: "loader")
     monkeypatch.setattr(ev, "load_test", lambda transform: transform)
     monkeypatch.setattr(ev, "_load_checkpoint", lambda name, device: nn.Identity())
-    monkeypatch.setattr(ev, "top1_accuracy", lambda *args: 0.9)
+    monkeypatch.setattr(ev, "loss_and_accuracy", lambda *args: EvalResult(loss=1.25, accuracy=0.9))
     monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 2.0)
     monkeypatch.setattr(tracking, "run", fake_run)
     monkeypatch.setattr(tracking, "log_metrics", lambda handle, metrics: calls.append(metrics))
@@ -141,10 +142,13 @@ def test_main_attaches_results_to_the_training_run(
 
     ev.main()
 
-    # Attached results are written straight to the run id, never by resuming the run.
     attached = [c for c in calls if isinstance(c, tuple) and len(c) == 2]
     assert [run_id for run_id, _ in attached] == ["abc", "def"]
-    assert attached[0][1]["metrics"] == {"test_accuracy": 0.9, "mean_latency_ms": 2.0}
+    assert attached[0][1]["metrics"] == {
+        "test_accuracy": 0.9,
+        "test_loss": 1.25,
+        "mean_latency_ms": 2.0,
+    }
     assert "eval_device" in attached[0][1]["tags"]
     assert not [c for c in calls if isinstance(c, tuple) and len(c) == 3]
     assert "not attached" not in capsys.readouterr().out
@@ -169,5 +173,6 @@ def test_main_without_a_usable_sidecar_runs_standalone(
     runs = [c for c in calls if isinstance(c, tuple) and len(c) == 3]
     assert runs[0][0] == "evaluate-small" and runs[0][2] is None
     assert "test accuracy" in out and "0.9000" in out
+    assert "test loss" in out and "1.2500" in out
     assert "small results are not attached to a training run" in out
     assert "large results are not attached to a training run" in out
