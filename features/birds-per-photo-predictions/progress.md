@@ -46,10 +46,18 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   import cycle worked around with a local import.
 
 ## Task 5 — Summary tables
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:31:48
+- Completed: 2026-10-27 13:35:19
+- Notes: `summarize()` is pure over two DataFrames; `load_summary()` reads both
+  models' test rows; `main()` prints and logs one standalone MLflow run.
+  Cascade is a stable sort on (confidence, numeric photo id), so ties cannot
+  reorder between runs. Escalated count is floor (`n * percent // 100`), which
+  differs by one photo from the throwaway run's rounding at 5% and 20% — the
+  real figures will differ in the last decimal from the numbers quoted during
+  planning, which is why the plan forbade hardcoding them. 10 new tests
+  (246 total), ruff clean, mypy still 9. Only public APIs used, no new import
+  cycle.
 
 ## Task 6 — Migration, then the real run
 - Status: not started

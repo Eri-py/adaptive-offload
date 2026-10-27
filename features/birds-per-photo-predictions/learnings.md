@@ -18,3 +18,4 @@
   in `predictions.py` rather than in its own entry-point module. Also minor:
   `split_labels()` re-reads the index files once per (model, split), so seven
   reads per full run.
+- Task 5: `summary.py` splits pure computation (`summarize(small, large)` over two DataFrames) from DB loading, so the hand-computed tests need no Postgres. Escalated count is integer `n * percent // 100` (floor), AUC is NaN when a model has only one outcome (skipped from MLflow metrics), and gap-recovered is NaN on a zero gap and unclamped above 1.
