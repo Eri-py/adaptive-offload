@@ -1,10 +1,10 @@
-"""Tests for `birds.models`: 200-way head shape and the GPU gate (never downloads weights)."""
+"""Tests for `birds.modeling.build`: 200-way head shape and the GPU gate (no weight download)."""
 
 import pytest
 import torch
 
-from birds import models as models_module
 from birds.config import NUM_CLASSES
+from birds.modeling import build as models_module
 
 
 def test_build_small_model_outputs_num_classes() -> None:

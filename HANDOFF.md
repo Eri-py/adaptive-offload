@@ -81,7 +81,7 @@ Release/`preview` build before reporting), and it measures the forward pass
 only.
 
 That number already undercuts a comparison elsewhere in the repo:
-`birds/evaluate.py` times the "phone" model on the desktop CPU
+`birds/evaluation/evaluate.py` times the "phone" model on the desktop CPU
 (`5.877 ms/photo` at last run) while the real phone CPU measured 106 ms. The
 desktop stand-in flatters local by a large factor, and any win/loss label
 derived from it inherits the bias.

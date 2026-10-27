@@ -14,7 +14,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from birds import train as train_module
-from birds.metrics import EvalResult
+from birds.evaluation.metrics import EvalResult
 from shared import tracking
 from shared.tracking import RunHandle
 
@@ -117,7 +117,7 @@ def _patch_main(
     def fake_make_data_loader(split: str, *args: Any, **kwargs: Any) -> str:
         calls.append(f"data:{split}")
         if data_missing:
-            raise FileNotFoundError("run `python -m birds.download`")
+            raise FileNotFoundError("run `python -m birds.dataset.download`")
         return split
 
     def fake_require_cuda() -> torch.device:
@@ -158,7 +158,7 @@ def test_main_builds_no_model_when_the_dataset_is_missing(
     calls: list[str] = []
     _patch_main(monkeypatch, calls, tmp_path, data_missing=True)
 
-    with pytest.raises(FileNotFoundError, match="birds.download"):
+    with pytest.raises(FileNotFoundError, match="birds.dataset.download"):
         train_module.main()
 
     assert "model" not in calls

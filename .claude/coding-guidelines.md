@@ -39,7 +39,16 @@ security hardening, or exhaustive production robustness.
     - `training/coco/router/` — decision-layer code: feature extraction,
       direct-classifier and utility-regression models, training/eval scripts,
       saved model artifacts.
-  - `training/birds/` — attempt 2 (bird species identification, CUB-200-2011).
+  - `training/birds/` — attempt 2 (bird species identification, CUB-200-2011),
+    with subfolders by concern:
+    - `training/birds/dataset/` — CUB-200-2011 acquisition and the
+      train/val/test splits built from it.
+    - `training/birds/modeling/` — the small/large architectures and their
+      200-way heads.
+    - `training/birds/evaluation/` — shared loss/accuracy and the evaluation
+      entry point.
+    `config.py` and `train.py` stay at the package root: the first is read by
+    every subpackage, the second is the training entry point.
   - Code reused by both attempts moves into a shared location when it's
     first reused; no shared folder exists yet.
 - `findings/` — research findings, one file per line of investigation

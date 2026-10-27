@@ -1,4 +1,4 @@
-"""Tests for `birds.evaluate`: missing checkpoint, per-model transform, timing sanity."""
+"""Tests for `birds.evaluation.evaluate`: missing checkpoint, per-model transform, timing sanity."""
 
 import json
 import math
@@ -12,8 +12,8 @@ import torch
 from torch import nn
 from torch.utils.data import TensorDataset
 
-from birds import evaluate as ev
-from birds.metrics import EvalResult
+from birds.evaluation import evaluate as ev
+from birds.evaluation.metrics import EvalResult
 from shared import tracking
 
 
