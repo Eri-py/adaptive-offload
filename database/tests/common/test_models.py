@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from common.models import (
+    BirdPrediction,
     FrameFeatures,
     Label,
     ModelInference,
@@ -19,7 +20,7 @@ from common.models import (
 )
 
 
-def test_round_trips_all_five_tables(postgres_engine: Engine) -> None:
+def test_round_trips_all_six_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
@@ -71,6 +72,18 @@ def test_round_trips_all_five_tables(postgres_engine: Engine) -> None:
             mean_box_area=0.12,
             min_box_area=0.03,
         )
+        prediction = BirdPrediction(
+            dataset="nabirds",
+            photo_id="photo-1",
+            model_name="mobilenet",
+            split="test",
+            true_label=12,
+            predicted_label=12,
+            is_correct=True,
+            max_probability=0.93,
+            top2_margin=0.71,
+            training_run_id=None,
+        )
 
         # No ORM `relationship()` links these two mappers, so the unit of work
         # won't infer insert order from the `run_id` FK on its own — flush the
@@ -78,7 +91,7 @@ def test_round_trips_all_five_tables(postgres_engine: Engine) -> None:
         # silently didn't, which is exactly the dialect gap this switch closes.
         session.add(run)
         session.flush()
-        session.add_all([result, complexity, inference, features])
+        session.add_all([result, complexity, inference, features, prediction])
         session.commit()
 
     with Session(postgres_engine) as session:
@@ -139,3 +152,14 @@ def test_round_trips_all_five_tables(postgres_engine: Engine) -> None:
         assert fetched_features.mean_box_area == 0.12
         assert fetched_features.min_box_area == 0.03
         assert fetched_features.computed_at is not None
+
+        fetched_prediction = session.get(BirdPrediction, ("nabirds", "photo-1", "mobilenet"))
+        assert fetched_prediction is not None
+        assert fetched_prediction.split == "test"
+        assert fetched_prediction.true_label == 12
+        assert fetched_prediction.predicted_label == 12
+        assert fetched_prediction.is_correct is True
+        assert fetched_prediction.max_probability == 0.93
+        assert fetched_prediction.top2_margin == 0.71
+        assert fetched_prediction.training_run_id is None
+        assert fetched_prediction.computed_at is not None
