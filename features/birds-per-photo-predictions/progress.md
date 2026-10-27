@@ -11,10 +11,14 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   only, not applied. `database/`: ruff clean, mypy clean, 1 test passed.
 
 ## Task 2 — Per-photo record computation
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:20:57
+- Completed: 2026-10-27 13:23:59
+- Notes: `PhotoPrediction` frozen dataclass + `predict_photos(...)`, no DB
+  imports. 5 new tests (227 total), ruff clean, mypy still 9. Raised a gap
+  the plan's file table missed: a split's labels have no public accessor, so
+  the alignment check needs one added to `birds/dataset/splits.py` — see
+  Task 4.
 
 ## Task 3 — Record store
 - Status: not started
