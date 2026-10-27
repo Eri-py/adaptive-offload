@@ -86,10 +86,16 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   probability at every escalation level.
 
 ## Task 7 — Rewrite the findings
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:44:39
+- Completed: 2026-10-27 13:45:58
+- Notes: `findings/birds.md` now separates unreproducible numbers (flowers, and
+  the pilot's birds figures) from the reproducible committed-checkpoint
+  tables, adds a "Regenerating" section naming both commands, and reports the
+  large model's AUCs plus the top-2-margin result. Verified independently:
+  every figure in the agreement, AUC and both cascade tables matches Task 6's
+  captured output exactly. Flowers figures preserved and still marked
+  unreproducible.
 
 ## Task 8 — Regression test run
 - Status: not started
