@@ -21,10 +21,15 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   Task 4.
 
 ## Task 3 — Record store
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:24:30
+- Completed: 2026-10-27 13:26:47
+- Notes: `write_predictions` (delete-then-insert for one dataset/split/model)
+  and `read_predictions`, ordered by numeric photo id to match `splits.py`.
+  The reader also filters on dataset and model, not split alone as the plan
+  worded it — the PK includes `model_name`, so a split-only read would mix
+  the two models into one frame. 3 new tests (230 total) on the ephemeral
+  Postgres fixture; ruff clean, mypy still 9.
 
 ## Task 4 — Recording entry point
 - Status: not started
