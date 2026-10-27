@@ -76,6 +76,8 @@ index beyond the primary key.
 | `database/common/models.py` | edit | Add the `BirdPrediction` table model; update the module docstring's table count | `database/` owns every table model |
 | `database/migrations/versions/0004_create_bird_predictions_table.py` | add | Authored migration matching that model | Schema changes go through Alembic |
 | `database/tests/common/test_models.py` | edit | Round-trip coverage for the new table | Matches existing per-table coverage |
+| `training/birds/dataset/splits.py` | edit | Public accessor returning a split's photo ids with their labels | The alignment check needs a label source that isn't the loader itself (amendment, see below) |
+| `training/tests/birds/dataset/test_splits.py` | edit | Cover the new accessor | Mirrors the source change |
 | `training/birds/evaluation/predictions.py` | add | Per-photo records from a model and loader, plus the recording entry point | Pure compute, no database |
 | `training/birds/evaluation/store.py` | add | Write records with replace semantics; read them back for the summary | Single owner of this table's access |
 | `training/birds/evaluation/summary.py` | add | Agreement, confidence-separation and cascade tables, printed and tracked | Reads records; needs no GPU |
@@ -153,8 +155,20 @@ index beyond the primary key.
 
 - **Objective:** Wire computation and storage into a runnable entry point over
   both models and all three splits.
-- **Files:** `training/birds/evaluation/predictions.py`,
+- **Files:** `training/birds/dataset/splits.py`,
+  `training/tests/birds/dataset/test_splits.py`,
+  `training/birds/evaluation/predictions.py`,
   `training/tests/birds/evaluation/test_predictions.py`
+- **Amendment (approved during execution):** Task 2 surfaced that a split's
+  labels have no public accessor — `split_ids()` returns ids only, and
+  `CubDataset._records` and `_read_index()` are private — so the alignment
+  check had no label source independent of the loader it validates. Add a
+  small public accessor to `birds/dataset/splits.py` returning a split's photo
+  ids with their labels, as a counterpart to the existing `split_ids()`, and
+  cover it in that module's tests. The two alternatives were dropping the
+  alignment check (removing the guard against rows attached to the wrong
+  photos, which the testing bar singles out) or reading `_read_index()` from
+  the entry point; both were rejected.
 - **Details:** A `main()` that calls `birds.modeling.build.require_cuda()`,
   loads each checkpoint the way `birds/evaluation/evaluate.py` does (including
   its missing-checkpoint error naming the train command), resolves
