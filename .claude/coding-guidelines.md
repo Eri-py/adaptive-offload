@@ -158,14 +158,17 @@ config applies where.
 - The frame-level train/test split is enforced by a helper function that
   guarantees no frame appears in both sets — not by convention.
 
-## Experiment tracking (`training/birds/`, and any training code added later)
+## Experiment tracking (`training/shared/`, used by every training attempt)
 
 - Every training run is tracked in MLflow: params, per-epoch metrics and the
   evaluation results. This is a standing requirement, not a birds-only one —
   new training code tracks its runs the same way.
-- Only `training/birds/tracking.py` calls MLflow. Callers use its `run(...)`
+- Only `training/shared/tracking.py` calls MLflow. Callers use its `run(...)`
   context manager and `log_metrics(...)`, so there is one place to change if
-  the backend moves again.
+  the backend moves again. It lives in `shared/`, not under an attempt folder,
+  because tracking is not attempt-specific — and the package is `shared` rather
+  than `common` because `database/` already owns the top-level `common` package
+  and a second one would shadow it on `sys.path`.
 - **The store is Postgres, not a folder.** Run history lives in its own
   `mlflow` database on the same instance as `adaptive_offload`, addressed by
   `MLFLOW_TRACKING_URI` in the gitignored `training/.env`. It must stay a
@@ -184,7 +187,7 @@ config applies where.
   (`*.run.json`): they name rows in a machine-local database.
 - Tracking must never break a run: failures print a warning and continue with a
   no-op handle. Tests must not write real run history
-  (`training/tests/conftest.py` sets `BIRDS_TRACKING=off` for the whole suite);
+  (`training/tests/conftest.py` sets `TRAINING_TRACKING=off` for the whole suite);
   tests that need a real store opt in and use a disposable database.
 - To view history, the user runs `mlflow-ui` (never the agent; see `CLAUDE.md`).
   It reads `MLFLOW_TRACKING_URI` from `training/.env` itself and passes any extra
