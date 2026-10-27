@@ -18,6 +18,13 @@ local-vs-offload routing, not continuous streaming).
 A3 ("Progress Report 1") was due 2026-09-15 and has passed. Check the
 assignment folders for what's next — this repo doesn't track deadlines.
 
+**This file is a snapshot and goes stale fast.** It has already been overtaken
+once by a conversation held the same evening it was written. Before planning
+anything, read the most recent session transcript
+(`~/.claude/projects/-home-eriol-projects-adaptive-offload/*.jsonl`, newest by
+mtime) alongside this file. **Where the two disagree, the conversation wins** —
+then update this file rather than leaving the contradiction in place.
+
 ## What exists now
 
 | Area | State |
@@ -27,12 +34,12 @@ assignment folders for what's next — this repo doesn't track deadlines.
 | `training/shared/` | MLflow tracking, used by every attempt. |
 | `database/` | SQLAlchemy engine/session, shared models, Alembic migrations, ephemeral-test-DB fixture. |
 | `app/` | React Native inference benchmark. Runs on a real iPhone; has produced numbers. |
-| `server/` | **Scaffolding only.** `server/api/` holds one `__init__.py`. No endpoints, no tests. |
+| `server/` | Two endpoints (frame list + frame image) from spec 01, layered per the guidelines. PR #14, 14 tests. |
 | `findings/` | `coco-router.md`, `birds.md` — where results are recorded. |
 | `features/` | Ten feature directories, each with spec, plan, implementation report and review. |
 
-Tests: `training/` 222 passing, `database/` 1 passing, `server/` none (nothing
-to test yet). Ruff clean; mypy has 9 pre-existing `ndarray` type-arg errors in
+Tests: 237 passing, 0 skipped (`training/` 222, `database/` 1, `server/` 14).
+Ruff clean; mypy has 9 pre-existing `ndarray` type-arg errors in
 `training/coco/` that predate current work.
 
 Run history is in Postgres (the `mlflow` database, separate from
@@ -81,16 +88,42 @@ derived from it inherits the bias.
 
 ## Next step
 
-`features/server-served-benchmark/01-server-frame-endpoints/spec.md` is written
-and unimplemented — server-side frame endpoints, so the app can offload over a
-real network. That is the natural next feature, and it is what unblocks
-everything above. It has a spec but no plan; start at
-`generateImplementationPlan`.
+**The order below comes from the 2026-09-29 23:00 session, which supersedes the
+"server endpoint next" advice this file used to carry.** That older advice was
+acted on under the A6 deadline on 2026-10-27 — spec 01 is now built (PR #14) —
+but it was step 4 of 4, not step 1. The remaining order stands:
+
+1. **Per-photo birds prediction records** — prediction, correctness, max
+   probability and top-2 margin, per model, to Postgres. Needs a new table, so a
+   migration the user runs. Nothing else in the birds work can start without it.
+2. **λ-sweep write-up on the existing COCO data** — closes out attempt 1 as a
+   *characterized* negative result rather than a failure. The soft utility
+   `accuracy − λ · (latency_s)` at λ=0.3 priced COCO's 225 ms offload penalty at
+   0.0675 against a 0.1466 accuracy gain, so always-offload dominated until
+   λ ≈ 0.65 (birds: 300 ms break-even, λ ≈ 0.36). Data is already in Postgres.
+3. **Birds cascade under the hard latency budget**, never the soft λ score, with
+   local/offload latency swept rather than fixed to the biased desktop stand-in.
+4. **Core ML export, Release-build phone numbers, and the server endpoints** —
+   spec 01 done; specs 02 (app fetches frames over Tailscale) and 03 (per-stage
+   phone timing vs. the desktop figure) remain.
+
+Birds is the better substrate on *signal quality*, not prize size: COCO's
+accuracy gap was larger (0.1466 vs. 0.0901), but birds' confidence AUC is
+0.844–0.854 against COCO's ~0.71, and its local tax is ~17 ms (Core ML) against
+COCO's 74 ms simulated — roughly a 4x cheaper cascade.
+
+**`scene_complexity` is not a router feature.** Correlation with the
+local-vs-offload margin is 0.002, and the budget-only policy that worked decides
+from network/device conditions alone, before any inference runs. Spec 01 spreads
+its benchmark frame set across the complexity range only as a *sampling* axis;
+sorting on the stored desktop latency would be the better axis and is worth
+changing in spec 02.
 
 ## Branch and PR state
 
-Everything is on `main` as of PR #12 (2026-09-29). Eleven PRs merged, numbered
-#1–#12 — there is no #9. For a long stretch PRs merged into each other rather than into
+As of 2026-10-27: PR #13 (this handoff refresh) and PR #14 (spec 01's
+endpoints) are both open; `main` is otherwise current as of PR #12 (2026-09-29).
+Twelve PRs merged, numbered #1–#12 — there is no #9. For a long stretch PRs merged into each other rather than into
 `main`, which left the default branch showing almost nothing while the work
 lived in a five-deep branch stack — PRs #11 and #12 landed all of it. GitHub
 auto-deletes branches on merge here, so a merged branch disappears from origin;
