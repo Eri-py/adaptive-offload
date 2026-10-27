@@ -8,9 +8,9 @@ from torch import nn
 from torch.utils.data import Dataset
 
 from birds.config import EXPERIMENT_NAME, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
-from birds.data import eval_transform, load_test, make_data_loader
-from birds.metrics import EvalResult, loss_and_accuracy
-from birds.models import build_model, require_cuda
+from birds.dataset.splits import eval_transform, load_test, make_data_loader
+from birds.evaluation.metrics import EvalResult, loss_and_accuracy
+from birds.modeling.build import build_model, require_cuda
 from shared import tracking
 
 _MODEL_NAMES: tuple[ModelName, ModelName] = ("small", "large")

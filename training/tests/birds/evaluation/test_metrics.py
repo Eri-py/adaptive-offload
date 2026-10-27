@@ -1,4 +1,4 @@
-"""Tests for `birds.metrics`: hand-computed loss/accuracy and the shared criterion."""
+"""Tests for `birds.evaluation.metrics`: hand-computed loss/accuracy and the shared criterion."""
 
 from typing import Any
 
@@ -7,9 +7,10 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from birds import evaluate, metrics, train
+from birds import train
 from birds.config import LABEL_SMOOTHING
-from birds.metrics import loss_and_accuracy
+from birds.evaluation import evaluate, metrics
+from birds.evaluation.metrics import loss_and_accuracy
 
 _LOGITS = torch.tensor(
     [

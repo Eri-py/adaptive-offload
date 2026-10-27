@@ -15,9 +15,9 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 
 from birds.config import EXPERIMENT_NAME, NUM_CLASSES, SEED, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
-from birds.data import eval_transform, make_data_loader, train_transform
-from birds.metrics import loss_and_accuracy, loss_criterion
-from birds.models import build_model, require_cuda
+from birds.dataset.splits import eval_transform, make_data_loader, train_transform
+from birds.evaluation.metrics import loss_and_accuracy, loss_criterion
+from birds.modeling.build import build_model, require_cuda
 from shared import tracking
 
 

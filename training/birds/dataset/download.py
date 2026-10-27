@@ -1,11 +1,11 @@
-"""Explicit dataset download step (`python -m birds.download`); data.py never downloads."""
+"""Explicit dataset download step (`python -m birds.dataset.download`); data.py never downloads."""
 
 import tarfile
 import urllib.request
 from pathlib import Path
 
 from birds.config import CUB_URL, DATA_DIR
-from birds.data import INDEX_FILES, dataset_root
+from birds.dataset.splits import INDEX_FILES, dataset_root
 
 _ARCHIVE_NAME = "CUB_200_2011.tgz"
 _CHUNK_BYTES = 1 << 20

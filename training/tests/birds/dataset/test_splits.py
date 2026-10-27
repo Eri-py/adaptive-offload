@@ -1,4 +1,4 @@
-"""Tests for `birds.data` against a tiny fake CUB tree in `tmp_path` (no network or GPU)."""
+"""Tests for `birds.dataset.splits` against a tiny fake CUB tree in `tmp_path` (no network/GPU)."""
 
 from pathlib import Path
 from typing import Any
@@ -7,8 +7,8 @@ import pytest
 import torch
 from PIL import Image
 
-from birds import data as data_module
-from birds import download as download_module
+from birds.dataset import download as download_module
+from birds.dataset import splits as data_module
 
 # species index -> (official-train photos, official-test photos)
 _LAYOUT = {0: (25, 2), 1: (12, 2), 2: (5, 1)}
@@ -93,14 +93,14 @@ def test_labels_are_zero_based(fake_cub: Path) -> None:
 def test_missing_root_raises_helpful_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(data_module, "DATA_DIR", tmp_path)
 
-    with pytest.raises(FileNotFoundError, match="python -m birds.download"):
+    with pytest.raises(FileNotFoundError, match="python -m birds.dataset.download"):
         data_module.load_train(_identity_transform)
 
 
 def test_missing_index_file_raises_helpful_error(fake_cub: Path) -> None:
     (fake_cub / "train_test_split.txt").unlink()
 
-    with pytest.raises(FileNotFoundError, match="python -m birds.download"):
+    with pytest.raises(FileNotFoundError, match="python -m birds.dataset.download"):
         data_module.split_ids()
 
 

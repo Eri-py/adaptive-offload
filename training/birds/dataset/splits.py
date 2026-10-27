@@ -23,7 +23,7 @@ Split = Literal["train", "val", "test"]
 Transform = Callable[[Any], Any]
 Record = tuple[str, str, int]  # (photo id, path relative to images/, label 0-199)
 
-_DOWNLOAD_COMMAND = "python -m birds.download"
+_DOWNLOAD_COMMAND = "python -m birds.dataset.download"
 _DATASET_FOLDER = "CUB_200_2011"
 INDEX_FILES = ("images.txt", "image_class_labels.txt", "train_test_split.txt")
 
