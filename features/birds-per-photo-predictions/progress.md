@@ -98,7 +98,10 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   unreproducible.
 
 ## Task 8 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:46:22
+- Completed: 2026-10-27 13:47:50
+- Notes: `training/` 247 passed, `database/` 1 passed, none skipped. ruff clean
+  in both; mypy clean in `database/` and still exactly the 9 pre-existing
+  `ndarray` errors in `training/coco/`. `server/` has no tests, unchanged by
+  this feature. No files changed by this task.
