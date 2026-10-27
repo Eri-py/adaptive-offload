@@ -182,3 +182,10 @@ def _fail(name: str) -> Any:
         raise AssertionError(f"{name} must not be reached")
 
     return _raise
+
+
+def test_env_path_points_at_training_dotenv() -> None:
+    """main() loads DATABASE_URL from training/.env; a wrong hop count silently misses it."""
+    training_dir = Path(__file__).resolve().parents[3]
+    assert predictions_module.ENV_PATH == training_dir / ".env"
+    assert (training_dir / "birds").is_dir()

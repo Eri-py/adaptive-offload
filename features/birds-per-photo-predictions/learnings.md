@@ -19,3 +19,5 @@
   `split_labels()` re-reads the index files once per (model, split), so seven
   reads per full run.
 - Task 5: `summary.py` splits pure computation (`summarize(small, large)` over two DataFrames) from DB loading, so the hand-computed tests need no Postgres. Escalated count is integer `n * percent // 100` (floor), AUC is NaN when a model has only one outcome (skipped from MLflow metrics), and gap-recovered is NaN on a zero gap and unclamped above 1.
+
+- Task 6 defect: `main()` in `birds/evaluation/predictions.py` and `summary.py` called `get_engine()` without `load_dotenv`, so `python -m ...` failed with "DATABASE_URL is not set". Unit tests monkeypatch `get_engine`, so they never exercised the real resolution. Fix: `ENV_PATH` constant in `predictions.py` (3 `.parent` hops from `birds/evaluation/`, resolves to `training/.env`), `load_dotenv(ENV_PATH)` at the top of both mains; `summary.py` imports the constant. A test pins `ENV_PATH == training/.env`. Lesson: when tests stub an environment-dependent seam, pin the resolved path/config separately.

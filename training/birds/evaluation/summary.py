@@ -9,11 +9,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from common.db import get_engine
+from dotenv import load_dotenv
 from sklearn.metrics import roc_auc_score
 from sqlalchemy import Engine
 
 from birds.config import EXPERIMENT_NAME, ModelName
-from birds.evaluation.predictions import DATASET_NAME
+from birds.evaluation.predictions import DATASET_NAME, ENV_PATH
 from birds.evaluation.store import read_predictions
 from shared import tracking
 
@@ -197,6 +198,7 @@ def _metrics(summary: Summary) -> dict[str, float]:
 
 def main() -> None:
     """Print the summary tables and log them as one standalone MLflow run."""
+    load_dotenv(ENV_PATH)
     summary = load_summary(get_engine())
     print(format_summary(summary))
     with tracking.run(

@@ -60,10 +60,30 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   cycle.
 
 ## Task 6 — Migration, then the real run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Stops for the user to run migration 0004 (`CLAUDE.md`, Infrastructure).
+- Status: completed
+- Started: 2026-10-27 13:36:30
+- Completed: 2026-10-27 13:44:06
+- Notes: Migration 0004 applied by the user at ~13:36 (0003 -> 0004,
+  `bird_predictions` created); DDL had been verified offline beforehand via
+  `alembic upgrade 0003:0004 --sql`.
+  First real run **failed**: `main()` in both new entry points calls
+  `get_engine()` without loading `training/.env`, so `DATABASE_URL` was unset.
+  Every COCO entry point that touches Postgres calls
+  `load_dotenv(<training>/.env)` inside `main()` first; the new ones skipped
+  it, and the unit tests missed it because they monkeypatch `get_engine`.
+  Fixed by sharing an `ENV_PATH` constant and calling `load_dotenv` in both
+  `main()`s, plus a test pinning the resolved path (247 tests).
+  Re-run succeeded. All four criteria met:
+  - 23,576 rows (5,400 train / 594 val / 5,794 test per model), and every row
+    carries its checkpoint's `training_run_id`.
+  - Derived test accuracies 0.7798 / 0.8699 match `evaluate.py`'s independent
+    figures exactly.
+  - Two consecutive summary runs produced byte-identical output (`diff` clean).
+  - Output captured for Task 7 at
+    `<scratchpad>/summary_run1.txt`.
+  New since the pilot: the large model's own confidence AUCs (0.8816
+  max-probability, 0.8864 top-2 margin), and top-2 margin beats max
+  probability at every escalation level.
 
 ## Task 7 — Rewrite the findings
 - Status: not started

@@ -1,10 +1,12 @@
 """Per-photo predictions: what a model said about each photo, with its confidence."""
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, get_args
 
 import torch
 from common.db import get_engine
+from dotenv import load_dotenv
 from sqlalchemy import Engine
 from torch import nn
 from torch.utils.data import DataLoader
@@ -100,9 +102,13 @@ def record_split(
     return len(records)
 
 
+ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"  # training/.env
+
+
 def main() -> None:
     split_labels()  # Raises the download-command error before any GPU or checkpoint work.
     device = require_cuda()
+    load_dotenv(ENV_PATH)
     engine = get_engine()
     for name in _MODEL_NAMES:
         model = _load_checkpoint(name, device)
