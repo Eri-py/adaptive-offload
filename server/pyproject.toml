@@ -8,13 +8,18 @@ requires-python = ">=3.11"
 # it explicitly into this package's venv instead, once `server/api/` needs it:
 #   pip install -e ../database
 #   pip install -e ".[dev]"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pytest>=8.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
 ]
 
 [build-system]
@@ -37,3 +42,8 @@ strict = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
 exclude = ["build/"]
+# `common` (from `database/common`, installed via `pip install -e ../database`)
+# resolves at runtime through that editable install's import hook, not through
+# mypy's filesystem module search. Point mypy at `common`'s import root, as
+# `training/pyproject.toml` does.
+mypy_path = "../database"
