@@ -96,6 +96,17 @@ def split_ids() -> tuple[list[str], list[str], list[str]]:
     return _split_from_index(labels, is_train)
 
 
+def split_labels() -> tuple[list[tuple[str, int]], list[tuple[str, int]], list[tuple[str, int]]]:
+    """(photo id, 0-based label) pairs of the (train, val, test) splits, in `split_ids()` order."""
+    _, labels, is_train = _read_index()
+    train, val, test = _split_from_index(labels, is_train)
+    return (
+        [(k, labels[k]) for k in train],
+        [(k, labels[k]) for k in val],
+        [(k, labels[k]) for k in test],
+    )
+
+
 def _load_split(split: Split, transform: Transform) -> CubDataset:
     paths, labels, is_train = _read_index()
     ids = dict(zip(("train", "val", "test"), _split_from_index(labels, is_train), strict=True))[

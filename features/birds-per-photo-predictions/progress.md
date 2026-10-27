@@ -32,10 +32,18 @@ Base: `main` at `d40a578`. Branch: `feature/birds-per-photo-predictions`.
   Postgres fixture; ruff clean, mypy still 9.
 
 ## Task 4 — Recording entry point
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-10-27 13:27:23
+- Completed: 2026-10-27 13:31:14
+- Notes: `splits.split_labels()` added (the approved amendment, plan amended
+  in 23edb5b); `record_split(...)` and `main()` added to `predictions.py`.
+  6 new tests (236 total), ruff clean, mypy still 9. All four success criteria
+  have tests, including the integration one on the ephemeral database.
+  The subagent's hand-back report was empty (the literal "placeholder"), so
+  this was accepted on direct verification of the diffs and the gate rather
+  than on its report. Two design smells recorded in `learnings.md` for the
+  reviewer: private-name imports from `evaluate.py`, and a predictions/store
+  import cycle worked around with a local import.
 
 ## Task 5 — Summary tables
 - Status: not started

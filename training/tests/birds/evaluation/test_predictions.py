@@ -1,13 +1,22 @@
 """Tests for `birds.evaluation.predictions`: hand-computed per-photo records and alignment."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from PIL import Image
+from sqlalchemy import Engine
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from birds.evaluation.predictions import PhotoPrediction, predict_photos
+from birds.config import ModelName
+from birds.dataset import splits as splits_module
+from birds.dataset.splits import Split
+from birds.evaluation import evaluate as evaluate_module
+from birds.evaluation import predictions as predictions_module
+from birds.evaluation.predictions import DATASET_NAME, PhotoPrediction, predict_photos
+from birds.evaluation.store import read_predictions
 
 _LOGITS = torch.tensor(
     [
@@ -65,3 +74,111 @@ def test_loader_yielding_fewer_photos_than_the_split_raises() -> None:
 
     with pytest.raises(ValueError, match="does not match"):
         predict_photos(nn.Identity(), short, torch.device("cpu"), _IDS, _LABELS)
+
+
+# species index -> (official-train photos, official-test photos); every split gets photos.
+_LAYOUT = {0: (12, 1), 1: (12, 1)}
+
+
+class _ConstantModel(nn.Module):
+    """Always predicts class `favorite` of 2, whatever the image."""
+
+    def __init__(self, favorite: int) -> None:
+        super().__init__()
+        self._favorite = favorite
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        logits = torch.zeros(len(images), 2)
+        logits[:, self._favorite] = 3.0
+        return logits
+
+
+@pytest.fixture
+def fake_cub(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "CUB_200_2011"
+    (root / "images").mkdir(parents=True)
+    images, labels, flags = [], [], []
+    photo_id = 0
+    for species, (n_train, n_test) in _LAYOUT.items():
+        (root / "images" / f"s{species}").mkdir()
+        for is_train in [1] * n_train + [0] * n_test:
+            photo_id += 1
+            relative = f"s{species}/p{photo_id}.png"
+            Image.new("RGB", (4, 4)).save(root / "images" / relative)
+            images.append(f"{photo_id} {relative}")
+            labels.append(f"{photo_id} {species + 1}")
+            flags.append(f"{photo_id} {is_train}")
+    (root / "images.txt").write_text("\n".join(images) + "\n")
+    (root / "image_class_labels.txt").write_text("\n".join(labels) + "\n")
+    (root / "train_test_split.txt").write_text("\n".join(flags) + "\n")
+    monkeypatch.setattr(splits_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(splits_module, "NUM_WORKERS", 0)
+    monkeypatch.setattr(
+        predictions_module, "eval_transform", lambda name: lambda image: torch.zeros(3, 4, 4)
+    )
+
+
+def test_each_photo_gets_one_record_per_model_across_all_splits(
+    fake_cub: None, postgres_engine: Engine
+) -> None:
+    device = torch.device("cpu")
+    train_ids, val_ids, test_ids = splits_module.split_ids()
+    models: dict[ModelName, nn.Module] = {"small": _ConstantModel(0), "large": _ConstantModel(1)}
+    expected_sizes: dict[Split, int] = {
+        "train": len(train_ids),
+        "val": len(val_ids),
+        "test": len(test_ids),
+    }
+
+    for name, model in models.items():
+        for split, size in expected_sizes.items():
+            count = predictions_module.record_split(
+                postgres_engine, model, name, split, device, None
+            )
+            assert count == size
+
+    for split, size in expected_sizes.items():
+        small = read_predictions(postgres_engine, DATASET_NAME, split, "small")
+        large = read_predictions(postgres_engine, DATASET_NAME, split, "large")
+        assert len(small) == len(large) == size
+        assert small["photo_id"].tolist() == large["photo_id"].tolist()
+        assert set(small["predicted_label"]) == {0}
+        assert set(large["predicted_label"]) == {1}
+        assert small["is_correct"].tolist() == (small["true_label"] == 0).tolist()
+
+
+def test_missing_dataset_stops_before_gpu_checkpoints_and_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(splits_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(predictions_module, "require_cuda", _fail("require_cuda"))
+    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+
+    with pytest.raises(FileNotFoundError, match="python -m birds.dataset.download"):
+        predictions_module.main()
+
+
+def test_missing_checkpoint_names_the_train_command(
+    fake_cub: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(predictions_module, "require_cuda", lambda: torch.device("cpu"))
+    monkeypatch.setattr(predictions_module, "get_engine", lambda: None)
+    monkeypatch.setattr(evaluate_module, "WEIGHTS_DIR", tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="python -m birds.train --model small"):
+        predictions_module.main()
+
+
+def test_no_gpu_refuses_to_proceed(fake_cub: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+
+    with pytest.raises(RuntimeError, match="No CUDA GPU"):
+        predictions_module.main()
+
+
+def _fail(name: str) -> Any:
+    def _raise(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError(f"{name} must not be reached")
+
+    return _raise

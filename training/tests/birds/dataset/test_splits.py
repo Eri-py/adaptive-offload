@@ -83,6 +83,23 @@ def test_test_split_is_exactly_the_official_test_ids(fake_cub: Path) -> None:
     assert test == official
 
 
+def test_split_labels_pair_each_split_id_with_its_species(fake_cub: Path) -> None:
+    labeled = data_module.split_labels()
+
+    for pairs, ids in zip(labeled, data_module.split_ids(), strict=True):
+        assert [photo_id for photo_id, _ in pairs] == ids
+        assert [label for _, label in pairs] == _species_of(ids, fake_cub)
+
+
+def test_split_labels_missing_dataset_raises_helpful_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(data_module, "DATA_DIR", tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="python -m birds.dataset.download"):
+        data_module.split_labels()
+
+
 def test_labels_are_zero_based(fake_cub: Path) -> None:
     dataset = data_module.load_test(_identity_transform)
 
