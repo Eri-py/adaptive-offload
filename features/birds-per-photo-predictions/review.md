@@ -292,7 +292,7 @@ N6 only so it isn't forgotten).
   so "the last two sections" names the wrong thing either way.
 - **Fix:** Name the section: "the **Birds, committed checkpoints** section
   below".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N3: name the section the reproducible tables live in"
 
 #### N4 — The numeric-photo-id assumption is repeated in three places, documented in one
 

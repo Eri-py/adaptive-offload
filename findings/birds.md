@@ -13,7 +13,8 @@ are:
   cleared. The flowers half cannot be regenerated at all (its dataset and
   checkpoints were deleted). The pilot's birds checkpoints are not the ones
   committed today, so the pilot's birds figures cannot be regenerated either.
-- **The committed-checkpoint birds tables** (last two sections) are reproducible.
+- **The committed-checkpoint birds tables** (the **Birds, committed
+  checkpoints** section below) are reproducible.
   They come from the committed birds checkpoints and from committed code that
   reproduces them. Per-photo predictions are recorded in the `bird_predictions`
   table, and the tables are computed from those records.
