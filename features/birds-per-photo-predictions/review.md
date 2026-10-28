@@ -161,7 +161,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Append `"Run \`python -m birds.evaluation.predictions\` first."` to
   both messages, and assert the command string in a test the way
   `test_splits.py:95` does.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1: name the fixing command in the summary's errors"
 
 #### S2 — `ENV_PATH` re-derives a path `birds.config` already exports, in the wrong module
 

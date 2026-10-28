@@ -134,8 +134,17 @@ def test_repeated_calls_format_identically() -> None:
 
 
 def test_mismatched_photo_sets_raise() -> None:
-    with pytest.raises(ValueError, match="different photos"):
+    with pytest.raises(
+        ValueError, match="different photos.*python -m birds.evaluation.predictions"
+    ):
         summarize(_frame([("1", True, 0.5, 0.5)]), _frame([("2", True, 0.5, 0.5)]))
+
+
+def test_no_stored_predictions_names_the_recording_command() -> None:
+    with pytest.raises(
+        ValueError, match="no stored predictions.*python -m birds.evaluation.predictions"
+    ):
+        summarize(_frame([]), _frame([]))
 
 
 def _record(photo_id: str, ok: bool) -> PhotoPrediction:

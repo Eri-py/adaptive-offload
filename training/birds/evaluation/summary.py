@@ -23,6 +23,7 @@ CONFIDENCE_MEASURES = ("max_probability", "top2_margin")
 # Share of photos (by percent) sent to the large model in the threshold sweep.
 ESCALATION_PERCENTS = (0, 5, 10, 15, 20, 30, 50, 100)
 _MODELS: tuple[ModelName, ...] = ("small", "large")
+_RECORD_COMMAND = "python -m birds.evaluation.predictions"
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,10 @@ class Summary:
 def align_models(small: pd.DataFrame, large: pd.DataFrame) -> pd.DataFrame:
     """One row per photo with `<column>_small`/`<column>_large`, ordered by numeric photo id."""
     if set(small["photo_id"]) != set(large["photo_id"]):
-        raise ValueError("small and large models cover different photos; re-record both")
+        raise ValueError(
+            "small and large models cover different photos; re-record both. "
+            f"Run `{_RECORD_COMMAND}` first."
+        )
     if small["photo_id"].duplicated().any() or large["photo_id"].duplicated().any():
         raise ValueError("duplicate photo ids in stored predictions")
     joined = small.merge(large, on="photo_id", suffixes=("_small", "_large"))
@@ -120,7 +124,7 @@ def summarize(small: pd.DataFrame, large: pd.DataFrame) -> Summary:
     """Compute every table from the two models' stored rows for one split."""
     joined = align_models(small, large)
     if joined.empty:
-        raise ValueError("no stored predictions to summarize")
+        raise ValueError(f"no stored predictions to summarize. Run `{_RECORD_COMMAND}` first.")
     agreement = _agreement(joined)
     return Summary(
         photos=len(joined),
