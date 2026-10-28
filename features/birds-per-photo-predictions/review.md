@@ -256,7 +256,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Resolve `split_labels()` once in `main()` into a
   `dict[Split, list[tuple[str, int]]]` and pass the split's pairs into
   `record_split` as a parameter.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S7: resolve the split once per run"
 
 ## Nitpicks
 

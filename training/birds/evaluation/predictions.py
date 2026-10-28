@@ -72,11 +72,14 @@ def record_split(
     model: nn.Module,
     model_name: ModelName,
     split: Split,
+    labeled: list[tuple[str, int]],
     device: torch.device,
     training_run_id: str | None,
 ) -> int:
-    """Computes and stores `model_name`'s records over `split`; returns the row count."""
-    labeled = dict(zip(_SPLITS, split_labels(), strict=True))[split]
+    """Computes and stores `model_name`'s records over `split`; returns the row count.
+
+    `labeled` is the split's `(photo_id, label)` pairs, resolved once by the caller.
+    """
     photo_ids = [photo_id for photo_id, _ in labeled]
     loader = make_data_loader(
         split, eval_transform(model_name), TRAIN_SETTINGS[model_name].batch_size, shuffle=False
@@ -87,7 +90,8 @@ def record_split(
 
 
 def main() -> None:
-    split_labels()  # Raises the download-command error before any GPU or checkpoint work.
+    # Resolved once, and raises the download-command error before any GPU or checkpoint work.
+    labeled_splits = dict(zip(_SPLITS, split_labels(), strict=True))
     device = require_cuda()
     load_dotenv(ENV_PATH)
     for name in MODEL_NAMES:
@@ -99,7 +103,9 @@ def main() -> None:
         if run_id is None:
             print(f"note: {name} results are not attached to a training run.")
         for split in _SPLITS:
-            count = record_split(engine, model, name, split, device, run_id)
+            count = record_split(
+                engine, model, name, split, labeled_splits[split], device, run_id
+            )
             print(f"{name:<8} {split:<6} {count:>6} rows")
 
 

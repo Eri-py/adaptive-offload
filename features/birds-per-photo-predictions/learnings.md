@@ -35,3 +35,5 @@
 - S5: the untraceable-run note is tested by patching `shared.tracking.read_run_id` (per-model dict keyed by checkpoint stem) and driving `main()` with stub `load_checkpoint`/`require_checkpoint`; a mixed small=id/large=None case proves the note names only the offending model. Never use `git checkout -p` in a scripted run; it prompts and hangs.
 
 - S6: `Summary.training_runs` (distinct `training_run_id` per model, None last) feeds both a "Training runs" block in the printed output (notes for mixed ids, partly/wholly null) and `run_params`, which logs `<model>_training_run_id` (comma-joined if mixed, omitted if unknown, never a made-up value). The `_frame` test helper now always carries a `training_run_id` column, so `summarize` requires it rather than tolerating its absence. Params are asserted via the pure `run_params`, since the autouse fixture forces tracking off.
+
+- S7: `main()` resolves `split_labels()` once into a split->pairs dict (also serving as the up-front missing-dataset check) and passes each split's pairs to `record_split`. `test_main_resolves_the_split_once` counts calls; reverting the fix makes it and the integration test fail.

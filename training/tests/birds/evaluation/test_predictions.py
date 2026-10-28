@@ -124,18 +124,14 @@ def test_each_photo_gets_one_record_per_model_across_all_splits(
     fake_cub: None, postgres_engine: Engine
 ) -> None:
     device = torch.device("cpu")
-    train_ids, val_ids, test_ids = splits_module.split_ids()
+    labeled_splits = dict(zip(get_args(Split), splits_module.split_labels(), strict=True))
     models: dict[ModelName, nn.Module] = {"small": _ConstantModel(0), "large": _ConstantModel(1)}
-    expected_sizes: dict[Split, int] = {
-        "train": len(train_ids),
-        "val": len(val_ids),
-        "test": len(test_ids),
-    }
+    expected_sizes = {split: len(labeled) for split, labeled in labeled_splits.items()}
 
     for name, model in models.items():
         for split, size in expected_sizes.items():
             count = predictions_module.record_split(
-                postgres_engine, model, name, split, device, None
+                postgres_engine, model, name, split, labeled_splits[split], device, None
             )
             assert count == size
 
@@ -238,6 +234,24 @@ def test_run_with_training_run_ids_prints_no_note(
     out = capsys.readouterr().out
     assert "note:" not in out
     assert "small" in out  # the per-split rows still print
+
+
+def test_main_resolves_the_split_once(
+    fake_cub: None, postgres_engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+    real = splits_module.split_labels
+
+    def counting() -> Any:
+        nonlocal calls
+        calls += 1
+        return real()
+
+    monkeypatch.setattr(predictions_module, "split_labels", counting)
+
+    _drive_main(postgres_engine, monkeypatch, {"small": None, "large": None})
+
+    assert calls == 1
 
 
 def test_no_gpu_refuses_to_proceed(fake_cub: None, monkeypatch: pytest.MonkeyPatch) -> None:
