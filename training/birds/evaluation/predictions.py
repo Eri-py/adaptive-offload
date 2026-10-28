@@ -10,10 +10,9 @@ from sqlalchemy import Engine
 from torch import nn
 from torch.utils.data import DataLoader
 
-from birds.config import ENV_PATH, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.config import ENV_PATH, MODEL_NAMES, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.dataset.splits import Split, eval_transform, make_data_loader, split_labels
-from birds.evaluation.evaluate import _MODEL_NAMES, _load_checkpoint, require_checkpoint
-from birds.modeling.build import require_cuda
+from birds.modeling.build import load_checkpoint, require_checkpoint, require_cuda
 from shared import tracking
 
 DATASET_NAME = "cub-200-2011"
@@ -105,11 +104,11 @@ def main() -> None:
     split_labels()  # Raises the download-command error before any GPU or checkpoint work.
     device = require_cuda()
     load_dotenv(ENV_PATH)
-    for name in _MODEL_NAMES:
+    for name in MODEL_NAMES:
         require_checkpoint(name)  # Path check only: fail before any model's records are written.
     engine = get_engine()
-    for name in _MODEL_NAMES:
-        model = _load_checkpoint(name, device)
+    for name in MODEL_NAMES:
+        model = load_checkpoint(name, device)
         run_id = tracking.read_run_id(WEIGHTS_DIR / f"{name}.pt")
         for split in _SPLITS:
             count = record_split(engine, model, name, split, device, run_id)

@@ -1,12 +1,15 @@
 """Builds the small/large bird classifiers (200-way head) and gates training on a GPU."""
 
+from pathlib import Path
 from typing import cast
 
 import torch
 from torch import nn
 from torchvision.models import WeightsEnum, convnext_base, mobilenet_v3_large
 
-from birds.config import MODEL_WEIGHTS, NUM_CLASSES, ModelName
+from birds.config import MODEL_WEIGHTS, NUM_CLASSES, WEIGHTS_DIR, ModelName
+
+_TRAIN_COMMAND = "python -m birds.train --model {name}"
 
 
 def weights_for(name: ModelName) -> WeightsEnum:
@@ -32,6 +35,27 @@ def build_model(name: ModelName, pretrained: bool = True) -> nn.Module:
     large_model: nn.Module = convnext_base(weights=weights)
     _replace_head(cast(nn.Sequential, large_model.classifier), index=2)
     return large_model
+
+
+def require_checkpoint(name: ModelName) -> Path:
+    """Path of `name`'s trained checkpoint; raises an actionable error if it is missing."""
+    checkpoint_path = WEIGHTS_DIR / f"{name}.pt"
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(
+            f"Missing checkpoint for the '{name}' model at {checkpoint_path}. "
+            f"Run `{_TRAIN_COMMAND.format(name=name)}` first."
+        )
+    return checkpoint_path
+
+
+def load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
+    """Builds `name`'s model (untrained head) and loads its trained checkpoint."""
+    checkpoint_path = require_checkpoint(name)
+    model = build_model(name, pretrained=False)
+    state_dict = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(state_dict)
+    model.to(device)
+    return model
 
 
 def require_cuda() -> torch.device:

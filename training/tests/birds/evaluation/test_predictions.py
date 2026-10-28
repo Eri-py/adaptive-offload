@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from birds.config import ModelName
 from birds.dataset import splits as splits_module
 from birds.dataset.splits import Split
-from birds.evaluation import evaluate as evaluate_module
 from birds.evaluation import predictions as predictions_module
 from birds.evaluation.predictions import DATASET_NAME, PhotoPrediction, predict_photos
 from birds.evaluation.store import read_predictions
+from birds.modeling import build as build_module
 
 _LOGITS = torch.tensor(
     [
@@ -152,7 +152,7 @@ def test_missing_dataset_stops_before_gpu_checkpoints_and_writes(
 ) -> None:
     monkeypatch.setattr(splits_module, "DATA_DIR", tmp_path)
     monkeypatch.setattr(predictions_module, "require_cuda", _fail("require_cuda"))
-    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+    monkeypatch.setattr(predictions_module, "load_checkpoint", _fail("load_checkpoint"))
 
     with pytest.raises(FileNotFoundError, match="python -m birds.dataset.download"):
         predictions_module.main()
@@ -163,7 +163,7 @@ def test_missing_checkpoint_names_the_train_command(
 ) -> None:
     monkeypatch.setattr(predictions_module, "require_cuda", lambda: torch.device("cpu"))
     monkeypatch.setattr(predictions_module, "get_engine", lambda: None)
-    monkeypatch.setattr(evaluate_module, "WEIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(build_module, "WEIGHTS_DIR", tmp_path)
 
     with pytest.raises(FileNotFoundError, match="python -m birds.train --model small"):
         predictions_module.main()
@@ -175,8 +175,8 @@ def test_one_missing_checkpoint_writes_no_records(
     (tmp_path / "small.pt").touch()  # small present, large absent
     monkeypatch.setattr(predictions_module, "require_cuda", lambda: torch.device("cpu"))
     monkeypatch.setattr(predictions_module, "get_engine", lambda: postgres_engine)
-    monkeypatch.setattr(evaluate_module, "WEIGHTS_DIR", tmp_path)
-    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+    monkeypatch.setattr(build_module, "WEIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(predictions_module, "load_checkpoint", _fail("load_checkpoint"))
 
     with pytest.raises(FileNotFoundError, match="python -m birds.train --model large"):
         predictions_module.main()
@@ -188,7 +188,7 @@ def test_one_missing_checkpoint_writes_no_records(
 
 def test_no_gpu_refuses_to_proceed(fake_cub: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+    monkeypatch.setattr(predictions_module, "load_checkpoint", _fail("load_checkpoint"))
 
     with pytest.raises(RuntimeError, match="No CUDA GPU"):
         predictions_module.main()

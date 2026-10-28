@@ -28,6 +28,8 @@ MODEL_WEIGHTS: dict[ModelName, WeightsEnum] = {
     "small": MobileNet_V3_Large_Weights.IMAGENET1K_V2,
     "large": ConvNeXt_Base_Weights.IMAGENET1K_V1,
 }
+# Derived from the weights mapping so the model list has one source of truth.
+MODEL_NAMES: tuple[ModelName, ...] = tuple(MODEL_WEIGHTS)
 
 
 @dataclass(frozen=True)

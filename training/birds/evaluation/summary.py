@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from sklearn.metrics import roc_auc_score
 from sqlalchemy import Engine
 
-from birds.config import ENV_PATH, EXPERIMENT_NAME, ModelName
+from birds.config import ENV_PATH, EXPERIMENT_NAME, MODEL_NAMES, ModelName
 from birds.evaluation.predictions import DATASET_NAME
 from birds.evaluation.store import read_predictions
 from shared import tracking
@@ -22,7 +22,6 @@ SPLIT = "test"
 CONFIDENCE_MEASURES = ("max_probability", "top2_margin")
 # Share of photos (by percent) sent to the large model in the threshold sweep.
 ESCALATION_PERCENTS = (0, 5, 10, 15, 20, 30, 50, 100)
-_MODELS: tuple[ModelName, ...] = ("small", "large")
 _RECORD_COMMAND = "python -m birds.evaluation.predictions"
 
 
@@ -131,7 +130,7 @@ def summarize(small: pd.DataFrame, large: pd.DataFrame) -> Summary:
         agreement=agreement,
         separation={
             (model, measure): _separation(joined, model, measure)
-            for model in _MODELS
+            for model in MODEL_NAMES
             for measure in CONFIDENCE_MEASURES
         },
         cascade={measure: _cascade(joined, measure, agreement) for measure in CONFIDENCE_MEASURES},
@@ -140,7 +139,7 @@ def summarize(small: pd.DataFrame, large: pd.DataFrame) -> Summary:
 
 def load_summary(engine: Engine) -> Summary:
     """Summarize the test split as currently stored for both models."""
-    small, large = (read_predictions(engine, DATASET_NAME, SPLIT, model) for model in _MODELS)
+    small, large = (read_predictions(engine, DATASET_NAME, SPLIT, model) for model in MODEL_NAMES)
     return summarize(small, large)
 
 
@@ -163,7 +162,7 @@ def format_summary(summary: Summary) -> str:
         "Confidence separation (AUC, correct vs incorrect)",
         f"  {'model':<8}" + "".join(f"{m:>18}" for m in CONFIDENCE_MEASURES),
     ]
-    for model in _MODELS:
+    for model in MODEL_NAMES:
         cells = "".join(f"{summary.separation[(model, m)]:>18.4f}" for m in CONFIDENCE_MEASURES)
         lines.append(f"  {model:<8}{cells}")
     for measure in CONFIDENCE_MEASURES:

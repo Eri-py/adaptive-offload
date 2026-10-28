@@ -199,7 +199,7 @@ N6 only so it isn't forgotten).
   `_load_checkpoint` to a public `load_checkpoint` (its natural home is
   `birds/modeling/build.py`, next to `build_model`) and import it from there in
   both entry points.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3: stop importing private names from evaluate.py"
 
 #### S4 — `predictions` and `store` import each other, worked around with a local import
 

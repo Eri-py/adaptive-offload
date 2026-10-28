@@ -27,3 +27,5 @@
 - B1 fix: `main()` loaded checkpoints inside the model loop, so a missing `large.pt` failed after `small`'s rows were committed. The test only had both missing. Now `evaluate.require_checkpoint(name)` (path check, shared with `_load_checkpoint` so the message is identical) runs for every model before any write. Asymmetric test: `small.pt` present, `large.pt` absent, and `_load_checkpoint` patched to fail, so only the up-front check can raise.
 - S1: summary.py errors now name the recording command via _RECORD_COMMAND; tests match the command string (empty frames hit the 'no stored predictions' branch).
 - S2: ENV_PATH now lives in birds/config.py (TRAINING_DIR / .env); both main()s import it. Hop-count test moved to tests/birds/test_config.py.
+
+- S3: checkpoint helpers (`require_checkpoint`, `load_checkpoint`) now live in `birds/modeling/build.py`, so tests that need a missing/present checkpoint patch `build.WEIGHTS_DIR`, not `evaluate.WEIGHTS_DIR` (which now only governs `_log_results`' run-id lookup). `config.MODEL_NAMES` is derived from `MODEL_WEIGHTS` keys.
