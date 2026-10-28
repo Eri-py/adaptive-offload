@@ -98,6 +98,15 @@ confidence ordering rather than the absolute confidence values.
 
 Test split, 5,794 photos. Regenerate with the two commands above.
 
+The recipe of record is `TRAIN_SETTINGS` in `training/birds/config.py`: small
+30 epochs at lr 1e-3, batch 64; large 15 epochs at lr 1e-4, batch 32. Those
+values match the pilot settings listed above, but nothing in this file
+re-verifies that the committed checkpoints were trained under them — the claim
+rests on the config being unchanged since they were trained, not on a
+measurement. Each stored prediction does carry its checkpoint's training run
+id, so a run's settings can be checked against the tracking store if it
+matters.
+
 ### Small vs. large
 
 | | CUB-200 birds (n=5,794) |

@@ -341,7 +341,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Add a sentence to the committed-checkpoint section pointing at
   `birds/config.py`'s `TRAIN_SETTINGS` as the recipe of record, noting it matches
   the pilot's listed settings but was not re-verified against the checkpoints.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N7: state the recipe of record for the committed checkpoints"
 
 #### N8 — The canonical summary output isn't committed anywhere
 
