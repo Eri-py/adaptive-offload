@@ -228,7 +228,7 @@ N6 only so it isn't forgotten).
   case.
 - **Fix:** In the model loop, print that same note when `run_id is None`, so a
   run that produces untraceable rows says so.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S5: note when records carry no training run"
 
 #### S6 — The tracked summary run carries no link to the checkpoints it summarizes
 

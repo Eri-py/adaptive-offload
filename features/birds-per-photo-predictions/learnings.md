@@ -31,3 +31,5 @@
 - S3: checkpoint helpers (`require_checkpoint`, `load_checkpoint`) now live in `birds/modeling/build.py`, so tests that need a missing/present checkpoint patch `build.WEIGHTS_DIR`, not `evaluate.WEIGHTS_DIR` (which now only governs `_log_results`' run-id lookup). `config.MODEL_NAMES` is derived from `MODEL_WEIGHTS` keys.
 
 - S4: `PhotoPrediction` and `DATASET_NAME` live in `birds/evaluation/records.py` (stdlib only). Import graph is now `predictions` -> `store` -> `records`, and `summary` -> `store`/`records`; `summary` no longer pulls in torch via `predictions`. A function-local import to break a cycle means a shared type is living in the wrong module; extract it.
+
+- S5: the untraceable-run note is tested by patching `shared.tracking.read_run_id` (per-model dict keyed by checkpoint stem) and driving `main()` with stub `load_checkpoint`/`require_checkpoint`; a mixed small=id/large=None case proves the note names only the offending model. Never use `git checkout -p` in a scripted run; it prompts and hangs.

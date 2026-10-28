@@ -96,6 +96,8 @@ def main() -> None:
     for name in MODEL_NAMES:
         model = load_checkpoint(name, device)
         run_id = tracking.read_run_id(WEIGHTS_DIR / f"{name}.pt")
+        if run_id is None:
+            print(f"note: {name} results are not attached to a training run.")
         for split in _SPLITS:
             count = record_split(engine, model, name, split, device, run_id)
             print(f"{name:<8} {split:<6} {count:>6} rows")

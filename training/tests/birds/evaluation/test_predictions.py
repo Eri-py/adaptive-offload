@@ -18,6 +18,7 @@ from birds.evaluation.predictions import predict_photos
 from birds.evaluation.records import DATASET_NAME, PhotoPrediction
 from birds.evaluation.store import read_predictions
 from birds.modeling import build as build_module
+from shared import tracking
 
 _LOGITS = torch.tensor(
     [
@@ -187,6 +188,58 @@ def test_one_missing_checkpoint_writes_no_records(
             assert read_predictions(postgres_engine, DATASET_NAME, split, name).empty
 
 
+def _drive_main(
+    postgres_engine: Engine, monkeypatch: pytest.MonkeyPatch, run_ids: dict[str, str | None]
+) -> None:
+    monkeypatch.setattr(predictions_module, "require_cuda", lambda: torch.device("cpu"))
+    monkeypatch.setattr(predictions_module, "require_checkpoint", lambda name: None)
+    monkeypatch.setattr(predictions_module, "get_engine", lambda: postgres_engine)
+    monkeypatch.setattr(
+        predictions_module, "load_checkpoint", lambda name, device: _ConstantModel(0)
+    )
+    monkeypatch.setattr(tracking, "read_run_id", lambda path: run_ids[path.stem])
+    predictions_module.main()
+
+
+def test_run_without_a_training_run_id_prints_a_note(
+    fake_cub: None,
+    postgres_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _drive_main(postgres_engine, monkeypatch, {"small": None, "large": None})
+
+    out = capsys.readouterr().out
+    assert "note: small results are not attached to a training run." in out
+    assert "note: large results are not attached to a training run." in out
+
+
+def test_note_names_only_the_model_without_a_training_run_id(
+    fake_cub: None,
+    postgres_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _drive_main(postgres_engine, monkeypatch, {"small": "run-1", "large": None})
+
+    out = capsys.readouterr().out
+    assert "note: large results are not attached to a training run." in out
+    assert "note: small" not in out
+
+
+def test_run_with_training_run_ids_prints_no_note(
+    fake_cub: None,
+    postgres_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _drive_main(postgres_engine, monkeypatch, {"small": "run-1", "large": "run-2"})
+
+    out = capsys.readouterr().out
+    assert "note:" not in out
+    assert "small" in out  # the per-split rows still print
+
+
 def test_no_gpu_refuses_to_proceed(fake_cub: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     monkeypatch.setattr(predictions_module, "load_checkpoint", _fail("load_checkpoint"))
@@ -200,4 +253,3 @@ def _fail(name: str) -> Any:
         raise AssertionError(f"{name} must not be reached")
 
     return _raise
-
