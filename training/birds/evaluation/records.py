@@ -15,3 +15,18 @@ class PhotoPrediction:
     is_correct: bool
     max_probability: float
     top2_margin: float
+
+
+def numeric_photo_id(photo_id: str) -> int:
+    """Integer value of a photo id, the one place that assumes ids are stringified ints.
+
+    "10" must follow "2", matching splits.py's ordering; a plain string sort would not.
+    Another dataset sharing the table with non-numeric ids needs its own ordering.
+    """
+    try:
+        return int(photo_id)
+    except ValueError:
+        raise ValueError(
+            f"photo id {photo_id!r} is not an integer; stored predictions are ordered "
+            "by numeric photo id, which only holds for datasets with integer ids"
+        ) from None

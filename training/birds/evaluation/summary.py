@@ -14,7 +14,7 @@ from sklearn.metrics import roc_auc_score
 from sqlalchemy import Engine
 
 from birds.config import ENV_PATH, EXPERIMENT_NAME, MODEL_NAMES, ModelName
-from birds.evaluation.records import DATASET_NAME
+from birds.evaluation.records import DATASET_NAME, numeric_photo_id
 from birds.evaluation.store import read_predictions
 from shared import tracking
 
@@ -71,7 +71,9 @@ def align_models(small: pd.DataFrame, large: pd.DataFrame) -> pd.DataFrame:
     if small["photo_id"].duplicated().any() or large["photo_id"].duplicated().any():
         raise ValueError("duplicate photo ids in stored predictions")
     joined = small.merge(large, on="photo_id", suffixes=("_small", "_large"))
-    return joined.sort_values("photo_id", key=lambda ids: ids.astype(int), ignore_index=True)
+    return joined.sort_values(
+        "photo_id", key=lambda ids: ids.map(numeric_photo_id), ignore_index=True
+    )
 
 
 def _agreement(joined: pd.DataFrame) -> Agreement:
@@ -102,7 +104,7 @@ def _separation(joined: pd.DataFrame, model: ModelName, measure: str) -> float:
 def _cascade(joined: pd.DataFrame, measure: str, agreement: Agreement) -> list[CascadeRow]:
     """Threshold sweep: escalate the least-confident small-model photos to the large model."""
     # Ties on confidence fall back to the numeric photo id, so the order never varies.
-    ordered = joined.assign(_id=joined["photo_id"].astype(int)).sort_values(
+    ordered = joined.assign(_id=joined["photo_id"].map(numeric_photo_id)).sort_values(
         [f"{measure}_small", "_id"], kind="stable", ignore_index=True
     )
     small_ok = ordered["is_correct_small"].to_numpy(dtype=bool)

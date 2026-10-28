@@ -305,7 +305,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Extract the ordering into one small helper used by all three call
   sites, carrying the existing comment, so the assumption lives in one place and
   can raise a clear message.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N4: one helper for the numeric photo-id ordering"
 
 #### N5 — `predict_photos` takes a device but never moves the model to it
 

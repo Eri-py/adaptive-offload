@@ -7,7 +7,7 @@ from common.models import BirdPrediction
 from sqlalchemy import Engine, delete, select
 from sqlalchemy.orm import Session
 
-from birds.evaluation.records import PhotoPrediction
+from birds.evaluation.records import PhotoPrediction, numeric_photo_id
 
 
 def write_predictions(
@@ -53,5 +53,6 @@ def read_predictions(engine: Engine, dataset: str, split: str, model_name: str) 
         BirdPrediction.model_name == model_name,
     )
     frame = pd.read_sql(query, engine)
-    # Photo ids are stringified ints; "10" must follow "2", matching splits.py's ordering.
-    return frame.sort_values("photo_id", key=lambda ids: ids.astype(int), ignore_index=True)
+    return frame.sort_values(
+        "photo_id", key=lambda ids: ids.map(numeric_photo_id), ignore_index=True
+    )

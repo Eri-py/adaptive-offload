@@ -129,6 +129,14 @@ def test_tied_confidences_break_on_numeric_photo_id() -> None:
     assert reversed_rows == summarize(small, large).cascade["max_probability"]
 
 
+def test_non_numeric_photo_ids_name_the_offending_id() -> None:
+    small = _frame([("1", True, 0.5, 0.5), ("bird-a", True, 0.5, 0.5)])
+    large = _frame([("1", True, 0.5, 0.5), ("bird-a", True, 0.5, 0.5)])
+
+    with pytest.raises(ValueError, match="'bird-a' is not an integer"):
+        summarize(small, large)
+
+
 def test_repeated_calls_format_identically() -> None:
     tied = _frame([(str(i), i % 2 == 0, 0.5, 0.5) for i in range(1, 21)])
     other = _frame([(str(i), i % 3 == 0, 0.5, 0.5) for i in range(1, 21)])
