@@ -7,7 +7,7 @@ from common.models import BirdPrediction
 from sqlalchemy import Engine, delete, select
 from sqlalchemy.orm import Session
 
-from birds.evaluation.predictions import PhotoPrediction
+from birds.evaluation.records import PhotoPrediction
 
 
 def write_predictions(

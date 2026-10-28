@@ -29,3 +29,5 @@
 - S2: ENV_PATH now lives in birds/config.py (TRAINING_DIR / .env); both main()s import it. Hop-count test moved to tests/birds/test_config.py.
 
 - S3: checkpoint helpers (`require_checkpoint`, `load_checkpoint`) now live in `birds/modeling/build.py`, so tests that need a missing/present checkpoint patch `build.WEIGHTS_DIR`, not `evaluate.WEIGHTS_DIR` (which now only governs `_log_results`' run-id lookup). `config.MODEL_NAMES` is derived from `MODEL_WEIGHTS` keys.
+
+- S4: `PhotoPrediction` and `DATASET_NAME` live in `birds/evaluation/records.py` (stdlib only). Import graph is now `predictions` -> `store` -> `records`, and `summary` -> `store`/`records`; `summary` no longer pulls in torch via `predictions`. A function-local import to break a cycle means a shared type is living in the wrong module; extract it.

@@ -14,7 +14,8 @@ from birds.config import ModelName
 from birds.dataset import splits as splits_module
 from birds.dataset.splits import Split
 from birds.evaluation import predictions as predictions_module
-from birds.evaluation.predictions import DATASET_NAME, PhotoPrediction, predict_photos
+from birds.evaluation.predictions import predict_photos
+from birds.evaluation.records import DATASET_NAME, PhotoPrediction
 from birds.evaluation.store import read_predictions
 from birds.modeling import build as build_module
 

@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import Engine
 
-from birds.evaluation.predictions import DATASET_NAME, PhotoPrediction
+from birds.evaluation.records import DATASET_NAME, PhotoPrediction
 from birds.evaluation.store import write_predictions
 from birds.evaluation.summary import (
     ESCALATION_PERCENTS,

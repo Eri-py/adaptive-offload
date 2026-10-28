@@ -2,7 +2,7 @@
 
 from sqlalchemy import Engine
 
-from birds.evaluation.predictions import PhotoPrediction
+from birds.evaluation.records import PhotoPrediction
 from birds.evaluation.store import read_predictions, write_predictions
 
 _DATASET = "cub"

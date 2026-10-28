@@ -214,7 +214,7 @@ N6 only so it isn't forgotten).
   one-directional: `predictions` → `store` → `records`. Moving `record_split` and
   `main` into a dedicated entry-point module would also work and matches the
   plan's own description of `predictions.py` as "pure compute, no database".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S4: break the predictions/store import cycle"
 
 #### S5 — A null `training_run_id` is recorded silently
 

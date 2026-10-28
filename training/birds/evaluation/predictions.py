@@ -1,6 +1,5 @@
 """Per-photo predictions: what a model said about each photo, with its confidence."""
 
-from dataclasses import dataclass
 from typing import Any, get_args
 
 import torch
@@ -12,23 +11,12 @@ from torch.utils.data import DataLoader
 
 from birds.config import ENV_PATH, MODEL_NAMES, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.dataset.splits import Split, eval_transform, make_data_loader, split_labels
+from birds.evaluation.records import DATASET_NAME, PhotoPrediction
+from birds.evaluation.store import write_predictions
 from birds.modeling.build import load_checkpoint, require_checkpoint, require_cuda
 from shared import tracking
 
-DATASET_NAME = "cub-200-2011"
 _SPLITS: tuple[Split, ...] = get_args(Split)
-
-
-@dataclass(frozen=True)
-class PhotoPrediction:
-    """One photo's top-1 outcome and the model's confidence in it."""
-
-    photo_id: str
-    true_label: int
-    predicted_label: int
-    is_correct: bool
-    max_probability: float
-    top2_margin: float
 
 
 def predict_photos(
@@ -88,8 +76,6 @@ def record_split(
     training_run_id: str | None,
 ) -> int:
     """Computes and stores `model_name`'s records over `split`; returns the row count."""
-    from birds.evaluation.store import write_predictions  # Deferred: store imports this module.
-
     labeled = dict(zip(_SPLITS, split_labels(), strict=True))[split]
     photo_ids = [photo_id for photo_id, _ in labeled]
     loader = make_data_loader(
