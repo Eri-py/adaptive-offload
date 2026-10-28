@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from sklearn.metrics import roc_auc_score
 from sqlalchemy import Engine
 
-from birds.config import EXPERIMENT_NAME, ModelName
-from birds.evaluation.predictions import DATASET_NAME, ENV_PATH
+from birds.config import ENV_PATH, EXPERIMENT_NAME, ModelName
+from birds.evaluation.predictions import DATASET_NAME
 from birds.evaluation.store import read_predictions
 from shared import tracking
 

@@ -180,7 +180,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Put `ENV_PATH = TRAINING_DIR / ".env"` in `birds/config.py` beside
   `WEIGHTS_DIR`, import it in both `main()`s, and drop the hop-count test (or
   move it to `config`).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S2: move ENV_PATH to birds.config"
 
 #### S3 — `predictions.py` imports two private names out of the frozen `evaluate.py`
 

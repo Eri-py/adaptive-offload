@@ -1,7 +1,6 @@
 """Per-photo predictions: what a model said about each photo, with its confidence."""
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, get_args
 
 import torch
@@ -11,7 +10,7 @@ from sqlalchemy import Engine
 from torch import nn
 from torch.utils.data import DataLoader
 
-from birds.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.config import ENV_PATH, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.dataset.splits import Split, eval_transform, make_data_loader, split_labels
 from birds.evaluation.evaluate import _MODEL_NAMES, _load_checkpoint, require_checkpoint
 from birds.modeling.build import require_cuda
@@ -100,9 +99,6 @@ def record_split(
     records = predict_photos(model, loader, device, photo_ids, [label for _, label in labeled])
     write_predictions(engine, DATASET_NAME, split, model_name, training_run_id, records)
     return len(records)
-
-
-ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"  # training/.env
 
 
 def main() -> None:

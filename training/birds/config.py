@@ -9,6 +9,7 @@ from torchvision.models import ConvNeXt_Base_Weights, MobileNet_V3_Large_Weights
 TRAINING_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = TRAINING_DIR / "data" / "cub200"
 WEIGHTS_DIR = TRAINING_DIR / "models" / "birds"
+ENV_PATH = TRAINING_DIR / ".env"  # DATABASE_URL lives here
 
 ARTIFACTS_DIR = TRAINING_DIR / "mlartifacts"
 EXPERIMENT_NAME = "birds"
