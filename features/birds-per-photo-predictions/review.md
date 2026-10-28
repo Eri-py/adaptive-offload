@@ -328,7 +328,7 @@ N6 only so it isn't forgotten).
   0.8324/0.8443 (`findings/birds.md:117`). Out of this plan's scope by design;
   flagged so the next `refreshDocs` catches it rather than the next reader.
 - **Fix:** Leave to `refreshDocs`; no change on this branch.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — `refreshDocs` owns `HANDOFF.md` in this repo's workflow, so editing it here would be the scope drift this review exists to catch.
 
 #### N7 — The committed-checkpoint section doesn't say which recipe trained those checkpoints
 
@@ -354,7 +354,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Note the date and commit of the run that produced the tables, or
   commit the captured summary text beside the findings file so a later run can be
   diffed against it.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the spec's requirement (name the commands that regenerate the tables) is met, and committing generated output invites it to go stale against the database it came from.
 
 ## Tests
 
