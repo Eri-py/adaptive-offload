@@ -13,12 +13,18 @@ from birds.evaluation.summary import (
     format_summary,
     load_summary,
     main,
+    run_params,
     summarize,
 )
 
 
-def _frame(rows: list[tuple[str, bool, float, float]]) -> pd.DataFrame:
-    return pd.DataFrame(rows, columns=["photo_id", "is_correct", "max_probability", "top2_margin"])
+def _frame(
+    rows: list[tuple[str, bool, float, float]], run_ids: list[str | None] | None = None
+) -> pd.DataFrame:
+    """Hand-built rows; every row carries training run "run-1" unless `run_ids` says otherwise."""
+    frame = pd.DataFrame(rows, columns=["photo_id", "is_correct", "max_probability", "top2_margin"])
+    frame["training_run_id"] = run_ids if run_ids is not None else ["run-1"] * len(rows)
+    return frame
 
 
 # Ten photos. Small-model confidence rises with photo id, so the sweep order is 1..10.
@@ -145,6 +151,60 @@ def test_no_stored_predictions_names_the_recording_command() -> None:
         ValueError, match="no stored predictions.*python -m birds.evaluation.predictions"
     ):
         summarize(_frame([]), _frame([]))
+
+
+def _two_photos(run_ids: list[str | None]) -> pd.DataFrame:
+    return _frame([("1", True, 0.9, 0.5), ("2", False, 0.8, 0.4)], run_ids)
+
+
+def test_summary_names_each_models_training_run() -> None:
+    out = format_summary(summarize(_two_photos(["a", "a"]), _two_photos(["b", "b"])))
+
+    assert "small   a\n" in out
+    assert "large   b\n" in out
+    assert "note:" not in out
+
+
+def test_mixed_training_runs_are_flagged_for_that_model_only() -> None:
+    summary = summarize(_two_photos(["a", "a"]), _two_photos(["b", "c"]))
+    out = format_summary(summary)
+
+    assert summary.training_runs == {"small": ("a",), "large": ("b", "c")}
+    assert "large   b, c" in out
+    assert "note: large rows come from 2 training runs" in out
+    assert "python -m birds.evaluation.predictions" in out
+    assert "note: small" not in out
+
+
+def test_untraceable_rows_do_not_claim_a_checkpoint() -> None:
+    out = format_summary(summarize(_two_photos(["a", "a"]), _two_photos([None, None])))
+
+    assert "large   none recorded" in out
+    assert "note: large rows carry no training run, so no checkpoint is named." in out
+    assert "note: small" not in out
+
+
+def test_partly_untraceable_rows_are_noted() -> None:
+    summary = summarize(_two_photos(["a", None]), _two_photos(["b", "b"]))
+
+    assert summary.training_runs["small"] == ("a", None)
+    assert "note: some small rows carry no training run." in format_summary(summary)
+
+
+def test_summary_run_params_link_the_checkpoints() -> None:
+    summary = summarize(_two_photos(["a", "a"]), _two_photos(["b", "c"]))
+
+    params = run_params(summary)
+
+    assert params["small_training_run_id"] == "a"
+    assert params["large_training_run_id"] == "b,c"
+    assert params["photos"] == 2
+
+
+def test_summary_run_params_omit_an_unknown_run() -> None:
+    summary = summarize(_two_photos(["a", "a"]), _two_photos([None, None]))
+
+    assert "large_training_run_id" not in run_params(summary)
 
 
 def _record(photo_id: str, ok: bool) -> PhotoPrediction:

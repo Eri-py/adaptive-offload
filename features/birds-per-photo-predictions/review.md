@@ -242,7 +242,7 @@ N6 only so it isn't forgotten).
   `small_training_run_id` / `large_training_run_id`), and note in the output when
   a model's rows carry more than one — that would mean a partially refreshed
   table.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S6: tie the tracked summary to its checkpoints"
 
 #### S7 — `split_labels()` re-derives the whole split on every call
 

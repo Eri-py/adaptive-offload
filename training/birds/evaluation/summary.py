@@ -57,6 +57,8 @@ class Summary:
     agreement: Agreement
     separation: dict[tuple[ModelName, str], float]
     cascade: dict[str, list[CascadeRow]]
+    # Distinct training runs behind each model's rows, sorted; None (untraceable) goes last.
+    training_runs: dict[ModelName, tuple[str | None, ...]]
 
 
 def align_models(small: pd.DataFrame, large: pd.DataFrame) -> pd.DataFrame:
@@ -119,6 +121,12 @@ def _cascade(joined: pd.DataFrame, measure: str, agreement: Agreement) -> list[C
     return rows
 
 
+def _training_runs(frame: pd.DataFrame) -> tuple[str | None, ...]:
+    """The distinct `training_run_id` values in one model's rows, with None last."""
+    distinct = {None if pd.isna(value) else str(value) for value in frame["training_run_id"]}
+    return tuple(sorted(distinct, key=lambda value: (value is None, value or "")))
+
+
 def summarize(small: pd.DataFrame, large: pd.DataFrame) -> Summary:
     """Compute every table from the two models' stored rows for one split."""
     joined = align_models(small, large)
@@ -134,6 +142,7 @@ def summarize(small: pd.DataFrame, large: pd.DataFrame) -> Summary:
             for measure in CONFIDENCE_MEASURES
         },
         cascade={measure: _cascade(joined, measure, agreement) for measure in CONFIDENCE_MEASURES},
+        training_runs={"small": _training_runs(small), "large": _training_runs(large)},
     )
 
 
@@ -143,11 +152,32 @@ def load_summary(engine: Engine) -> Summary:
     return summarize(small, large)
 
 
+def _training_run_lines(summary: Summary) -> list[str]:
+    """One line per model naming its training run(s), plus a note for each oddity."""
+    lines = ["Training runs"]
+    for model in MODEL_NAMES:
+        runs = summary.training_runs[model]
+        ids = [run for run in runs if run is not None]
+        lines.append(f"  {model:<8}{', '.join(ids) if ids else 'none recorded'}")
+        if len(ids) > 1:
+            lines.append(
+                f"  note: {model} rows come from {len(ids)} training runs; the table is "
+                f"partly stale. Re-record every split with `{_RECORD_COMMAND}`."
+            )
+        if None in runs and ids:
+            lines.append(f"  note: some {model} rows carry no training run.")
+        elif None in runs:
+            lines.append(f"  note: {model} rows carry no training run, so no checkpoint is named.")
+    return lines
+
+
 def format_summary(summary: Summary) -> str:
     """The tables as text."""
     a = summary.agreement
     lines = [
         f"Test split: {summary.photos} photos",
+        "",
+        *_training_run_lines(summary),
         "",
         "Agreement",
         f"  small accuracy    {a.small_accuracy:.4f}",
@@ -199,6 +229,19 @@ def _metrics(summary: Summary) -> dict[str, float]:
     return {key: value for key, value in metrics.items() if math.isfinite(value)}
 
 
+def run_params(summary: Summary) -> dict[str, str | int]:
+    params: dict[str, str | int] = {
+        "dataset": DATASET_NAME,
+        "split": SPLIT,
+        "photos": summary.photos,
+    }
+    for model in MODEL_NAMES:
+        ids = [run for run in summary.training_runs[model] if run is not None]
+        if ids:  # joined when a partly refreshed table mixes runs; omitted when none is known
+            params[f"{model}_training_run_id"] = ",".join(ids)
+    return params
+
+
 def main() -> None:
     """Print the summary tables and log them as one standalone MLflow run."""
     load_dotenv(ENV_PATH)
@@ -206,7 +249,7 @@ def main() -> None:
     print(format_summary(summary))
     with tracking.run(
         "prediction-summary",
-        {"dataset": DATASET_NAME, "split": SPLIT, "photos": summary.photos},
+        run_params(summary),
         experiment=EXPERIMENT_NAME,
     ) as handle:
         tracking.log_metrics(handle, _metrics(summary))
