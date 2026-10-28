@@ -317,7 +317,7 @@ N6 only so it isn't forgotten).
   the other convention gets a device-mismatch error from inside the loop.
 - **Fix:** Either call `model.to(device)` beside the existing `model.eval()`, or
   say in the docstring that the model must already be on `device`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N5: make predict_photos move the model to its device"
 
 #### N6 — `HANDOFF.md` still lists this feature as the next thing to do
 

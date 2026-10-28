@@ -52,6 +52,7 @@ def predict_photos(
     if len(photo_ids) != len(expected_labels):
         raise ValueError(f"{len(photo_ids)} photo ids but {len(expected_labels)} expected labels")
     model.eval()
+    model.to(device)
     true_labels: list[int] = []
     predicted: list[int] = []
     max_probs: list[float] = []
