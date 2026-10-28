@@ -62,7 +62,9 @@ def test_batch_size_does_not_change_the_records() -> None:
 def test_misaligned_label_order_raises() -> None:
     swapped_ids_labels = [_LABELS[1], _LABELS[0], _LABELS[2]]
 
-    with pytest.raises(ValueError, match="does not match"):
+    with pytest.raises(
+        ValueError, match=r"first disagreement at position 0: loader label 1, expected 2"
+    ):
         predict_photos(nn.Identity(), _loader(), torch.device("cpu"), _IDS, swapped_ids_labels)
 
 
@@ -74,7 +76,7 @@ def test_count_mismatch_raises() -> None:
 def test_loader_yielding_fewer_photos_than_the_split_raises() -> None:
     short = DataLoader(TensorDataset(_LOGITS[:2], torch.tensor(_LABELS[:2])), batch_size=2)
 
-    with pytest.raises(ValueError, match="does not match"):
+    with pytest.raises(ValueError, match=r"loader yielded 2 photos but the split has 3"):
         predict_photos(nn.Identity(), short, torch.device("cpu"), _IDS, _LABELS)
 
 

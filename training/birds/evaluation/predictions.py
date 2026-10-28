@@ -19,6 +19,24 @@ from shared import tracking
 _SPLITS: tuple[Split, ...] = get_args(Split)
 
 
+def _misalignment_message(collected: list[int], expected: list[int]) -> str:
+    """Diagnoses a label disagreement: the counts if they differ, else the first bad position."""
+    if len(collected) != len(expected):
+        detail = f"loader yielded {len(collected)} photos but the split has {len(expected)}"
+    else:
+        index = next(
+            i for i, (got, want) in enumerate(zip(collected, expected, strict=True)) if got != want
+        )
+        detail = (
+            f"first disagreement at position {index}: "
+            f"loader label {collected[index]}, expected {expected[index]}"
+        )
+    return (
+        f"Loader label order does not match the split's labels ({detail}); "
+        "refusing to attach photo ids to the wrong predictions."
+    )
+
+
 def predict_photos(
     model: nn.Module,
     loader: "DataLoader[Any]",
@@ -47,11 +65,7 @@ def predict_photos(
             max_probs += top2[:, 0].tolist()
             margins += (top2[:, 0] - top2[:, 1]).tolist()
     if true_labels != expected_labels:
-        raise ValueError(
-            "Loader label order does not match the split's labels "
-            f"({len(true_labels)} collected vs {len(expected_labels)} expected); "
-            "refusing to attach photo ids to the wrong predictions."
-        )
+        raise ValueError(_misalignment_message(true_labels, expected_labels))
     return [
         PhotoPrediction(
             photo_id=photo_id,
@@ -103,9 +117,7 @@ def main() -> None:
         if run_id is None:
             print(f"note: {name} results are not attached to a training run.")
         for split in _SPLITS:
-            count = record_split(
-                engine, model, name, split, labeled_splits[split], device, run_id
-            )
+            count = record_split(engine, model, name, split, labeled_splits[split], device, run_id)
             print(f"{name:<8} {split:<6} {count:>6} rows")
 
 

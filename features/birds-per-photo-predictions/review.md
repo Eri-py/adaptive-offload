@@ -282,7 +282,7 @@ N6 only so it isn't forgotten).
 - **Fix:** Report the first disagreeing position and its two labels instead of
   the counts (the counts are still useful for the short-loader case at
   `test_predictions.py:72-76`, so keep both, clearly separated).
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: report the first disagreeing label, not equal counts"
 
 #### N3 — "last two sections" doesn't point at two sections
 
