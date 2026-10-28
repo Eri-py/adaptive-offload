@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from birds.config import TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.dataset.splits import Split, eval_transform, make_data_loader, split_labels
-from birds.evaluation.evaluate import _MODEL_NAMES, _load_checkpoint
+from birds.evaluation.evaluate import _MODEL_NAMES, _load_checkpoint, require_checkpoint
 from birds.modeling.build import require_cuda
 from shared import tracking
 
@@ -109,6 +109,8 @@ def main() -> None:
     split_labels()  # Raises the download-command error before any GPU or checkpoint work.
     device = require_cuda()
     load_dotenv(ENV_PATH)
+    for name in _MODEL_NAMES:
+        require_checkpoint(name)  # Path check only: fail before any model's records are written.
     engine = get_engine()
     for name in _MODEL_NAMES:
         model = _load_checkpoint(name, device)

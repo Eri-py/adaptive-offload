@@ -1,6 +1,7 @@
 """Reports test loss/accuracy (GPU batches) and per-photo latency (small on CPU, large on GPU)."""
 
 import time
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -52,14 +53,20 @@ def mean_latency_ms(
     return total_ms / num_items
 
 
-def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
-    """Builds `name`'s model (untrained head) and loads its trained checkpoint."""
+def require_checkpoint(name: ModelName) -> Path:
+    """Path of `name`'s trained checkpoint; raises an actionable error if it is missing."""
     checkpoint_path = WEIGHTS_DIR / f"{name}.pt"
     if not checkpoint_path.exists():
         raise FileNotFoundError(
             f"Missing checkpoint for the '{name}' model at {checkpoint_path}. "
             f"Run `{_TRAIN_COMMAND.format(name=name)}` first."
         )
+    return checkpoint_path
+
+
+def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
+    """Builds `name`'s model (untrained head) and loads its trained checkpoint."""
+    checkpoint_path = require_checkpoint(name)
     model = build_model(name, pretrained=False)
     state_dict = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(state_dict)

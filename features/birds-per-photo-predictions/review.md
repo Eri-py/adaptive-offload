@@ -141,7 +141,7 @@ N6 only so it isn't forgotten).
   raises for the first missing one (a path check, not a load, so GPU memory is
   unaffected). Extend the test to the asymmetric case: one checkpoint present,
   the other absent, and assert the table is still empty.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1: check both checkpoints exist before writing records"
 
 ## Suggestions
 

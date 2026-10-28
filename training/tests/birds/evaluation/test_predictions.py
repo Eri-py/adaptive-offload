@@ -1,7 +1,7 @@
 """Tests for `birds.evaluation.predictions`: hand-computed per-photo records and alignment."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 import torch
@@ -167,6 +167,23 @@ def test_missing_checkpoint_names_the_train_command(
 
     with pytest.raises(FileNotFoundError, match="python -m birds.train --model small"):
         predictions_module.main()
+
+
+def test_one_missing_checkpoint_writes_no_records(
+    fake_cub: None, postgres_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "small.pt").touch()  # small present, large absent
+    monkeypatch.setattr(predictions_module, "require_cuda", lambda: torch.device("cpu"))
+    monkeypatch.setattr(predictions_module, "get_engine", lambda: postgres_engine)
+    monkeypatch.setattr(evaluate_module, "WEIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(predictions_module, "_load_checkpoint", _fail("_load_checkpoint"))
+
+    with pytest.raises(FileNotFoundError, match="python -m birds.train --model large"):
+        predictions_module.main()
+
+    for split in get_args(Split):
+        for name in ("small", "large"):
+            assert read_predictions(postgres_engine, DATASET_NAME, split, name).empty
 
 
 def test_no_gpu_refuses_to_proceed(fake_cub: None, monkeypatch: pytest.MonkeyPatch) -> None:
