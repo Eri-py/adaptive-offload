@@ -5,7 +5,7 @@ section: `simulation_runs` (one row per simulator invocation, holding the
 resolved config snapshot), `simulation_results` (one row per frame ×
 condition pair, FK'd to its run), `scene_complexity` (one row per frame,
 computed once and reused across runs), `model_inference` (one row per
-(dataset, frame, model) triple, caching real inference results), and
+(dataset, frame, model) triple, caching real inference results),
 `frame_features` (one row per (dataset, frame), holding candidate router
 features), and `bird_predictions` (one row per (dataset, photo, model),
 holding per-photo classifier predictions).

@@ -268,7 +268,7 @@ N6 only so it isn't forgotten).
   appended after the list's existing closing "and".
 - **Fix:** Drop the first "and" so the list closes once, before
   `bird_predictions`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1: fix the doubled and in the table-list docstring"
 
 #### N2 — The order-mismatch error reports counts that are equal in the case it fires for
 
