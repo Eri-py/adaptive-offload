@@ -29,15 +29,19 @@
   CLI argument, so Task 4 cannot run until the real figure is supplied.
 
 ## Task 4 — Real run and write-up
-- Status: in progress
+- Status: completed
 - Started: 2026-11-10 09:28:44
-- Completed: —
-- Notes: Was blocked on the large model's measured per-photo GPU latency, the
-  server-compute term. The user authorised re-running
-  `python -m birds.evaluation.evaluate` to measure it, which unblocks the run.
+- Completed: 2026-11-10 09:40:49
+- Notes: Unblocked by running `birds.evaluation.evaluate`, which measured the
+  large model's per-photo GPU latency at 6.731 ms. Negative result: the cascade
+  is not useful in any of the 36 cells. Surfaced one acceptance-criterion miss
+  from Task 3 (the always-local interval was computed but never printed) and one
+  illegible figure label; both fixed in a follow-up commit with a new
+  `format_report` test, suite 289 -> 290.
 
 ## Task 5 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-10 09:40:49
+- Completed: 2026-11-10 09:40:49
+- Notes: Full suite 290 passed, none skipped; ruff clean; mypy clean across
+  `birds/` and `tests/birds/`. Nothing changed, so no commit of its own.

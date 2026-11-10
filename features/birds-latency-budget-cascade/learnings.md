@@ -121,3 +121,37 @@ Two consequences:
   seeds must give each split distinct ids.
 - Budgets default to 50/100/200/400 ms (CLI-overridable) and are validated at run time; with
   very large server compute they will fail validation loudly rather than report nothing useful.
+
+## Task 4 — the real run, and what the run exposed
+
+- **Server compute is 6.731 ms** (large model, desktop RTX 5070 standing in for
+  a server GPU), measured by `birds.evaluation.evaluate`. It is *smaller* than
+  the transfer and round-trip terms in every named condition, so offload cost is
+  dominated by the network, not the server: good 28.6, medium 75.8, poor
+  202.3 ms. That is why the band structure looks the way it does.
+- **`evaluate` reproduced both test accuracies exactly** (0.7798 / 0.8699),
+  which is the cheapest available check that nothing upstream has drifted.
+- **The one real local measurement moved ~5% between runs** on the same machine
+  and the same code: 5.586 ms today against the 5.877 ms in
+  `SMALL_DESKTOP_CPU_MS`. The constant was left alone (it is a reference mark on
+  a swept axis, and three tests pin it), but this is good evidence for the
+  write-up's claim that the local axis is unanchored.
+- **`format_report` printed only one of the two required intervals.** The spec's
+  acceptance criterion asks for intervals against budget-only *and*
+  always-local; `vs_always_local` was computed at `evaluate_cell` and dropped on
+  the floor. Root cause: `format_report` had no test whatsoever. A task that
+  produces human-readable output needs a test that the output contains what the
+  spec says it contains, not only that the numbers behind it are right.
+- **The always-local interval changes how the negative result reads.** Wherever
+  escalation is affordable the cascade beats always-local by
+  [+0.0803, +0.0999], which brackets the 0.0901 small-to-large gap — it recovers
+  essentially the whole of the large model's advantage. The cascade's failure is
+  redundancy under a hard budget, not accuracy. Reporting only the budget-only
+  interval made the result look more damning than it is.
+- **Determinism is verified, not assumed:** two full runs over unchanged records
+  produced byte-identical reports (diffed).
+- **Pink on orange inside a filled region is illegible**, and an offset alone
+  does not fix it. The figure label needed a white background box. Worth
+  checking any annotation that lands inside a heatmap fill.
+- **`birds.evaluation.predictions` is delete-and-reinsert per model and split**,
+  so it is safe to re-run, but it does write to the shared database.
