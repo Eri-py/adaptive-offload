@@ -1,17 +1,18 @@
-"""Per-row policies for the latency-budget router: budget-only, budget +
-cascade, and a within-budget oracle, plus the outcomes and metrics they
-share, the offload-latency predictor, and the two cascade confidence scores.
+"""Attempt 1's COCO-shaped latency-budget pieces: how a simulated row's
+latency and accuracy follow from an action, the within-budget oracle over
+those rows, the offload-latency predictor, and the two cascade confidence
+scores.
 
-Everything here is computed per row, vectorised, from stored/predicted
-values — see `coco.router.frame_dataset.load_simulated_rows` for the row columns
+The action labels and the shape-agnostic policies and metrics live in
+`shared.routing`, since attempt 2 uses them too. What stays here depends on
+the shape of attempt 1's data — see
+`coco.router.frame_dataset.load_simulated_rows` for the row columns
 (`local_latency_ms`, `local_accuracy`, `offload_latency_ms`,
-`offload_accuracy`). No inference is re-run; a policy only returns each
-row's action, and outcomes/metrics follow mechanically from that action.
+`offload_accuracy`). No inference is re-run; a policy only returns each row's
+action, and outcomes follow mechanically from that action.
 """
 
 from __future__ import annotations
-
-from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
@@ -20,19 +21,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 from coco.router.frame_dataset import CONFIDENCE_COLUMNS
 from coco.router.two_stage import Stage1Models, predict_stage1, train_stage1
-
-LOCAL = "LOCAL"
-OFFLOAD = "OFFLOAD"
-ESCALATE = "ESCALATE"
-
-# <U8 fits "ESCALATE"; np.full would otherwise size the dtype from the fill value and truncate.
-_ACTION_DTYPE = "<U8"
-
-
-def constant_actions(n: int, action: str) -> npt.NDArray[np.str_]:
-    """`n`-length action array, every entry `action` (e.g. LOCAL or OFFLOAD)."""
-    return np.full(n, action, dtype=_ACTION_DTYPE)
-
+from shared.routing import ACTION_DTYPE, ESCALATE, LOCAL, OFFLOAD
 
 # The router decides using predicted conditions only — it never sees the true latency in advance.
 _OFFLOAD_LATENCY_FEATURE_COLUMNS = [
@@ -94,38 +83,6 @@ def learned_score(model: Stage1Models, rows: pd.DataFrame) -> npt.NDArray[np.flo
     return np.asarray(predicted["p_local_good_enough"], dtype=np.float64)
 
 
-def budget_only_actions(
-    predicted_offload_ms: pd.Series | npt.NDArray[np.float64], budget_ms: float
-) -> npt.NDArray[np.str_]:
-    """OFFLOAD where the predicted offload latency fits the budget
-    (`<= budget_ms`), else LOCAL."""
-    predicted = np.asarray(predicted_offload_ms, dtype=np.float64)
-    actions = np.full(predicted.shape, LOCAL, dtype=_ACTION_DTYPE)
-    actions[predicted <= budget_ms] = OFFLOAD
-    return actions
-
-
-def cascade_actions(
-    local_latency_ms: pd.Series | npt.NDArray[np.float64],
-    predicted_offload_ms: pd.Series | npt.NDArray[np.float64],
-    score: pd.Series | npt.NDArray[np.float64],
-    threshold: float,
-    budget_ms: float,
-) -> npt.NDArray[np.str_]:
-    """LOCAL where `score >= threshold` (confident enough to keep the local
-    result); otherwise ESCALATE where local + predicted offload latency fits
-    the budget; otherwise LOCAL (escalating wouldn't fit)."""
-    local = np.asarray(local_latency_ms, dtype=np.float64)
-    predicted = np.asarray(predicted_offload_ms, dtype=np.float64)
-    score_arr = np.asarray(score, dtype=np.float64)
-
-    actions = np.full(local.shape, LOCAL, dtype=_ACTION_DTYPE)
-    below_threshold = score_arr < threshold
-    fits_if_escalated = (local + predicted) <= budget_ms
-    actions[below_threshold & fits_if_escalated] = ESCALATE
-    return actions
-
-
 def oracle_actions(rows: pd.DataFrame, budget_ms: float) -> npt.NDArray[np.str_]:
     """Among LOCAL/OFFLOAD/ESCALATE's *true* latencies, the option whose
     latency fits the budget with the highest accuracy; ties broken by lower
@@ -147,7 +104,7 @@ def oracle_actions(rows: pd.DataFrame, budget_ms: float) -> npt.NDArray[np.str_]
     )
 
     n = local_latency.shape[0]
-    actions = np.full(n, LOCAL, dtype=_ACTION_DTYPE)
+    actions = np.full(n, LOCAL, dtype=ACTION_DTYPE)
     best_accuracy = np.full(n, -np.inf)
     best_latency = np.full(n, np.inf)
 
@@ -185,44 +142,3 @@ def outcomes(
     accuracy = np.select(conditions, [local_accuracy, offload_accuracy, offload_accuracy])
     return latency_ms.astype(np.float64), accuracy.astype(np.float64)
 
-
-def on_time_accuracy_per_row(
-    latency_ms: pd.Series | npt.NDArray[np.float64],
-    accuracy: pd.Series | npt.NDArray[np.float64],
-    budget_ms: float,
-) -> npt.NDArray[np.float64]:
-    """Per-row accuracy with results that missed the budget (`latency_ms >
-    budget_ms`) counted as 0 — the bootstrap's per-row input."""
-    latency = np.asarray(latency_ms, dtype=np.float64)
-    acc = np.asarray(accuracy, dtype=np.float64)
-    return np.where(latency <= budget_ms, acc, 0.0)
-
-
-@dataclass(frozen=True)
-class RouterMetrics:
-    """Summary of a policy's outcomes at one budget: mean accuracy, on-time
-    accuracy (late results count as 0), mean latency and the share of rows
-    that missed the budget."""
-
-    mean_accuracy: float
-    on_time_accuracy: float
-    mean_latency_ms: float
-    over_budget_share: float
-
-
-def metrics(
-    latency_ms: pd.Series | npt.NDArray[np.float64],
-    accuracy: pd.Series | npt.NDArray[np.float64],
-    budget_ms: float,
-) -> RouterMetrics:
-    """`RouterMetrics` for a policy's per-row `(latency_ms, accuracy)`
-    outcomes at `budget_ms`."""
-    latency = np.asarray(latency_ms, dtype=np.float64)
-    acc = np.asarray(accuracy, dtype=np.float64)
-    on_time = on_time_accuracy_per_row(latency, acc, budget_ms)
-    return RouterMetrics(
-        mean_accuracy=float(acc.mean()),
-        on_time_accuracy=float(on_time.mean()),
-        mean_latency_ms=float(latency.mean()),
-        over_budget_share=float((latency > budget_ms).mean()),
-    )

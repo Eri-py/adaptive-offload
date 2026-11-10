@@ -17,7 +17,6 @@ import pandas as pd
 
 from coco.datagen.config import DEFAULT_LAMBDA
 from coco.router.evaluation import (
-    bootstrap_mean_difference,
     bootstrap_router_vs_offload,
     cascade_ceiling_utility,
     escalated_utility,
@@ -27,6 +26,7 @@ from coco.router.evaluation import (
     score_decide_first,
     summarize,
 )
+from shared.routing import bootstrap_mean_difference
 
 
 def test_default_lambda_is_point_three() -> None:
@@ -194,25 +194,6 @@ def test_bootstrap_does_not_flag_a_router_identical_to_offload_as_useful() -> No
     result = bootstrap_router_vs_offload(df, router_utility, seed=42)
     assert result.ci_low <= 0
     assert result.useful is False
-
-
-def test_bootstrap_mean_difference_matches_hand_built_case() -> None:
-    # A constant per-row diff means every resample's mean is that same
-    # constant regardless of which frames get drawn — an exact expected CI.
-    frame_ids = np.array(["frame_0", "frame_0", "frame_1", "frame_2"])
-    diff = np.array([0.1, 0.1, 0.1, 0.1])
-    result = bootstrap_mean_difference(frame_ids, diff, seed=42)
-    assert math.isclose(result.ci_low, 0.1)
-    assert math.isclose(result.ci_high, 0.1)
-    assert result.useful is True
-
-
-def test_bootstrap_mean_difference_is_deterministic_for_seed() -> None:
-    df = _bootstrap_df()
-    diff = (offload_utility(df) + 0.1 - offload_utility(df)).to_numpy()
-    first = bootstrap_mean_difference(df["frame_id"], diff, seed=42)
-    second = bootstrap_mean_difference(df["frame_id"], diff, seed=42)
-    assert first == second
 
 
 def test_bootstrap_router_vs_offload_matches_generic_on_router_minus_offload() -> None:

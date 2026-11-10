@@ -21,7 +21,6 @@ from sqlalchemy import Engine
 from coco.router.dataset import frame_level_split
 from coco.router.diagnostics import compute_feature_diagnostics
 from coco.router.evaluation import (
-    BootstrapResult,
     RouterSummary,
     bootstrap_router_vs_offload,
     cascade_ceiling_utility,
@@ -38,6 +37,7 @@ from coco.router.frame_dataset import (
     load_simulated_rows,
 )
 from coco.router.two_stage import Design, Family, Objective, run_router
+from shared.routing import BootstrapResult
 
 # Every router this experiment trains and evaluates: the four classifier
 # design/family combinations (matching `coco/router/baseline.py`'s model
