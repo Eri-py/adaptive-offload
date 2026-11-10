@@ -10,10 +10,14 @@
   is a required argument with no default.
 
 ## Task 2 — Boundary heatmap
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-09 21:38:54
+- Completed: 2026-11-09 21:50:35
+- Notes: 5 new tests, suite 279 -> 284. Rendered and inspected a figure from
+  synthetic records matching the real joint distribution; the band structure
+  reads correctly. Rendering also showed per-cell threshold tuning is both too
+  slow and unnecessary — see learnings; Task 3 must compute the threshold once
+  per measure rather than per cell.
 
 ## Task 3 — Wire the entry point
 - Status: not started
