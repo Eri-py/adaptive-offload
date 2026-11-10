@@ -332,10 +332,16 @@ bands holds:
 
 | Band | Condition | Consequence |
 |---|---|---|
-| Nothing fits | L > B | Every policy has 0 on-time accuracy, for any threshold |
-| Local only | L ≤ B and O > B | Offload never fits; cascade is always-local |
-| Offload but no escalation | O ≤ B < L + O | Offload fits, escalation never does; cascade is always-local |
+| Nothing fits | B < L and B < O | Every policy has 0 on-time accuracy, for any threshold |
+| Local only | L ≤ B < O | Offload never fits; cascade is always-local, and arrives on time |
+| Offload but no escalation | O ≤ B < L + O | Offload fits, escalation never does; cascade is always-local, which is on time only if L ≤ B |
 | Everything | L + O ≤ B | Everything is on time; on-time accuracy equals plain accuracy |
+
+The conditions are tested in that precedence order — cheapest-fitting band
+first — which is what makes them a partition. Writing "nothing fits" as `L > B`
+alone would be wrong: a cell with `O ≤ B < L` has local too slow but offload
+fitting comfortably, so always-offload is on time there and the row's
+consequence is false. Such a cell belongs to the offload-no-escalation band.
 
 **The escalation band always sits above the offload band.** Escalation fits when
 L + O ≤ B, offload fits when O ≤ B, and L + O ≥ O for non-negative costs, so
@@ -350,13 +356,24 @@ inference widens the range of budgets in which the cascade can act at all.
 The band summary in the output prints this as "lockout" (5.877 ms, 20 ms
 and 50 ms for the three marked local costs).
 
-**The result is exact, not approximate, which is why the table below is so
-repetitive.** Inside a band, nothing depends on L, O or B: in "nothing fits"
-every policy scores 0; in "local only" and the offload-no-escalation band the
-cascade *is* always-local for any threshold; in "everything" on-time accuracy is
-plain accuracy, which depends on the threshold alone. So the cascade's standing
-against the other policies depends only on which band a cell is in, never on the
-latency values inside the band.
+**The threshold result is exact, not approximate, which is why the table below
+is so repetitive.** The tuned threshold is identical across every cell where
+escalation fits and irrelevant everywhere else: in "nothing fits" every policy
+scores 0; in "local only" and the offload-no-escalation band the cascade *is*
+always-local for any threshold; in "everything" on-time accuracy is plain
+accuracy, which depends on the threshold alone.
+
+The stronger claim — that *nothing* depends on L, O or B inside a band — holds
+in three of the four bands but not in the offload-no-escalation band, which
+splits once more on whether local alone fits. The cascade is always-local
+throughout that band, but always-local is on time only when L ≤ B. At
+(L=50, O=28.6, B=50) the cascade trails budget-only by about 0.09, the
+small-to-large gap; at (L=60, O=28.6, B=50) the same band, same threshold, it
+trails by about 0.87, because its local answer now arrives late and scores 0
+while budget-only still offloads on time. Every cell reported below has
+L ≤ B — the largest marked local cost, 50 ms, equals the smallest budget — so
+no number in these tables is affected, but the band label alone does not pin the
+outcome in that one band.
 
 Bands across the 36 reported cells (4 budgets x 3 networks x 3 local costs):
 
@@ -652,8 +669,10 @@ entirely above zero. Across the 72 verdicts (36 cells, two confidence measures)
 | Local only | 12 | [+0.0000, +0.0000] | not useful (cascade is always-local, as is budget-only) |
 | Offload but no escalation | 2 | [-0.0998, -0.0803] | not useful (cascade is worse) |
 
-The interval is identical across all cells of a band, and the same for both
-confidence measures, as the band argument predicts.
+The interval is identical across all cells of a band here, and the same for both
+confidence measures. That follows from the band argument given that every
+reported cell has L ≤ B; in the offload-no-escalation band a cell with L > B
+would give a different interval again, as noted above.
 
 The interval against always-local tells the other half of the story, and it is
 the more flattering half:

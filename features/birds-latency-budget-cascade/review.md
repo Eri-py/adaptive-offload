@@ -188,7 +188,7 @@ is inside the rules; it is worth being deliberate about repeating.
   L, O or B; when local alone exceeds the budget the cascade is always-local and
   late, so its on-time accuracy is 0". Add one clause noting that all 36
   reported cells have L ≤ B, so no number in the tables changes.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Correct the four-band table and qualify band independence"
 
 ## Suggestions
 
@@ -218,7 +218,7 @@ is inside the rules; it is worth being deliberate about repeating.
   would still pass under its own name.
 - **Fix:** Collect `classify_band(...)` per cell into a set and assert
   `seen == set(Band)`, as the oracle test does.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Correct the four-band table and qualify band independence"
 
 #### S3 — "It never matches always-offload" reads oddly against the local-only tables
 

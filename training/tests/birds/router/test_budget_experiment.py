@@ -196,6 +196,7 @@ def test_precomputed_thresholds_do_not_change_the_result() -> None:
 def test_grid_matches_evaluate_cell_in_every_band() -> None:
     local_ms, offload_ms = [3.0, 10.0, 25.0], [5.0, 30.0, 60.0, 90.0]
     tuned = tuned_thresholds(_tiny())
+    seen = set()
     for budget in (5.0, 20.0, 35.0, 60.0, 120.0):
         grid = grid_accuracy(
             _tiny(),
@@ -208,6 +209,7 @@ def test_grid_matches_evaluate_cell_in_every_band() -> None:
         for i, offload in enumerate(offload_ms):
             for j, local in enumerate(local_ms):
                 result = evaluate_cell(_tiny(), _tiny(), Cell(local, offload, budget))
+                seen.add(result.band)
                 expected = {
                     "always-local": result.always_local,
                     "always-offload": result.always_offload,
@@ -216,6 +218,8 @@ def test_grid_matches_evaluate_cell_in_every_band() -> None:
                 }
                 for policy, m in expected.items():
                     assert grid[policy][i, j] == m.on_time_accuracy, (budget, local, offload)
+    # Without this the test's name is a claim nothing enforces.
+    assert seen == set(Band)
 
 
 def _seed(engine: Engine, splits: tuple[str, ...]) -> None:
