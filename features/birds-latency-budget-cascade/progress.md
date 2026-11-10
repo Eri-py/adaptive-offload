@@ -29,14 +29,12 @@
   CLI argument, so Task 4 cannot run until the real figure is supplied.
 
 ## Task 4 — Real run and write-up
-- Status: blocked
-- Started: —
+- Status: in progress
+- Started: 2026-11-10 09:28:44
 - Completed: —
-- Notes: Blocked on the large model's measured per-photo GPU latency, the
-  server-compute term. The entry point requires `--server-compute-ms` and has
-  no default by design, so no real run is possible until the user supplies it
-  from the tracking store (or authorises re-running
-  `python -m birds.evaluation.evaluate`, a GPU pass over the test split).
+- Notes: Was blocked on the large model's measured per-photo GPU latency, the
+  server-compute term. The user authorised re-running
+  `python -m birds.evaluation.evaluate` to measure it, which unblocks the run.
 
 ## Task 5 — Regression test run
 - Status: not started
