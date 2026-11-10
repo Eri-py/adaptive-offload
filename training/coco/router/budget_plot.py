@@ -8,7 +8,7 @@ the oracle, and a vertical line at the budget.
 Takes only plain point data (`BudgetPoint`/`BudgetPanelData`) — no dependency
 on the router or the database, so it can be tested with synthetic data.
 `budget_experiment.py` builds these from
-`coco.router.latency_policies.RouterMetrics`.
+`shared.routing.RouterMetrics`.
 """
 
 from __future__ import annotations
