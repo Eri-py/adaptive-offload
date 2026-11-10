@@ -119,15 +119,26 @@ def _draw_panel(ax: Axes, panel: BoundaryPanelData, marks: BoundaryMarks) -> Non
 
     # Marks: desktop measurement on the local axis, named conditions on the offload axis.
     ax.axvline(marks.desktop_local_ms, color="#CC79A7", linewidth=1.5)
-    ax.text(
-        marks.desktop_local_ms,
-        offload[-1],
-        f" desktop CPU {marks.desktop_local_ms:g} ms",
+    # Offset in points, not data units, so the label clears the line it annotates instead of
+    # overprinting it at any axis scale.
+    ax.annotate(
+        f"desktop CPU {marks.desktop_local_ms:g} ms",
+        xy=(marks.desktop_local_ms, offload[-1]),
+        xytext=(5, -4),
+        textcoords="offset points",
         color="#CC79A7",
         fontsize=7,
         rotation=90,
         va="top",
         ha="left",
+        # The label sits inside a filled region, so it needs its own background to stay
+        # legible against the fill colours.
+        bbox={
+            "boxstyle": "round,pad=0.2",
+            "facecolor": "white",
+            "edgecolor": "none",
+            "alpha": 0.85,
+        },
     )
     for name, offload_ms in marks.condition_offload_ms.items():
         ax.axhline(offload_ms, color="#222222", linewidth=0.8, linestyle="-.")

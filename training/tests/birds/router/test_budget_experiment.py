@@ -23,6 +23,7 @@ from birds.router.budget_experiment import (
     PhotoRecords,
     evaluate_cell,
     fewest_escalations_to_match,
+    format_report,
     grid_accuracy,
     records_from_frames,
     run_on_engine,
@@ -274,3 +275,14 @@ def test_missing_records_stop_the_run_and_write_nothing(postgres_engine: Engine)
         else:
             raise AssertionError("missing records should stop the run")
         assert not figure.exists()
+
+
+def test_report_shows_both_bootstrap_intervals() -> None:
+    """The spec requires an interval against budget-only *and* against always-local."""
+    result = evaluate_cell(_tiny(), _tiny(), Cell(local_ms=10.0, offload_ms=30.0, budget_ms=50.0))
+    report = format_report({50.0: {"good": [result]}}, {"good": 30.0})
+
+    for measure in ("max_probability", "top2_margin"):
+        assert f"cascade ({measure}): threshold" in report
+    assert "vs budget-only 95% CI" in report
+    assert "vs always-local 95% CI" in report

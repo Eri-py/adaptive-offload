@@ -212,6 +212,9 @@ tables and verdicts below, records one MLflow run, and writes the figure to
 offload cost 5 to 1000 ms in the figure. Every number below came from this run's
 output.
 
+The run is deterministic, as the spec requires: two runs over unchanged records
+produced byte-identical reports, verified by diffing their output.
+
 Existing entry points, re-checked on the same day: `evaluate` reproduces test
 accuracy 0.7798 (small) and 0.8699 (large); `predictions` re-recorded
 5,400 train, 594 val and 5,794 test rows for each model (it replaces rows per
@@ -296,8 +299,7 @@ What it shows:
   dashed line offload does not fit, so the cascade and budget-only both run
   locally.
 - The vertical mark for the desktop small model is drawn in pink at 5.877 ms,
-  but its text label is rotated and overprints the line, so it is hard to read in
-  the rendered image.
+  labelled against a white background so it stays legible over the fill.
 
 ### Where the boundary sits, and how it moves with the budget
 
@@ -651,12 +653,34 @@ entirely above zero. Across the 72 verdicts (36 cells, two confidence measures)
 | Offload but no escalation | 2 | [-0.0998, -0.0803] | not useful (cascade is worse) |
 
 The interval is identical across all cells of a band, and the same for both
-confidence measures, as the band argument predicts. (The experiment also
-computes the cascade's advantage over always-local with its own interval, but
-the printed report shows only the interval against budget-only, so no
-always-local interval is quoted here.) Two noise notes: the validation split is
-only 594 photos, so the tuned threshold is noisy, and that split was already
-used once to select the checkpoints.
+confidence measures, as the band argument predicts.
+
+The interval against always-local tells the other half of the story, and it is
+the more flattering half:
+
+| Band | Cells | Interval vs always-local |
+|---|---|---|
+| Everything | 22 | [+0.0803, +0.0999] |
+| Local only | 12 | [+0.0000, +0.0000] |
+| Offload but no escalation | 2 | [+0.0000, +0.0000] |
+
+So the cascade is not useless in absolute terms. Wherever escalation is
+affordable it beats always-local decisively — the interval sits entirely above
+zero and brackets the 0.0901 small-to-large accuracy gap, meaning the cascade
+recovers essentially the whole of the large model's advantage. Where escalation
+is unaffordable it *is* always-local, exactly, so the difference is zero by
+construction rather than by measurement.
+
+The negative result is therefore narrower than "the cascade does not work": the
+cascade buys the large model's accuracy, but it pays local + offload latency to
+do so, while plain always-offload buys the same accuracy for offload alone. Its
+failure is one of redundancy under a hard budget, not of accuracy. Usefulness is
+defined against budget-only precisely because budget-only already picks the
+better of the two static policies in each cell, so it is the comparison that can
+embarrass the cascade — and it does.
+
+Two noise notes: the validation split is only 594 photos, so the tuned threshold
+is noisy, and that split was already used once to select the checkpoints.
 
 ### Fewest offload calls at which the cascade matches always-offload
 

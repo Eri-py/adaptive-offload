@@ -370,10 +370,14 @@ def format_report(
                 ]
                 for measure, c in result.cascades.items():
                     lo, hi = c.vs_budget_only.ci_low, c.vs_budget_only.ci_high
+                    local_lo, local_hi = c.vs_always_local.ci_low, c.vs_always_local.ci_high
+                    # Both intervals are reported, per the spec; only the budget-only one
+                    # decides usefulness.
                     lines.append(
                         f"  cascade ({measure}): threshold {c.threshold:.4f}, escalates "
                         f"{c.escalated_share:.2%}, vs budget-only 95% CI [{lo:+.4f}, {hi:+.4f}] "
-                        f"-> {'useful' if c.useful else 'not useful'}; fewest escalations to "
+                        f"-> {'useful' if c.useful else 'not useful'}; vs always-local 95% CI "
+                        f"[{local_lo:+.4f}, {local_hi:+.4f}]; fewest escalations to "
                         f"match always-offload: {c.fewest_escalations_to_match}"
                     )
         lines.append("")
