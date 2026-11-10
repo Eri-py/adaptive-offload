@@ -45,6 +45,25 @@ birds counterpart of that experiment.
     condition, each a bandwidth and round-trip pair) are marked on it so a
     result can be read as "offload wins on a good network but not a poor one".
 
+- **The stored predictions are a desktop stand-in for the local path, and the
+  write-up says so.** Both models' predictions were computed on a desktop GPU
+  in full precision, but the local path in a deployed app would run an exported,
+  likely reduced-precision model on the phone. Conversion shifts not only
+  accuracy but the confidence values themselves, which is exactly what the
+  cascade's threshold keys on. So every cascade figure here describes the
+  desktop small model, not a measured on-device one, and the write-up states
+  that measuring the exported model's predictions — not just its speed — is
+  required before any threshold is trusted on a phone.
+
+- **Offload cost is treated as known exactly, and the write-up names what that
+  hides.** Each cell fixes one offload cost, so no policy is ever surprised by
+  a slow network. A deployed router instead works from an *estimate*, and the
+  cascade has a property this design cannot score: having run the small model
+  first, it already holds an answer, so it can return the local result when the
+  network disappoints rather than missing the deadline with nothing. The
+  write-up records this as the cascade's unmeasured advantage and names
+  offload cost drawn with noise as the next experiment.
+
 - **A consequence of scenario-level latency is stated explicitly in the
   write-up:** because every photo in a cell shares the same local and offload
   cost, the two static baselines are all-on-time or all-late within a cell, and
@@ -114,6 +133,18 @@ birds counterpart of that experiment.
   - the usefulness verdict per reported cell
   - a statement of where the boundary sits and how it moves as the budget
     tightens — the result this experiment exists to produce
+  - the four budget bands implied by the two costs — nothing fits, local only,
+    offload but no escalation, and everything — with the arithmetic fact that
+    the escalation band always sits above the offload band, since local plus
+    offload exceeds offload alone. A hard budget therefore never makes the
+    cascade the only option that fits, so the cascade's case has to be made on
+    accuracy and on offload calls avoided rather than on fitting a deadline
+    nothing else fits.
+  - the width of the band where offload fits but escalation does not, which
+    equals the local cost — so cheaper local inference widens the range of
+    budgets in which the cascade can act at all
+  - the fewest offload calls at which the cascade matches always-offload's
+    accuracy, which is the cascade's payoff when accuracy ties
   - a short related-work note citing the three papers above
   - an explicit statement that the local axis is unanchored on real hardware,
     naming the on-device measurement that would anchor it
@@ -128,6 +159,10 @@ birds counterpart of that experiment.
 - Re-using attempt 1's YOLOv8n phone figures as birds anchors. They measure a
   different model on a different task.
 - Any learned router, learned confidence score, or trained latency predictor.
+- Measuring the exported, reduced-precision model's predictions or confidence.
+  The stored desktop predictions stand in for the local path.
+- Offload cost drawn with noise, network jitter, or any model of estimation
+  error. Each cell's costs are exact.
 - The soft utility score and any lambda weighting. Latency is a hard
   constraint here, not a penalty term.
 - Battery, energy, bandwidth caps, frame rate, and thermal constraints.
@@ -191,6 +226,19 @@ birds counterpart of that experiment.
 - Given the boundary figure, then the small model's real desktop measurement
   and the three named network conditions are marked on it, and no phone-side
   figure from attempt 1 appears as a birds anchor.
+- Given the birds findings file, then it states that the cascade figures come
+  from desktop full-precision predictions standing in for the local path, and
+  that the exported model's predictions and confidence must be measured before
+  a threshold is trusted on a phone.
+- Given the birds findings file, then it records that offload cost is exact in
+  every cell, names the cascade's unmeasured hedging advantage, and names
+  offload cost drawn with noise as the next experiment.
+- Given the birds findings file, then it sets out the four budget bands, states
+  that the escalation band always sits above the offload band, and gives the
+  lockout band's width as equal to the local cost.
+- Given the birds findings file, then it reports the fewest offload calls at
+  which the cascade matches always-offload's accuracy, or states that it never
+  matches it.
 - Given this feature is complete, then the existing prediction-recording and
   summary entry points still run and produce their previous numbers, and no
   migration has been authored or run.
