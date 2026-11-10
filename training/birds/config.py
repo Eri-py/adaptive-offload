@@ -9,6 +9,7 @@ from torchvision.models import ConvNeXt_Base_Weights, MobileNet_V3_Large_Weights
 TRAINING_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = TRAINING_DIR / "data" / "cub200"
 WEIGHTS_DIR = TRAINING_DIR / "models" / "birds"
+ENV_PATH = TRAINING_DIR / ".env"  # DATABASE_URL lives here
 
 ARTIFACTS_DIR = TRAINING_DIR / "mlartifacts"
 EXPERIMENT_NAME = "birds"
@@ -27,6 +28,8 @@ MODEL_WEIGHTS: dict[ModelName, WeightsEnum] = {
     "small": MobileNet_V3_Large_Weights.IMAGENET1K_V2,
     "large": ConvNeXt_Base_Weights.IMAGENET1K_V1,
 }
+# Derived from the weights mapping so the model list has one source of truth.
+MODEL_NAMES: tuple[ModelName, ...] = tuple(MODEL_WEIGHTS)
 
 
 @dataclass(frozen=True)

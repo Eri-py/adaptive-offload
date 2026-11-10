@@ -14,6 +14,7 @@ from torch.utils.data import TensorDataset
 
 from birds.evaluation import evaluate as ev
 from birds.evaluation.metrics import EvalResult
+from birds.modeling import build as build_module
 from shared import tracking
 
 
@@ -45,10 +46,10 @@ def test_mean_latency_ms_warmup_exceeds_dataset_size() -> None:
 def test_load_checkpoint_missing_names_the_train_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(ev, "WEIGHTS_DIR", tmp_path)
+    monkeypatch.setattr(build_module, "WEIGHTS_DIR", tmp_path)
 
     with pytest.raises(FileNotFoundError, match=r"python -m birds\.train --model small"):
-        ev._load_checkpoint("small", torch.device("cpu"))
+        build_module.load_checkpoint("small", torch.device("cpu"))
 
 
 def test_main_uses_each_models_own_eval_transform(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,7 +68,7 @@ def test_main_uses_each_models_own_eval_transform(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(ev, "eval_transform", fake_eval_transform)
     monkeypatch.setattr(ev, "make_data_loader", fake_make_data_loader)
     monkeypatch.setattr(ev, "load_test", lambda transform: transform)
-    monkeypatch.setattr(ev, "_load_checkpoint", lambda name, device: nn.Identity())
+    monkeypatch.setattr(ev, "load_checkpoint", lambda name, device: nn.Identity())
     monkeypatch.setattr(ev, "loss_and_accuracy", lambda *args: EvalResult(loss=0.5, accuracy=1.0))
     monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 1.0)
 
@@ -120,7 +121,7 @@ def _patch_main_for_tracking(monkeypatch: pytest.MonkeyPatch, weights_dir: Path)
     monkeypatch.setattr(ev, "eval_transform", lambda name: name)
     monkeypatch.setattr(ev, "make_data_loader", lambda *args, **kwargs: "loader")
     monkeypatch.setattr(ev, "load_test", lambda transform: transform)
-    monkeypatch.setattr(ev, "_load_checkpoint", lambda name, device: nn.Identity())
+    monkeypatch.setattr(ev, "load_checkpoint", lambda name, device: nn.Identity())
     monkeypatch.setattr(ev, "loss_and_accuracy", lambda *args: EvalResult(loss=1.25, accuracy=0.9))
     monkeypatch.setattr(ev, "mean_latency_ms", lambda *args: 2.0)
     monkeypatch.setattr(tracking, "run", fake_run)

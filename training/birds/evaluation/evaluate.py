@@ -7,14 +7,11 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 
-from birds.config import EXPERIMENT_NAME, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
+from birds.config import EXPERIMENT_NAME, MODEL_NAMES, TRAIN_SETTINGS, WEIGHTS_DIR, ModelName
 from birds.dataset.splits import eval_transform, load_test, make_data_loader
 from birds.evaluation.metrics import EvalResult, loss_and_accuracy
-from birds.modeling.build import build_model, require_cuda
+from birds.modeling.build import load_checkpoint, require_cuda
 from shared import tracking
-
-_MODEL_NAMES: tuple[ModelName, ModelName] = ("small", "large")
-_TRAIN_COMMAND = "python -m birds.train --model {name}"
 
 
 def mean_latency_ms(
@@ -52,21 +49,6 @@ def mean_latency_ms(
     return total_ms / num_items
 
 
-def _load_checkpoint(name: ModelName, device: torch.device) -> nn.Module:
-    """Builds `name`'s model (untrained head) and loads its trained checkpoint."""
-    checkpoint_path = WEIGHTS_DIR / f"{name}.pt"
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(
-            f"Missing checkpoint for the '{name}' model at {checkpoint_path}. "
-            f"Run `{_TRAIN_COMMAND.format(name=name)}` first."
-        )
-    model = build_model(name, pretrained=False)
-    state_dict = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(state_dict)
-    model.to(device)
-    return model
-
-
 def _log_results(
     name: ModelName, result: EvalResult, latency_ms: float, device_label: str
 ) -> bool:
@@ -92,7 +74,7 @@ def main() -> None:
         name: make_data_loader(
             "test", eval_transform(name), TRAIN_SETTINGS[name].batch_size, shuffle=False
         )
-        for name in _MODEL_NAMES
+        for name in MODEL_NAMES
     }
 
     gpu_device = require_cuda()
@@ -101,13 +83,13 @@ def main() -> None:
 
     rows: list[tuple[str, EvalResult, float, str]] = []
     unattached: list[str] = []
-    for name in _MODEL_NAMES:
-        model = _load_checkpoint(name, gpu_device)
+    for name in MODEL_NAMES:
+        model = load_checkpoint(name, gpu_device)
         result = loss_and_accuracy(model, test_loaders[name], gpu_device)
 
         if name == "small":
             # Phone stand-in: CPU.
-            latency_model = _load_checkpoint(name, cpu_device)
+            latency_model = load_checkpoint(name, cpu_device)
             latency_device = cpu_device
             device_label = f"cpu ({thread_count} threads)"
         else:

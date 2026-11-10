@@ -1,20 +1,21 @@
 """Shared ORM models for the data-gen simulator and (later) the offload API.
 
-Five tables, all owned here per `.claude/coding-guidelines.md`'s Database
+Six tables, all owned here per `.claude/coding-guidelines.md`'s Database
 section: `simulation_runs` (one row per simulator invocation, holding the
 resolved config snapshot), `simulation_results` (one row per frame ×
 condition pair, FK'd to its run), `scene_complexity` (one row per frame,
 computed once and reused across runs), `model_inference` (one row per
-(dataset, frame, model) triple, caching real inference results), and
+(dataset, frame, model) triple, caching real inference results),
 `frame_features` (one row per (dataset, frame), holding candidate router
-features).
+features), and `bird_predictions` (one row per (dataset, photo, model),
+holding per-photo classifier predictions).
 """
 
 import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -124,6 +125,26 @@ class FrameFeatures(Base):
     min_confidence: Mapped[float] = mapped_column(Float, nullable=False)
     mean_box_area: Mapped[float] = mapped_column(Float, nullable=False)
     min_box_area: Mapped[float] = mapped_column(Float, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class BirdPrediction(Base):
+    """One row per (dataset, photo_id, model_name): a bird classifier's per-photo prediction."""
+
+    __tablename__ = "bird_predictions"
+
+    dataset: Mapped[str] = mapped_column(String, primary_key=True)
+    photo_id: Mapped[str] = mapped_column(String, primary_key=True)
+    model_name: Mapped[str] = mapped_column(String, primary_key=True)
+    split: Mapped[str] = mapped_column(String, nullable=False)
+    true_label: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicted_label: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    max_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    top2_margin: Mapped[float] = mapped_column(Float, nullable=False)
+    training_run_id: Mapped[str | None] = mapped_column(String, nullable=True)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
