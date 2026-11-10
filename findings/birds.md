@@ -161,3 +161,602 @@ points, with 50% escalation needed to recover 0.9502 of it (by max
 probability), and confidence still informative on both models. The
 flowers-vs-birds comparison itself rests on the pilot's numbers only; no
 flowers figure was recomputed for this feature.
+
+## Birds cascade under a hard latency budget
+
+The cascade above is reported against the *share* escalated, with no cost on
+escalating. This section charges for it. A cascade runs the small model first
+and the large one second, so under a deadline it pays local cost plus offload
+cost. The question is where, if anywhere, that beats running one model, and how
+the answer moves as the budget tightens.
+
+The hard-budget framing (latency is a constraint, not a penalty term) follows
+DeepDecision (Ran et al., INFOCOM 2018). The escalate-on-low-confidence
+framing follows Big/LITTLE (Park et al., CODES+ISSS 2015) and DDNN
+(Teerapittayanon et al., ICDCS 2017). Attempt 1 applied the same framing to
+COCO; this is the birds counterpart.
+
+### Result
+
+**The cascade is never useful here, in any of the 36 reported cells.** Its
+on-time accuracy ties the best deployable policy wherever it can act at all, and
+loses outright in the two cells where offload fits the budget but escalation
+does not. The boundary figure has no region where it beats the best deployable
+policy. This is a characterised negative result, and the two halves of it are
+different in kind:
+
+- The *latency* half is a theorem. Escalation costs local plus offload, which
+  always exceeds offload alone, so a hard budget can never make the cascade the
+  only option that fits (see the bands below).
+- The *accuracy* half is empirical. Where escalation is affordable the cascade
+  reaches 0.8700 on-time accuracy against always-offload's 0.8699, a
+  difference the 95% bootstrap interval cannot separate from zero
+  ([-0.0007, +0.0010]). It gets there only by escalating 83.24% of photos
+  (max probability) or 82.29% (top-2 margin).
+
+### Regenerating this section
+
+Requires migration `0004` applied and the MLflow backend reachable. From
+`training/`:
+
+```
+python -m birds.evaluation.predictions                                  # record per-photo predictions
+python -m birds.evaluation.evaluate                                     # measured per-photo latency
+python -m birds.router.budget_experiment --server-compute-ms 6.731      # this section
+```
+
+The experiment reads the stored predictions and runs no inference. It prints the
+tables and verdicts below, records one MLflow run, and writes the figure to
+`training/birds/router/latency_budget_boundary.png`. Defaults used: budgets
+50, 100, 200 and 400 ms; payload 11.39 KB; local cost swept 1 to 150 ms and
+offload cost 5 to 1000 ms in the figure. Every number below came from this run's
+output.
+
+The run is deterministic, as the spec requires: two runs over unchanged records
+produced byte-identical reports, verified by diffing their output.
+
+Existing entry points, re-checked on the same day: `evaluate` reproduces test
+accuracy 0.7798 (small) and 0.8699 (large); `predictions` re-recorded
+5,400 train, 594 val and 5,794 test rows for each model (it replaces rows per
+model and split) and exited cleanly; `summary` output before and after
+re-recording was identical apart from the log timestamp, and matches the Small
+vs. large and Cascade tables above.
+
+### What is being swept
+
+Latency is a swept parameter, not read per photo; no per-photo latency exists
+for birds. Every cell fixes a local cost, an offload cost and a budget, so every
+photo in a cell shares the same latencies. **Structural consequence:** the two
+static baselines are all-on-time or all-late within a cell (their over-budget
+share is 0% or 100% in every row below), and the cascade is the only policy whose
+decision varies photo to photo. This differs from attempt 1, where latency
+varied per request.
+
+**Offload cost** is server compute + payload transfer + round trip, with a fixed
+11.39 KB payload (one photo encoded at the 224 px input resolution):
+
+| Network | Bandwidth | Round trip | Transfer | Server compute | Offload cost |
+|---|---|---|---|---|---|
+| good | 50 Mbps | 20 ms | 1.82 ms | 6.731 ms | 28.6 ms |
+| medium | 10 Mbps | 60 ms | 9.11 ms | 6.731 ms | 75.8 ms |
+| poor | 2 Mbps | 150 ms | 45.56 ms | 6.731 ms | 202.3 ms |
+
+Server compute, 6.731 ms, is the large model's measured per-photo latency on
+the desktop GPU, from `python -m birds.evaluation.evaluate`. A desktop RTX 5070
+stands in for a server GPU. The same run measured the small model at 5.586 ms
+per photo on the desktop CPU (6 threads). Server compute is therefore about the
+same as local cost and far below the transfer and round-trip terms: offload
+cost is dominated by the network, not the server. That is why the bands below
+are set almost entirely by which network the phone is on.
+
+**Local cost** is swept, with three marked values per budget: 5.877 ms (the
+small model's recorded desktop CPU time), 20 ms and 50 ms.
+
+### The local axis is unanchored on real hardware
+
+No on-device birds measurement exists. The one real local figure, the small
+model's desktop CPU time, is a desktop number, not a phone number, and it moves
+under repeat measurement: the recorded reference is 5.877 ms (September run,
+`SMALL_DESKTOP_CPU_MS`), and re-measuring on the same machine with the same code
+today gave 5.586 ms, a difference of about 5%. The axis is a sweep, not a
+calibration, and even its one real mark is soft. The reference constant was left
+at 5.877 ms deliberately, as a mark on a swept axis.
+
+Attempt 1's phone figures measure YOLOv8n on COCO frames, not any birds model,
+and are not used as anchors anywhere here.
+
+What would anchor it: a Core ML (iOS) or TFLite build of the small model
+(MobileNetV3-Large) timed on a real phone. Because the cascade keys on
+confidence, that build's *predictions and confidences* on the same split must
+be recorded too, not just its speed (see the first caveat below).
+
+### Boundary figure
+
+![Boundary figure: where the cascade can act, local cost by offload cost, per budget](../training/birds/router/latency_budget_boundary.png)
+
+One panel per budget (50, 100, 200, 400 ms) over the local-cost by
+offload-cost plane. The fill compares the cascade with the *best deployable
+policy* (always-local, always-offload or budget-only; the oracle is excluded
+because it is not deployable), with a tie tolerance of 0.001 on-time accuracy
+(about 6 photos): grey means no policy is on time, blue means the cascade loses,
+orange means it ties, green means it beats. Horizontal dash-dot lines mark the
+three named networks (good 29, medium 76, poor 202 ms offload), and a vertical
+mark sits at the small model's 5.877 ms desktop CPU time.
+
+What it shows:
+
+- **Green never appears.** There is no cell, at any budget, where the cascade
+  beats the best deployable policy.
+- **Blue is a single wedge**, between the dashed line (offload = budget) and the
+  solid diagonal (local + offload = budget). That is the offload-but-no-escalation
+  band: offload fits, escalation does not, so the cascade is stuck local while
+  budget-only and always-offload run the large model.
+- **Grey** fills the region where local cost *and* offload cost both exceed the
+  budget — right of the dotted vertical line and above the dashed horizontal
+  one. Right of the dotted line but below the dashed one the fill is blue, not
+  grey, because offload still fits there. At the 50 ms budget grey occupies
+  local 51-150 ms with offload above 50 ms; at 100 ms it starts at 100 ms local.
+  At 200 and 400 ms the swept range (to 150 ms) never reaches it.
+- **Orange fills the rest**: below the diagonal everything is on time and all
+  policies reach their plain accuracies, which the cascade matches; above the
+  dashed line offload does not fit, so the cascade and budget-only both run
+  locally.
+- The vertical mark for the desktop small model is drawn in pink at 5.877 ms,
+  labelled against a white background so it stays legible over the fill.
+
+### Where the boundary sits, and how it moves with the budget
+
+The boundary is the wedge between offload = budget and local + offload = budget.
+As the budget tightens the wedge slides down the offload axis and stays exactly
+`local` wide:
+
+- **400 ms:** the wedge sits at offload costs of 400 minus local up to 400. It
+  does not touch any named network at the marked local costs. All nine marked
+  cells at this budget are in the everything band, including the poor network
+  (202.3 ms offload plus 5.877 to 50 ms local stays under 400).
+- **200 ms:** the wedge covers offload costs of 200 minus local up to 200. The
+  poor network (202.3 ms) lies just above it and is local-only. Good and medium
+  are in the everything band at all three marked local costs.
+- **100 ms:** the wedge reaches the medium network once local cost passes
+  about 24 ms (75.8 + local > 100). At the marked 50 ms local cost, medium falls in
+  the wedge. Poor is local only.
+- **50 ms:** only the good network can offload at all. Good is in the wedge at
+  50 ms local cost (28.6 + 50 > 50) and in the everything band at 5.877 and 20.
+  Medium and poor are local only.
+
+Budget tightening therefore moves cells out of the everything band, first into
+the wedge and then into local-only, and the wedge is the only place the cascade
+loses. It never moves a cell into a region where the cascade wins.
+
+### The four bands
+
+In a cell with local cost L, offload cost O and budget B, exactly one of four
+bands holds:
+
+| Band | Condition | Consequence |
+|---|---|---|
+| Nothing fits | B < L and B < O | Every policy has 0 on-time accuracy, for any threshold |
+| Local only | L ≤ B < O | Offload never fits; cascade is always-local, and arrives on time |
+| Offload but no escalation | O ≤ B < L + O | Offload fits, escalation never does; cascade is always-local, which is on time only if L ≤ B |
+| Everything | L + O ≤ B | Everything is on time; on-time accuracy equals plain accuracy |
+
+The conditions are tested in that precedence order — cheapest-fitting band
+first — which is what makes them a partition. Writing "nothing fits" as `L > B`
+alone would be wrong: a cell with `O ≤ B < L` has local too slow but offload
+fitting comfortably, so always-offload is on time there and the row's
+consequence is false. Such a cell belongs to the offload-no-escalation band.
+
+**The escalation band always sits above the offload band.** Escalation fits when
+L + O ≤ B, offload fits when O ≤ B, and L + O ≥ O for non-negative costs, so
+escalation fitting implies offload fitting and never the reverse. A hard budget
+therefore never makes the cascade the only option that fits. The cascade's case
+has to be made on accuracy and on offload calls avoided, not on fitting a
+deadline nothing else fits.
+
+**The width of the band where offload fits but escalation does not is L**
+(budgets B with O ≤ B < L + O, an interval of length L), so cheaper local
+inference widens the range of budgets in which the cascade can act at all.
+The band summary in the output prints this as "lockout" (5.877 ms, 20 ms
+and 50 ms for the three marked local costs).
+
+**The threshold result is exact, not approximate, which is why the table below
+is so repetitive.** The tuned threshold is identical across every cell where
+escalation fits and irrelevant everywhere else: in "nothing fits" every policy
+scores 0; in "local only" and the offload-no-escalation band the cascade *is*
+always-local for any threshold; in "everything" on-time accuracy is plain
+accuracy, which depends on the threshold alone.
+
+The stronger claim — that *nothing* depends on L, O or B inside a band — holds
+in three of the four bands but not in the offload-no-escalation band, which
+splits once more on whether local alone fits. The cascade is always-local
+throughout that band, but always-local is on time only when L ≤ B. At
+(L=50, O=28.6, B=50) the cascade trails budget-only by about 0.09, the
+small-to-large gap; at (L=60, O=28.6, B=50) the same band, same threshold, it
+trails by about 0.87, because its local answer now arrives late and scores 0
+while budget-only still offloads on time. Every cell reported below has
+L ≤ B — the largest marked local cost, 50 ms, equals the smallest budget — so
+no number in these tables is affected, but the band label alone does not pin the
+outcome in that one band.
+
+Bands across the 36 reported cells (4 budgets x 3 networks x 3 local costs):
+
+| Band | Cells |
+|---|---|
+| Everything | 22 |
+| Offload but no escalation | 2 (50 ms budget, good, 50 ms local; 100 ms budget, medium, 50 ms local) |
+| Local only | 12 |
+| Nothing fits | 0 (every marked local cost is at most the smallest budget, 50 ms) |
+
+The reported budgets satisfy the spec's requirement: 50 ms is below the poor
+network's offload cost (202.3 ms) and 400 ms admits escalation under good.
+
+### Per-budget tables
+
+Test split, 5,794 photos. Each cell evaluates six rows: the four policies, with
+the cascade under each confidence measure, and the within-budget oracle. On-time
+accuracy counts a result arriving after the budget as zero. The cascade's
+threshold for each cell is tuned on the 594 validation photos and applied to the
+test photos; no test photo informs it.
+
+In every everything-band cell the tuned thresholds are 0.8728 (max probability)
+and 0.8537 (top-2 margin), escalating 83.24% and 82.29% of test photos. In the
+local-only and offload-no-escalation cells the tuned thresholds are 0.0418 and
+0.0004 and escalate 0.00%, which is simply always-local.
+
+Notable readings from the tables:
+
+- The cascade's on-time accuracy is 0.8700 in every everything-band cell,
+  against always-offload's and budget-only's 0.8699, and the oracle's 0.8999.
+  The cascade closes none of the gap to the oracle.
+- Mean latency is where escalation costs show up. At 5.877 ms local cost on the
+  good network the cascade averages 29.65 ms against always-offload's 28.55 ms,
+  and at 50 ms local cost 73.77 ms against 28.55 ms: it pays for both models on
+  most photos. On the medium and poor networks the order flips (medium, 5.877 ms
+  local: 69.01 ms against 75.84 ms; poor at 400 ms budget: 174.27 ms against
+  202.29 ms), because the 16.76% of photos it does not escalate skip the slow
+  offload.
+- In the local-only band always-offload scores 0.0000 on-time with a 100.00%
+  over-budget share, while the other policies keep the small model's 0.7798.
+
+<details>
+<summary>Full per-budget tables (216 rows)</summary>
+
+#### 50 ms budget
+
+| Network (offload ms) | Local ms | Band | Policy | Mean acc | On-time acc | Mean latency ms | Over budget |
+|---|---|---|---|---|---|---|---|
+| good (28.6) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| good (28.6) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 29.65 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 29.37 | 0.00% |
+| good (28.6) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 8.60 | 0.00% |
+| good (28.6) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| good (28.6) | 20 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 43.77 | 0.00% |
+| good (28.6) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 43.50 | 0.00% |
+| good (28.6) | 20 | everything | oracle | 0.8999 | 0.8999 | 21.03 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | offload but no escalation | oracle | 0.8999 | 0.8999 | 29.20 | 0.00% |
+| medium (75.8) | 5.877 | local only | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | local only | always-offload | 0.8699 | 0.0000 | 75.84 | 100.00% |
+| medium (75.8) | 5.877 | local only | budget-only | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | local only | oracle | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 20 | local only | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | local only | always-offload | 0.8699 | 0.0000 | 75.84 | 100.00% |
+| medium (75.8) | 20 | local only | budget-only | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | local only | oracle | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 50 | local only | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | local only | always-offload | 0.8699 | 0.0000 | 75.84 | 100.00% |
+| medium (75.8) | 50 | local only | budget-only | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | local only | oracle | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 5.877 | local only | budget-only | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | oracle | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 20 | local only | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 20 | local only | budget-only | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | oracle | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 50 | local only | budget-only | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | oracle | 0.7798 | 0.7798 | 50.00 | 0.00% |
+
+#### 100 ms budget
+
+| Network (offload ms) | Local ms | Band | Policy | Mean acc | On-time acc | Mean latency ms | Over budget |
+|---|---|---|---|---|---|---|---|
+| good (28.6) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| good (28.6) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 29.65 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 29.37 | 0.00% |
+| good (28.6) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 8.60 | 0.00% |
+| good (28.6) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| good (28.6) | 20 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 43.77 | 0.00% |
+| good (28.6) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 43.50 | 0.00% |
+| good (28.6) | 20 | everything | oracle | 0.8999 | 0.8999 | 21.03 | 0.00% |
+| good (28.6) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 73.77 | 0.00% |
+| good (28.6) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 73.50 | 0.00% |
+| good (28.6) | 50 | everything | oracle | 0.8999 | 0.8999 | 29.20 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 69.01 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 68.29 | 0.00% |
+| medium (75.8) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 14.28 | 0.00% |
+| medium (75.8) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 83.13 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 82.41 | 0.00% |
+| medium (75.8) | 20 | everything | oracle | 0.8999 | 0.8999 | 26.71 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | offload but no escalation | oracle | 0.8999 | 0.8999 | 53.10 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 5.877 | local only | budget-only | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | oracle | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 20 | local only | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 20 | local only | budget-only | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | oracle | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 50 | local only | budget-only | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | oracle | 0.7798 | 0.7798 | 50.00 | 0.00% |
+
+#### 200 ms budget
+
+| Network (offload ms) | Local ms | Band | Policy | Mean acc | On-time acc | Mean latency ms | Over budget |
+|---|---|---|---|---|---|---|---|
+| good (28.6) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| good (28.6) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 29.65 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 29.37 | 0.00% |
+| good (28.6) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 8.60 | 0.00% |
+| good (28.6) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| good (28.6) | 20 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 43.77 | 0.00% |
+| good (28.6) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 43.50 | 0.00% |
+| good (28.6) | 20 | everything | oracle | 0.8999 | 0.8999 | 21.03 | 0.00% |
+| good (28.6) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 73.77 | 0.00% |
+| good (28.6) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 73.50 | 0.00% |
+| good (28.6) | 50 | everything | oracle | 0.8999 | 0.8999 | 29.20 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 69.01 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 68.29 | 0.00% |
+| medium (75.8) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 14.28 | 0.00% |
+| medium (75.8) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 83.13 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 82.41 | 0.00% |
+| medium (75.8) | 20 | everything | oracle | 0.8999 | 0.8999 | 26.71 | 0.00% |
+| medium (75.8) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 113.13 | 0.00% |
+| medium (75.8) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 112.41 | 0.00% |
+| medium (75.8) | 50 | everything | oracle | 0.8999 | 0.8999 | 53.10 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 5.877 | local only | budget-only | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | local only | oracle | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 20 | local only | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 20 | local only | budget-only | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | local only | oracle | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | always-offload | 0.8699 | 0.0000 | 202.29 | 100.00% |
+| poor (202.3) | 50 | local only | budget-only | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (max_probability) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | cascade (top2_margin) | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | local only | oracle | 0.7798 | 0.7798 | 50.00 | 0.00% |
+
+#### 400 ms budget
+
+| Network (offload ms) | Local ms | Band | Policy | Mean acc | On-time acc | Mean latency ms | Over budget |
+|---|---|---|---|---|---|---|---|
+| good (28.6) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| good (28.6) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 29.65 | 0.00% |
+| good (28.6) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 29.37 | 0.00% |
+| good (28.6) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 8.60 | 0.00% |
+| good (28.6) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| good (28.6) | 20 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 43.77 | 0.00% |
+| good (28.6) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 43.50 | 0.00% |
+| good (28.6) | 20 | everything | oracle | 0.8999 | 0.8999 | 21.03 | 0.00% |
+| good (28.6) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| good (28.6) | 50 | everything | always-offload | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | budget-only | 0.8699 | 0.8699 | 28.55 | 0.00% |
+| good (28.6) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 73.77 | 0.00% |
+| good (28.6) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 73.50 | 0.00% |
+| good (28.6) | 50 | everything | oracle | 0.8999 | 0.8999 | 29.20 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| medium (75.8) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 69.01 | 0.00% |
+| medium (75.8) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 68.29 | 0.00% |
+| medium (75.8) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 14.28 | 0.00% |
+| medium (75.8) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| medium (75.8) | 20 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 83.13 | 0.00% |
+| medium (75.8) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 82.41 | 0.00% |
+| medium (75.8) | 20 | everything | oracle | 0.8999 | 0.8999 | 26.71 | 0.00% |
+| medium (75.8) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| medium (75.8) | 50 | everything | always-offload | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | everything | budget-only | 0.8699 | 0.8699 | 75.84 | 0.00% |
+| medium (75.8) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 113.13 | 0.00% |
+| medium (75.8) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 112.41 | 0.00% |
+| medium (75.8) | 50 | everything | oracle | 0.8999 | 0.8999 | 53.10 | 0.00% |
+| poor (202.3) | 5.877 | everything | always-local | 0.7798 | 0.7798 | 5.88 | 0.00% |
+| poor (202.3) | 5.877 | everything | always-offload | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 5.877 | everything | budget-only | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 5.877 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 174.27 | 0.00% |
+| poor (202.3) | 5.877 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 172.35 | 0.00% |
+| poor (202.3) | 5.877 | everything | oracle | 0.8999 | 0.8999 | 29.47 | 0.00% |
+| poor (202.3) | 20 | everything | always-local | 0.7798 | 0.7798 | 20.00 | 0.00% |
+| poor (202.3) | 20 | everything | always-offload | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 20 | everything | budget-only | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 20 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 188.39 | 0.00% |
+| poor (202.3) | 20 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 186.47 | 0.00% |
+| poor (202.3) | 20 | everything | oracle | 0.8999 | 0.8999 | 41.90 | 0.00% |
+| poor (202.3) | 50 | everything | always-local | 0.7798 | 0.7798 | 50.00 | 0.00% |
+| poor (202.3) | 50 | everything | always-offload | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 50 | everything | budget-only | 0.8699 | 0.8699 | 202.29 | 0.00% |
+| poor (202.3) | 50 | everything | cascade (max_probability) | 0.8700 | 0.8700 | 218.39 | 0.00% |
+| poor (202.3) | 50 | everything | cascade (top2_margin) | 0.8700 | 0.8700 | 216.47 | 0.00% |
+| poor (202.3) | 50 | everything | oracle | 0.8999 | 0.8999 | 68.29 | 0.00% |
+
+</details>
+
+### Usefulness verdicts
+
+The cascade counts as useful in a cell only when the 95% bootstrap interval
+(resampling test photos) of its on-time accuracy minus budget-only's lies
+entirely above zero. Across the 72 verdicts (36 cells, two confidence measures)
+**all 72 are "not useful"**. They fall in three groups, by band:
+
+| Band | Cells | Interval vs budget-only | Verdict |
+|---|---|---|---|
+| Everything | 22 | [-0.0007, +0.0010] | not useful (straddles zero) |
+| Local only | 12 | [+0.0000, +0.0000] | not useful (cascade is always-local, as is budget-only) |
+| Offload but no escalation | 2 | [-0.0998, -0.0803] | not useful (cascade is worse) |
+
+The interval is identical across all cells of a band here, which follows from
+the band argument given that every reported cell has L ≤ B; in the
+offload-no-escalation band a cell with L > B would give a different interval
+again, as noted above. The two confidence measures also agree to four decimals,
+but that is an empirical coincidence of two differently-escalated photo sets,
+not something the band argument predicts.
+
+The interval against always-local tells the other half of the story, and it is
+the more flattering half:
+
+| Band | Cells | Interval vs always-local |
+|---|---|---|
+| Everything | 22 | [+0.0803, +0.0999] |
+| Local only | 12 | [+0.0000, +0.0000] |
+| Offload but no escalation | 2 | [+0.0000, +0.0000] |
+
+So the cascade is not useless in absolute terms. Wherever escalation is
+affordable it beats always-local decisively — the interval sits entirely above
+zero and brackets the 0.0901 small-to-large accuracy gap, meaning the cascade
+recovers essentially the whole of the large model's advantage. Where escalation
+is unaffordable it *is* always-local, exactly, so the difference is zero by
+construction rather than by measurement.
+
+The negative result is therefore narrower than "the cascade does not work": the
+cascade buys the large model's accuracy, but it pays local + offload latency to
+do so, while plain always-offload buys the same accuracy for offload alone. Its
+failure is one of redundancy under a hard budget, not of accuracy. Usefulness is
+defined against budget-only precisely because budget-only already picks the
+better of the two static policies in each cell, so it is the comparison that can
+embarrass the cascade — and it does.
+
+Two noise notes: the validation split is only 594 photos, so the tuned threshold
+is noisy, and that split was already used once to select the checkpoints.
+
+### Fewest offload calls at which the cascade matches always-offload
+
+Wherever escalation is affordable (the 22 everything-band cells), escalating
+every photo reproduces always-offload exactly, so a match always exists and the
+interesting number is the share of photos at which it happens. The fewest
+offload calls that reach always-offload's accuracy on the test split are:
+
+| Confidence measure | Offload calls | Share of 5,794 |
+|---|---|---|
+| Max probability | 4,184 | 72.2% |
+| Top-2 margin | 3,978 | 68.7% |
+
+These are hindsight figures, read off the test split as the smallest prefix of
+least-confident photos that happens to suffice. Unlike the threshold, which was
+tuned on validation, they are not operating points selectable in advance; they
+bound how good the trade could be, not how good it would be.
+
+So matching the large model alone still sends around 7 in 10 photos to it. The
+saving, about 28% to 31% of offload calls, is the cascade's whole payoff when
+accuracy ties, and it comes only in cells where escalation also fits the
+budget. In the 14 cells where escalation is unaffordable (local only plus
+offload-but-no-escalation) the output reports `None`: the cascade never reaches
+always-offload's *plain* accuracy there, because it cannot escalate at all.
+
+That is the one comparison in this section made on plain rather than on-time
+accuracy, and the two metrics disagree sharply in those cells. In the 12
+local-only cells offload misses the budget entirely, so always-offload scores
+0.0000 on-time against the cascade's 0.7798 — on the metric the tables report,
+the cascade wins outright. In the 2 offload-but-no-escalation cells offload does
+arrive in time, so always-offload scores 0.8699 against the cascade's 0.7798 and
+the cascade loses. Same `None`, opposite verdicts.
+
+### Caveats
+
+1. **The predictions are a desktop full-precision stand-in for the local path.**
+   Both models' predictions were computed on a desktop GPU in full precision. A
+   deployed local path would run an exported, likely reduced-precision model on
+   the phone. Conversion shifts not only accuracy but the confidence values
+   themselves, which is exactly what the cascade's threshold keys on. Every
+   cascade figure here describes the desktop small model, not a measured
+   on-device one. The exported model's predictions and confidences (not just its
+   speed) must be measured before any threshold is trusted on a phone.
+2. **Offload cost is exact in every cell, so the cascade's hedging advantage is
+   unmeasured.** Each cell fixes one offload cost, so no policy is ever surprised
+   by a slow network. A deployed router works from an estimate. The cascade has a
+   property this design cannot score: having run the small model first, it already
+   holds an answer, so it can return the local result when the network
+   disappoints instead of missing the deadline with nothing. That advantage is
+   not measured here. **The next experiment is offload cost drawn with noise**,
+   scoring the policies on actual latency against an estimated one.
+
+Smaller caveats: the run is single-pass on one test split; the tuned thresholds
+come from a 594-photo validation split; and the offload costs are analytical, not
+measured on a real endpoint.
