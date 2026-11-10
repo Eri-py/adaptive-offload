@@ -5,16 +5,30 @@ Avoids `import pytest` (it breaks mypy against this venv); plain `def test_...()
 
 from __future__ import annotations
 
+import contextlib
+import io
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from sqlalchemy import Engine
 
+from birds.evaluation.records import DATASET_NAME, PhotoPrediction
+from birds.evaluation.store import write_predictions
+from birds.router.boundary_plot import CASCADE
 from birds.router.budget_experiment import (
+    RECORD_COMMAND,
     Cell,
     PhotoRecords,
     evaluate_cell,
     fewest_escalations_to_match,
+    grid_accuracy,
     records_from_frames,
+    run_on_engine,
+    tune_accuracy_threshold,
     tune_threshold,
+    tuned_thresholds,
     validate_budgets,
 )
 from birds.router.policies import Band
@@ -150,3 +164,113 @@ def test_validate_budgets_requires_a_lockout_and_an_escalation_budget() -> None:
         except ValueError:
             continue
         raise AssertionError(f"{bad} should have been rejected")
+
+
+def test_tuned_threshold_is_the_same_in_every_escalation_band_cell() -> None:
+    # Two different cells that both let everything fit: the threshold ignores L, O and B.
+    first = Cell(local_ms=10.0, offload_ms=30.0, budget_ms=50.0)
+    second = Cell(local_ms=3.0, offload_ms=7.0, budget_ms=500.0)
+    once = tuned_thresholds(_tiny())
+    for measure in once:
+        assert tune_threshold(_tiny(), measure, first) == once[measure]
+        assert tune_threshold(_tiny(), measure, second) == once[measure]
+        assert tune_accuracy_threshold(_tiny(), measure) == once[measure]
+    # Changing the *test* records leaves the validation-tuned threshold untouched.
+    other_test = _records(LARGE, SMALL, MAX_PROB[::-1], MARGIN[::-1])
+    for cell in (first, second):
+        a = evaluate_cell(_tiny(), _tiny(), cell, once)
+        b = evaluate_cell(_tiny(), other_test, cell, once)
+        for measure in once:
+            assert a.cascades[measure].threshold == b.cascades[measure].threshold == once[measure]
+
+
+def test_precomputed_thresholds_do_not_change_the_result() -> None:
+    for budget in (5.0, 20.0, 35.0, 60.0):
+        cell = Cell(local_ms=10.0, offload_ms=30.0, budget_ms=budget)
+        assert evaluate_cell(_tiny(), _tiny(), cell) == evaluate_cell(
+            _tiny(), _tiny(), cell, tuned_thresholds(_tiny())
+        )
+
+
+def test_grid_matches_evaluate_cell_in_every_band() -> None:
+    local_ms, offload_ms = [3.0, 10.0, 25.0], [5.0, 30.0, 60.0, 90.0]
+    tuned = tuned_thresholds(_tiny())
+    for budget in (5.0, 20.0, 35.0, 60.0, 120.0):
+        grid = grid_accuracy(
+            _tiny(),
+            budget_ms=budget,
+            local_ms=local_ms,
+            offload_ms=offload_ms,
+            threshold=tuned["top2_margin"],
+            measure="top2_margin",
+        )
+        for i, offload in enumerate(offload_ms):
+            for j, local in enumerate(local_ms):
+                result = evaluate_cell(_tiny(), _tiny(), Cell(local, offload, budget))
+                expected = {
+                    "always-local": result.always_local,
+                    "always-offload": result.always_offload,
+                    "budget-only": result.budget_only,
+                    CASCADE: result.cascades["top2_margin"].metrics,
+                }
+                for policy, m in expected.items():
+                    assert grid[policy][i, j] == m.on_time_accuracy, (budget, local, offload)
+
+
+def _seed(engine: Engine, splits: tuple[str, ...]) -> None:
+    """Twelve photos per split (ids are unique across splits), the small model right on the
+    confident ones."""
+    for offset, split in enumerate(splits):
+        for model, right_below in (("small", 8), ("large", 11)):
+            rows = [
+                PhotoPrediction(
+                    photo_id=str(i + 100 * offset),
+                    true_label=1,
+                    predicted_label=1 if i <= right_below else 2,
+                    is_correct=i <= right_below,
+                    max_probability=0.1 + i / 20,
+                    top2_margin=i / 20,
+                )
+                for i in range(1, 13)
+            ]
+            write_predictions(engine, DATASET_NAME, split, model, None, rows)
+
+
+def _run(engine: Engine, figure: Path) -> str:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        run_on_engine(
+            engine,
+            budgets=[50.0, 100.0, 200.0, 400.0],
+            server_compute_ms=10.0,
+            payload_kb=11.39,
+            figure_path=figure,
+        )
+    return out.getvalue()
+
+
+def test_entry_point_prints_tables_and_writes_the_figure(postgres_engine: Engine) -> None:
+    _seed(postgres_engine, ("val", "test"))
+    with tempfile.TemporaryDirectory() as tmp:
+        figure = Path(tmp) / "boundary.png"
+        first = _run(postgres_engine, figure)
+        assert figure.stat().st_size > 0
+        figure.unlink()
+        # Two runs over unchanged records print the same report.
+        assert _run(postgres_engine, figure) == first
+    assert "--- Budget: 50 ms ---" in first
+    assert "cascade (top2_margin)" in first and "oracle" in first
+    assert "Band summary" in first and "lockout" in first
+
+
+def test_missing_records_stop_the_run_and_write_nothing(postgres_engine: Engine) -> None:
+    _seed(postgres_engine, ("val",))  # the test split was never recorded
+    with tempfile.TemporaryDirectory() as tmp:
+        figure = Path(tmp) / "boundary.png"
+        try:
+            _run(postgres_engine, figure)
+        except ValueError as exc:
+            assert RECORD_COMMAND in str(exc)
+        else:
+            raise AssertionError("missing records should stop the run")
+        assert not figure.exists()

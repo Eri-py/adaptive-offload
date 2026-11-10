@@ -20,16 +20,23 @@
   per measure rather than per cell.
 
 ## Task 3 — Wire the entry point
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-09 21:51:23
+- Completed: 2026-11-09 21:56:39
+- Notes: 5 new tests, suite 284 -> 289. Threshold tuning restructured to once
+  per measure; the full run is ~8 s against synthetic records, against an
+  estimated 110 minutes per budget before. `--server-compute-ms` is a required
+  CLI argument, so Task 4 cannot run until the real figure is supplied.
 
 ## Task 4 — Real run and write-up
-- Status: not started
+- Status: blocked
 - Started: —
 - Completed: —
-- Notes: —
+- Notes: Blocked on the large model's measured per-photo GPU latency, the
+  server-compute term. The entry point requires `--server-compute-ms` and has
+  no default by design, so no real run is possible until the user supplies it
+  from the tracking store (or authorises re-running
+  `python -m birds.evaluation.evaluate`, a GPU pass over the test split).
 
 ## Task 5 — Regression test run
 - Status: not started

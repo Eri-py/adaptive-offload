@@ -97,3 +97,27 @@ Two consequences:
   the per-candidate pass and offered to vectorise; the instruction was to wait
   until Task 2 showed whether it mattered. It does. The fix is better than
   vectorising, though — the per-cell work disappears instead of getting faster.
+
+## Task 3 — entry point and the once-per-measure threshold
+
+- **The three-case argument held; no counterexample.** It assumes non-negative costs (an
+  offload cost below zero with local over budget could let escalation fit while kept results
+  are late). `escalation_fits` documents that. Everything the write-up says about "the cascade's
+  standing depends only on the band" rests on it.
+- **Per-cell threshold, old and new, differ only in the irrelevant bands.** The old scan
+  returned the lowest candidate (min score) when every threshold tied, so `tune_threshold` keeps
+  returning that outside the escalation band; inside it returns the plain-accuracy optimum.
+  `evaluate_cell` results are byte-identical (a test compares with and without precomputed
+  thresholds), and `evaluate_cell` takes an optional `tuned` dict to skip the pass.
+- **The figure grid is closed-form** (`grid_accuracy`): each static policy is all-on-time or
+  all-late and the cascade is plain accuracy or always-local by band. A test checks it equals
+  `evaluate_cell` on every policy across all four bands, so the shortcut cannot drift.
+- **Timing:** full run (4 budgets, 9 marked cells each, both measures, bootstraps, 150x200 grids
+  for 4 budgets) takes ~8 s on 5,794-photo synthetic records; the grids themselves are
+  milliseconds. The cost is the bootstraps.
+- **`ruff format .` from `training/` reformats unrelated files** (evaluate.py and coco tests).
+  Format only the paths you touched.
+- Photo ids in `bird_predictions` are unique per (dataset, photo, model) across splits, so test
+  seeds must give each split distinct ids.
+- Budgets default to 50/100/200/400 ms (CLI-overridable) and are validated at run time; with
+  very large server compute they will fail validation loudly rather than report nothing useful.
