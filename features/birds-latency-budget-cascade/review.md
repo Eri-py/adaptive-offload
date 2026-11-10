@@ -204,7 +204,7 @@ is inside the rules; it is worth being deliberate about repeating.
   reported beside.
 - **Fix:** Have `_policy_rows` return `(latency, correct, on_time)` and let
   `_metrics` use the `correct` it already computed.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### S2 — The grid/evaluate agreement test does not assert it covered all four bands
 
@@ -233,7 +233,7 @@ is inside the rules; it is worth being deliberate about repeating.
 - **Fix:** Say "never reaches always-offload's *plain* accuracy there, because
   it cannot escalate at all — though always-offload's on-time accuracy in those
   cells is 0, so the comparison that matters is the one in the tables."
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### S4 — The grey region of the figure is described by only half its condition
 
@@ -247,7 +247,7 @@ is inside the rules; it is worth being deliberate about repeating.
   and the rendered PNG agrees.
 - **Fix:** "Grey fills the region where local cost *and* offload cost both
   exceed the budget — right of the dotted line and above the dashed one."
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 ## Nitpicks
 
@@ -262,7 +262,7 @@ is inside the rules; it is worth being deliberate about repeating.
 - **Fix:** Assert against the module's own defaults instead — e.g. that
   `BoundaryMarks()` and `conditions.py`'s constants contain neither 17.34 nor
   106.01 — or drop the line as decorative.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### N2 — The "fewest offload calls" figure is read off the test split
 
@@ -274,7 +274,7 @@ is inside the rules; it is worth being deliberate about repeating.
   the test split", but does not flag what that implies.
 - **Fix:** Add half a sentence: "this is a hindsight figure read off the test
   split, not an operating point selectable in advance."
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### N3 — "As the band argument predicts" covers only half of what it is attached to
 
@@ -286,7 +286,7 @@ is inside the rules; it is worth being deliberate about repeating.
   a consequence of the argument.
 - **Fix:** Split the sentence: identical across cells *by the band argument*;
   identical across measures *as it happens, at four decimals*.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### N4 — `fewest_escalations_to_match` restates `escalation_fits` inline
 
@@ -296,7 +296,7 @@ is inside the rules; it is worth being deliberate about repeating.
   equivalent for non-negative costs, but it is the same predicate written twice,
   and the second copy is the one without the documented assumption attached.
 - **Fix:** `if not escalation_fits(cell):`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Apply the remaining review findings"
 
 #### N5 — Four-line provenance comments against the guidelines' one-to-two-line rule
 
@@ -310,7 +310,7 @@ is inside the rules; it is worth being deliberate about repeating.
 - **Fix:** Move the measurement provenance into the module docstring, which
   already carries the server-compute provenance, and leave a one-line comment at
   each constant.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the provenance is the point of these comments and the reviewer agrees it must not be lost. Moving it to the module docstring separates each fact from the constant it explains, which is where a reader meets it. Keeping four lines beside the constant is the better trade here, per the reviewer's own recommendation.
 
 ## Tests
 

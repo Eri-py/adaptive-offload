@@ -16,6 +16,7 @@ from birds.router.boundary_plot import (
     classify_cells,
     plot_boundary_maps,
 )
+from birds.router.conditions import SMALL_DESKTOP_CPU_MS
 
 _LOCAL = [1.0, 5.0, 10.0, 20.0]
 _OFFLOAD = [10.0, 50.0, 100.0]
@@ -65,11 +66,23 @@ def test_marks_are_desktop_measurement_and_three_named_conditions_only() -> None
     assert "desktop CPU 5.877 ms" in texts[0]
     for text, name in zip(texts[1:], ("good", "medium", "poor"), strict=True):
         assert text.strip().startswith(name)
-    assert not any("17.34" in t or "106" in t for t in texts)  # attempt 1 phone figures
 
 
 def test_default_desktop_mark_is_the_real_measurement() -> None:
     assert BoundaryMarks().desktop_local_ms == 5.877
+    assert BoundaryMarks().desktop_local_ms == SMALL_DESKTOP_CPU_MS
+
+
+def test_attempt_1_coco_phone_figures_are_never_birds_anchors() -> None:
+    """17.34 and 106.01 ms measure YOLOv8n on COCO frames. Asserted against the module's own
+    defaults, not test-supplied marks, so it can actually fail if a COCO figure is adopted."""
+    fig = build_boundary_figure([_panel(50.0)], BoundaryMarks())
+    texts = [t.get_text() for t in fig.axes[0].texts]
+    plt.close(fig)
+    assert texts  # the desktop mark is drawn even with no named conditions
+    for forbidden in ("17.34", "106.01", "106"):
+        assert not any(forbidden in t for t in texts)
+    assert SMALL_DESKTOP_CPU_MS not in (17.34, 106.01)
 
 
 def test_cells_are_tie_loss_win_or_empty_and_oracle_is_ignored() -> None:

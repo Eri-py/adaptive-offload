@@ -291,9 +291,12 @@ What it shows:
   solid diagonal (local + offload = budget). That is the offload-but-no-escalation
   band: offload fits, escalation does not, so the cascade is stuck local while
   budget-only and always-offload run the large model.
-- **Grey** fills the region where local cost exceeds the budget (dotted vertical
-  line): at 50 ms it starts at 50 ms local cost, at 100 ms at 100 ms. At 200
-  and 400 ms the swept range (to 150 ms) never reaches it.
+- **Grey** fills the region where local cost *and* offload cost both exceed the
+  budget — right of the dotted vertical line and above the dashed horizontal
+  one. Right of the dotted line but below the dashed one the fill is blue, not
+  grey, because offload still fits there. At the 50 ms budget grey occupies
+  local 51-150 ms with offload above 50 ms; at 100 ms it starts at 100 ms local.
+  At 200 and 400 ms the swept range (to 150 ms) never reaches it.
 - **Orange fills the rest**: below the diagonal everything is on time and all
   policies reach their plain accuracies, which the cascade matches; above the
   dashed line offload does not fit, so the cascade and budget-only both run
@@ -669,10 +672,12 @@ entirely above zero. Across the 72 verdicts (36 cells, two confidence measures)
 | Local only | 12 | [+0.0000, +0.0000] | not useful (cascade is always-local, as is budget-only) |
 | Offload but no escalation | 2 | [-0.0998, -0.0803] | not useful (cascade is worse) |
 
-The interval is identical across all cells of a band here, and the same for both
-confidence measures. That follows from the band argument given that every
-reported cell has L ≤ B; in the offload-no-escalation band a cell with L > B
-would give a different interval again, as noted above.
+The interval is identical across all cells of a band here, which follows from
+the band argument given that every reported cell has L ≤ B; in the
+offload-no-escalation band a cell with L > B would give a different interval
+again, as noted above. The two confidence measures also agree to four decimals,
+but that is an empirical coincidence of two differently-escalated photo sets,
+not something the band argument predicts.
 
 The interval against always-local tells the other half of the story, and it is
 the more flattering half:
@@ -713,12 +718,25 @@ offload calls that reach always-offload's accuracy on the test split are:
 | Max probability | 4,184 | 72.2% |
 | Top-2 margin | 3,978 | 68.7% |
 
+These are hindsight figures, read off the test split as the smallest prefix of
+least-confident photos that happens to suffice. Unlike the threshold, which was
+tuned on validation, they are not operating points selectable in advance; they
+bound how good the trade could be, not how good it would be.
+
 So matching the large model alone still sends around 7 in 10 photos to it. The
 saving, about 28% to 31% of offload calls, is the cascade's whole payoff when
 accuracy ties, and it comes only in cells where escalation also fits the
 budget. In the 14 cells where escalation is unaffordable (local only plus
-offload-but-no-escalation) the output reports `None`: it never matches
-always-offload there, because it cannot escalate at all.
+offload-but-no-escalation) the output reports `None`: the cascade never reaches
+always-offload's *plain* accuracy there, because it cannot escalate at all.
+
+That is the one comparison in this section made on plain rather than on-time
+accuracy, and the two metrics disagree sharply in those cells. In the 12
+local-only cells offload misses the budget entirely, so always-offload scores
+0.0000 on-time against the cascade's 0.7798 — on the metric the tables report,
+the cascade wins outright. In the 2 offload-but-no-escalation cells offload does
+arrive in time, so always-offload scores 0.8699 against the cascade's 0.7798 and
+the cascade loses. Same `None`, opposite verdicts.
 
 ### Caveats
 

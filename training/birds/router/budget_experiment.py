@@ -116,7 +116,9 @@ def _candidate_thresholds(scores: npt.NDArray[np.float64]) -> npt.NDArray[np.flo
 
 def _policy_rows(
     actions: npt.NDArray[np.str_], records: PhotoRecords, cell: Cell
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Per-photo latency, correctness and on-time correctness. Correctness is returned rather
+    than recomputed by callers, so the action-to-correctness mapping lives only in `outcomes`."""
     latency, correct = outcomes(
         actions,
         local_ms=cell.local_ms,
@@ -124,7 +126,7 @@ def _policy_rows(
         small_correct=records.small_correct,
         large_correct=records.large_correct,
     )
-    return latency, on_time_accuracy_per_row(latency, correct, cell.budget_ms)
+    return latency, correct, on_time_accuracy_per_row(latency, correct, cell.budget_ms)
 
 
 def _cascade_actions(
@@ -196,7 +198,7 @@ def fewest_escalations_to_match(records: PhotoRecords, measure: str, cell: Cell)
     small, large = records.small_correct, records.large_correct
     order = np.argsort(records.confidence[measure], kind="stable")
     gained = np.concatenate([[0.0], np.cumsum(large[order] - small[order])])
-    if cell.local_ms + cell.offload_ms > cell.budget_ms:
+    if not escalation_fits(cell):
         gained = gained[:1]
     reaches = np.flatnonzero(small.sum() + gained >= large.sum())
     return int(reaches[0]) if reaches.size else None
@@ -232,8 +234,7 @@ class CellResult:
 
 
 def _metrics(actions: npt.NDArray[np.str_], records: PhotoRecords, cell: Cell) -> RouterMetrics:
-    latency, _ = _policy_rows(actions, records, cell)
-    correct = np.where(actions == LOCAL, records.small_correct, records.large_correct)
+    latency, correct, _ = _policy_rows(actions, records, cell)
     return metrics(latency, correct, cell.budget_ms)
 
 
@@ -256,14 +257,14 @@ def evaluate_cell(
         large_correct=test.large_correct,
         budget_ms=cell.budget_ms,
     )
-    _, local_on_time = _policy_rows(local, test, cell)
-    _, budget_only_on_time = _policy_rows(budget_only, test, cell)
+    *_, local_on_time = _policy_rows(local, test, cell)
+    *_, budget_only_on_time = _policy_rows(budget_only, test, cell)
 
     cascades = {}
     for measure in CONFIDENCE_MEASURES:
         threshold = tune_threshold(validation, measure, cell, tuned)
         actions = _cascade_actions(test, measure, threshold, cell)
-        _, on_time = _policy_rows(actions, test, cell)
+        *_, on_time = _policy_rows(actions, test, cell)
         vs_budget_only = bootstrap_mean_difference(test.photo_ids, on_time - budget_only_on_time)
         cascades[measure] = CascadeResult(
             threshold=threshold,
