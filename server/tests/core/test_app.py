@@ -37,3 +37,11 @@ def test_stubbed_app_does_not_warm_up() -> None:
 
     with TestClient(application):
         assert model.calls == 0
+
+
+def test_startup_fails_clearly_without_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+
+    with pytest.raises(RuntimeError, match="No CUDA GPU"):
+        with TestClient(app_module.create_app()):
+            pass

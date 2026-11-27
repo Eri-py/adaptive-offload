@@ -12,6 +12,7 @@ import torch
 from birds import export
 from birds.config import NUM_CLASSES
 from birds.dataset import splits
+from birds.modeling import build
 
 
 def _write_classes(path: Path, count: int = NUM_CLASSES) -> Path:
@@ -102,3 +103,17 @@ def test_unusable_staged_file_fails_export_and_publishes_nothing(
         export.export(output_dir, num_parity_samples=2)
 
     assert list(output_dir.iterdir()) == []
+
+
+def test_missing_checkpoint_names_training_command_even_without_dataset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "litert_torch", types.SimpleNamespace())
+    monkeypatch.setattr(build, "WEIGHTS_DIR", tmp_path / "no_weights")
+    monkeypatch.setattr(splits, "dataset_root", lambda: tmp_path / "no_dataset")
+
+    output_dir = tmp_path / "out"
+    with pytest.raises(FileNotFoundError, match=r"birds\.train --model small"):
+        export.export(output_dir, num_parity_samples=2)
+
+    assert not output_dir.exists()

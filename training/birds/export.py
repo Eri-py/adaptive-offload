@@ -102,8 +102,9 @@ def export(output_dir: Path, num_parity_samples: int) -> tuple[Path, Path]:
     """Converts, parity-checks, then publishes the model and names; nothing lands on failure."""
     import litert_torch  # type: ignore[import-untyped]  # deferred: heavy, noisy import
 
-    names = species_names(splits.dataset_root() / "classes.txt")
+    # checkpoint first: a clean machine should be told to train before it is told to download
     model: nn.Module = load_checkpoint("small", torch.device("cpu")).eval()
+    names = species_names(splits.dataset_root() / "classes.txt")
     edge_model = litert_torch.convert(model, (torch.randn(*_INPUT_SHAPE),))
 
     output_dir.mkdir(parents=True, exist_ok=True)
