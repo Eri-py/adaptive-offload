@@ -46,6 +46,14 @@ def test_grayscale_input_is_converted_to_three_channels() -> None:
     assert tuple(preprocess_image(buffer.getvalue()).tensor.shape) == (3, 224, 224)
 
 
+def test_non_jpeg_image_is_rejected() -> None:
+    buffer = BytesIO()
+    Image.new("RGB", (224, 224), (200, 100, 50)).save(buffer, format="PNG")
+
+    with pytest.raises(ImageDecodeError, match="JPEG"):
+        preprocess_image(buffer.getvalue())
+
+
 @pytest.mark.parametrize("body", [b"", b"not an image at all"])
 def test_undecodable_body_raises_decode_error(body: bytes) -> None:
     with pytest.raises(ImageDecodeError):

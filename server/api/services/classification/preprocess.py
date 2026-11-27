@@ -26,7 +26,7 @@ _TO_NORMALIZED_TENSOR = transforms.Compose(
 
 
 class ImageDecodeError(ValueError):
-    """The request body is not an image Pillow can decode."""
+    """The request body is not a decodable JPEG."""
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,11 @@ class PreprocessedImage:
 def preprocess_image(jpeg_bytes: bytes) -> PreprocessedImage:
     """Decodes to RGB; resizes/crops unless the phone already sent an exact 224x224 crop."""
     try:
-        image = Image.open(BytesIO(jpeg_bytes)).convert("RGB")
+        opened = Image.open(BytesIO(jpeg_bytes))
+        # Check before convert(): the converted copy has format None. Keeps payload_bytes honest.
+        if opened.format != "JPEG":
+            raise ImageDecodeError(f"Request body must be a JPEG, got {opened.format}.")
+        image = opened.convert("RGB")
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
         raise ImageDecodeError("Request body is not a decodable image.") from error
 

@@ -152,7 +152,14 @@ class BirdPrediction(Base):
 
 
 class ClassifyRequest(Base):
-    """One row per request served by the bird-classification endpoint."""
+    """One row per request served by the bird-classification endpoint.
+
+    `total_ms` is the handler span: from the start of FastAPI dependency resolution (before the
+    body is read) to just before this row is inserted. It excludes Starlette receive and routing
+    ahead of that point, response serialization and transmission, and the insert itself.
+    `compute_ms` is the forward pass only, so `total_ms - compute_ms` covers body read, decode,
+    preprocessing and handler overhead, not the full server-side non-compute cost.
+    """
 
     __tablename__ = "classify_requests"
 

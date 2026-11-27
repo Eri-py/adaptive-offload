@@ -50,7 +50,11 @@ def log_classify_request(
 ) -> None:
     """Inserts one `classify_requests` row; never raises.
 
-    `total_ms` is the whole-request time; `classification.compute_ms` is the forward pass only.
+    `total_ms` is the handler span: from the start of FastAPI dependency resolution (before the
+    body is read) to just before this insert. It excludes Starlette receive and routing before
+    that point, response serialization and transmission, and the insert itself, so
+    `total_ms - compute_ms` is not the full server-side non-compute cost.
+    `classification.compute_ms` is the forward pass only.
     `engine` overrides the lazily built `DATABASE_URL` engine (used by tests).
     """
     try:

@@ -26,7 +26,10 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    """Reads settings at call time so tests and `.env` changes are honoured."""
+    """Reads the environment at call time so tests can monkeypatch it.
+
+    `.env` is loaded once at import, so editing it needs a process restart.
+    """
     return Settings(
         large_checkpoint=Path(
             os.environ.get(

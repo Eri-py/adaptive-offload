@@ -25,6 +25,8 @@ router = APIRouter()
 
 @router.post("/classify")
 def classify_image(
+    # started_at must stay the first parameter: dependencies resolve in signature order (behaviour,
+    # not contract), and it must be stamped before get_raw_body reads the request body.
     started_at: Annotated[float, Depends(get_request_start)],
     body: Annotated[bytes, Depends(get_raw_body)],
     model: Annotated[nn.Module, Depends(get_required_model)],
