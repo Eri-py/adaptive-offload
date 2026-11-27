@@ -91,3 +91,9 @@ Development (Debug) build, 15 pre-cropped CUB photos, timing only `model.run()`:
 - `create_app(load_resources=False)` skips the CUDA/checkpoint lifespan so tests can
   inject stubs through `dependency_overrides`; `create_app()` fails fast without CUDA.
 - Starlette warns that `httpx` TestClient is deprecated in favour of `httpx2` (harmless).
+
+## Task 4: preprocessing and classification service
+
+- `classify()` takes an explicit `device` rather than reading it off the model: the shared `StubModel` has no parameters, so `next(model.parameters())` would raise.
+- Hand-computable softmax: use logits of `log(w)` for integer weights; probabilities are then `w / sum(w)`. Avoid tied probabilities, since `topk` tie order is unspecified.
+- Decode failures surface as `UnidentifiedImageError` (garbage) or `OSError` (truncated JPEG, raised at `.convert()`/load time, not `open`). Both map to `ImageDecodeError`.

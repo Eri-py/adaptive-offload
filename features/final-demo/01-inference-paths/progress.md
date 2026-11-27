@@ -31,10 +31,15 @@
   the main risk of the server not importing the birds package.
 
 ## Task 4 — Preprocessing and classification service
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 13:45:41
+- Completed: 2026-11-27 13:52:00
+- Notes: ruff/mypy clean, 16 tests pass (11 new). Orchestrator verified both
+  preprocessing branches against real photos: a 224 crop matches a normalize-only
+  reference with 0.0 max abs diff, and a full-size CUB photo matches the training
+  eval transform with 0.0 max abs diff. Double-transforming the 224 crop would
+  have differed by 3.65 in normalized units, which is the cost the spec's
+  conditional rule avoids.
 
 ## Task 5 — Classify endpoint
 - Status: not started
