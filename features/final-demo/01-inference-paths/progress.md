@@ -77,7 +77,10 @@
   0004 with no classify_requests table.
 
 ## Task 8 — Regression test run
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 14:08:00
+- Completed: 2026-11-27 14:10:00
+- Notes: Run by the orchestrator rather than delegated, since no code changes were
+  involved. training/ 301 passed, database/ 1, server/ 29 — 331 total, none
+  skipped. ruff clean in all three areas; mypy clean in database/ and server/,
+  with only the 9 pre-existing ndarray errors in training/coco/.
