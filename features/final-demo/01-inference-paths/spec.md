@@ -187,9 +187,10 @@ This is spec 01 of the final demo (see Related specs below).
 
 ## Open Questions
 
-- Whether the Core ML delegate covers MobileNetV3-Large's operator set well
-  enough to run the whole graph on the Neural Engine is unverified. The only
-  on-device delegate measurement this project has (17.34 ms) was YOLOv8n, a
-  different architecture. This resolves in spec 02, where the model actually
-  runs on the phone; it does not affect anything in this spec, which produces a
-  standard float32 model file.
+- **Resolved.** Whether the Core ML delegate covers MobileNetV3-Large's
+  operator set well enough to run the whole graph was answered by the on-device
+  spike on this branch, not deferred to spec 02: the delegate accepts the model
+  and is genuinely engaged (4.20 ms against 7.19 ms on CPU, 15/15 predictions
+  matching), on a Debug build, so indicative rather than a Release figure. See
+  "On-device measurement" in `findings/birds.md`. (The earlier 17.34 ms
+  delegate measurement was YOLOv8n, a different architecture.)

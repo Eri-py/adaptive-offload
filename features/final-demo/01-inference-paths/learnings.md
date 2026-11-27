@@ -123,17 +123,34 @@ real 224x224 CUB crop. No server was started.
   logs `compute_ms` as the server-compute term, so an unwarmed first request
   would write a figure ~350x the true one that is indistinguishable from a real
   measurement after the fact.
-- **Unresolved: server compute through the endpoint is ~12.5-12.9 ms, but
-  6.08-6.60 ms measured directly in a tight loop.** The experiment's cost model
-  uses `server_compute_ms = 6.731`, sourced from `birds.evaluation.evaluate`, so
-  the live endpoint is about 2x the figure the report's band boundaries assume.
-  Candidate causes: the handler is a sync `def` so inference runs in Starlette's
-  threadpool rather than the main thread; GPU clocks dropping between spaced-out
-  requests where a tight loop keeps them boosted; or per-call synchronize
-  overhead. Offload cost is network-dominated (28.6/75.8/202.3 ms for the three
-  named conditions), so a ~6 ms shift moves band edges only slightly — but the
-  report must not quote 6.731 ms as the *live* server-compute figure until this
-  is understood. Measure it properly against a running server before claiming it.
+- **Server compute through the endpoint is ~12.5-12.9 ms, against 6.08-6.60 ms
+  in a direct tight loop; the cause is not yet measured, but the live term is
+  ~12.5 ms.** The experiment's cost model uses `server_compute_ms = 6.731`,
+  which is the *offline* `birds.evaluation.evaluate` figure, so the live
+  endpoint runs about 2x what the report's band boundaries assume. Ranked
+  explanation, most likely first:
+  1. **GPU clock state.** A tight loop holds SM and memory clocks at boost; a
+     single isolated inference arriving at an otherwise idle GPU runs at a much
+     lower clock. A ~2x spread on a ConvNeXt-Base forward is ordinary.
+  2. **Measurement asymmetry.** If the tight loop synchronized once for N
+     iterations and divided, it pipelined kernel launches and systematically
+     understates per-request latency. The service synchronizes on both sides of
+     every call, so the endpoint figure is the honest per-request number and the
+     loop figure is the optimistic one.
+  3. **The threadpool is effectively ruled out** (an earlier draft of this entry
+     listed it). `run_in_threadpool` dispatch costs microseconds, the GIL is
+     released inside the forward pass, and the warmup series (2224 ms, then
+     16.86 ms, then ~12.5 ms) already localises the remaining cost to the GPU
+     rather than the dispatch.
+
+  Practical consequence: **~12.5 ms is what a phone sending spaced-out single
+  photos actually experiences, so it, not 6.731 ms, is the live server-compute
+  term.** Keep 6.731 ms labelled as the offline `birds.evaluation.evaluate`
+  figure. Offload cost is network-dominated (28.6/75.8/202.3 ms for the three
+  named conditions), so a ~6 ms shift moves band edges only slightly. Still
+  unmeasured: the split between (1) and (2). Control experiment: re-measure
+  against a running server, with a per-iteration-synchronized tight loop as the
+  control, sampling `nvidia-smi --query-gpu=clocks.sm,clocks.mem` during both.
 - **A ready-made demo example: `app/assets/birds/1116.jpg`.** Ground truth is
   Eastern Towhee. The small on-device model predicts American Redstart (wrong);
   the large server model predicts Eastern Towhee at 0.804 (right). One photo that
@@ -150,3 +167,7 @@ real 224x224 CUB crop. No server was started.
 - The shared `app` fixture overrides the logger with a no-op, so existing tests never write to a real database through `DATABASE_URL` (the conftest loads `database/.env`). Tests that want the real writer override it back.
 - `total_ms` starts at the `get_request_start` dependency, declared first so it resolves before the body read; it ends right after response shaping, before the log call itself.
 - Unreachable-DB test: engine on 127.0.0.1:1 with `connect_timeout=1` fails fast; the response is still 200.
+
+## Review fixes B1/S5/S6
+- `config.py` loads `server/.env` then `database/.env`; `load_dotenv` never overrides, so shell > server > database. Constants `SERVER_ENV_PATH`/`DATABASE_ENV_PATH` are pinned in `tests/core/test_wiring.py`.
+- `RequestLogger` Protocol lives in `request_log.py` (providers imports it); the real writer has an extra optional `engine` kwarg and still satisfies it.

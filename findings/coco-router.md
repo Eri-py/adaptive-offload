@@ -670,6 +670,10 @@ confirm, and the phone/server work is exactly the way to check them:
    could be either several times cheaper or noticeably more expensive than
    this experiment's simulated figure depending on which delegate the app
    ends up using.
+   The YOLOv8n benchmark harness that produced the 17.34 ms and 106.01 ms
+   figures (`BenchmarkScreen.tsx`, `useBenchmark.ts`, `yolov8n.tflite` and the 15
+   COCO images) was removed on `feature/final-demo` in commit `9b01545`; the
+   measurements remain recorded in `features/mobile-inference-benchmark/learnings.md`.
 
 That second point cuts both ways for the cascade, too, and is worth
 re-checking rather than treating the cascade verdict above as final. The

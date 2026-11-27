@@ -182,7 +182,7 @@ and not applied, as required.
   and say so wherever the server's startup is documented. Add a test pinning the
   resolved env-file path, as `training/tests/birds/test_config.py` does for
   `training/.env`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1, S5, S6: Make production request logging work and cover it"
 
 ## Suggestions
 
@@ -202,7 +202,7 @@ and not applied, as required.
   (local cost, delegate result, decoder drift against the 0.8728
   max-probability threshold, Debug-build caveat) and mark the spec's Open
   Question resolved with a pointer to it.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, S2, S7: Record the device measurements in findings/"
 
 #### S2 — The YOLOv8n benchmark was deleted with only an `app/README.md` note
 
@@ -216,7 +216,7 @@ and not applied, as required.
 - **Fix:** Add one line at `findings/coco-router.md:665` noting that the
   benchmark harness was removed on this branch and naming the commit, so the
   figure stays traceable.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, S2, S7: Record the device measurements in findings/"
 
 #### S3 — `total_ms` is the handler span, not the request span, and that is not written down
 
@@ -235,7 +235,7 @@ and not applied, as required.
   `log_classify_request`'s, and add a comment at `classification.py:28`
   recording that `started_at` must stay the first parameter. Move the stamp into
   middleware only if a true request span is wanted later.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3, S4, N4: Validate JPEG input and document the timing span"
 
 #### S4 — Nothing checks the body is actually a JPEG, so `payload_bytes` can be polluted
 
@@ -249,7 +249,7 @@ and not applied, as required.
 - **Fix:** After decoding, reject with 400 when `image.format != "JPEG"`, or
   record the format alongside `payload_bytes` so a polluted row is identifiable
   later.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3, S4, N4: Validate JPEG input and document the timing span"
 
 #### S5 — The logger seam is typed `Callable[..., None]`, so mypy cannot catch a signature drift
 
@@ -263,7 +263,7 @@ and not applied, as required.
   (`(Classification, *, payload_bytes: int, was_transformed: bool, total_ms:
   float) -> None`) and annotate both the provider and the handler parameter with
   it.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1, S5, S6: Make production request logging work and cover it"
 
 #### S6 — The real writer is never wired in any test
 
@@ -277,7 +277,7 @@ and not applied, as required.
 - **Fix:** Add two cheap assertions: `get_request_logger() is
   log_classify_request`, and the resolved-env-path pin from B1. Keep the no-op
   default exactly as it is.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address B1, S5, S6: Make production request logging work and cover it"
 
 #### S7 — Settle the 12.5 ms vs 6.08-6.60 ms server-compute gap before the report quotes either
 
@@ -302,7 +302,7 @@ and not applied, as required.
   tight loop as the control and `nvidia-smi --query-gpu=clocks.sm,clocks.mem`
   sampled during both. Report the endpoint figure as the live term and keep
   6.731 ms labelled as the offline `birds.evaluation.evaluate` figure.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S1, S2, S7: Record the device measurements in findings/"
 
 #### S8 — Concurrent requests can overlap forward passes on one GPU
 
@@ -314,7 +314,7 @@ and not applied, as required.
   explicitly out of scope (`spec.md:116`).
 - **Fix:** If this ever matters, serialize inference behind a module-level
   `threading.Lock` in `classify.py` and time only the forward pass inside it.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the demo has a single client, so forward passes do not overlap in practice; serialising GPU access would add contention handling for a condition that does not arise.
 
 ## Nitpicks
 
@@ -326,7 +326,7 @@ and not applied, as required.
   -m birds.dataset.download`", not the training command `spec.md:127-128` asks
   for. Nothing is written either way, so only the message is wrong.
 - **Fix:** Load the checkpoint first, then read `classes.txt`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1, N3: Fix the checkpoint error order and relocate the startup test"
 
 #### N2 — The response calls it `margin`; everything else calls it `top2_margin`
 
@@ -336,7 +336,7 @@ and not applied, as required.
   is ambiguous for spec 02's client, which has not yet pinned the format.
 - **Fix:** Rename the contract field to `top2_margin` now, before the app
   consumes it.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N2: Rename the contract field to top2_margin"
 
 #### N3 — A startup test lives in the controller test tree
 
@@ -346,7 +346,7 @@ and not applied, as required.
   controller. The guidelines require tests to mirror source, and
   `server/tests/core/test_app.py` now exists.
 - **Fix:** Move it to `server/tests/core/test_app.py`.
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address N1, N3: Fix the checkpoint error order and relocate the startup test"
 
 #### N4 — `load_settings`'s docstring overstates what is re-read
 
@@ -357,7 +357,7 @@ and not applied, as required.
   `os.environ` changes are honoured per call.
 - **Fix:** Reword to "reads the environment at call time so tests can
   monkeypatch it; `.env` is loaded once at import".
-- **Decision:** — _(pending)_
+- **Decision:** Accepted — addressed in "Address S3, S4, N4: Validate JPEG input and document the timing span"
 
 #### N5 — `POST /classify` publishes no request body in OpenAPI
 
@@ -366,7 +366,7 @@ and not applied, as required.
   endpoint with no request schema, so spec 02 cannot discover the wire format
   from the server.
 - **Fix:** Add `openapi_extra` declaring an `image/jpeg` binary body.
-- **Decision:** — _(pending)_
+- **Decision:** Declined — the app is the only client and spec 02 pins the wire format from the contract module directly, so an OpenAPI body adds no discoverability that matters here.
 
 ## Tests
 
