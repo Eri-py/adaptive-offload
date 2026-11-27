@@ -144,3 +144,9 @@ real 224x224 CUB crop. No server was started.
 - The ephemeral test DB already has every table (`Base.metadata.create_all`), so a "missing table" failure test must drop the table first (`ClassifyRequest.__table__.drop(engine)`). Tests never exercise migration 0005; it was matched to the model by hand.
 - Instances are detached after `session.commit()` (expire_on_commit); give the row an explicit id in round-trip tests rather than reading `obj.id` afterward.
 - `log_classify_request(..., engine=None)` takes an optional engine for tests; the lazy module engine is only cached on a successful build.
+
+## Task 7 — wiring and integration test
+- The classify route now takes `get_request_logger` (returns `log_classify_request`) and `get_request_start` (a `perf_counter` stamp) as dependencies. Tests bind the ephemeral engine with `dependency_overrides[get_request_logger] = lambda: partial(log_classify_request, engine=engine)`; production is untouched.
+- The shared `app` fixture overrides the logger with a no-op, so existing tests never write to a real database through `DATABASE_URL` (the conftest loads `database/.env`). Tests that want the real writer override it back.
+- `total_ms` starts at the `get_request_start` dependency, declared first so it resolves before the body read; it ends right after response shaping, before the log call itself.
+- Unreachable-DB test: engine on 127.0.0.1:1 with `connect_timeout=1` fails fast; the response is still 200.

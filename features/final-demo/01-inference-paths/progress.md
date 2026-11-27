@@ -64,10 +64,17 @@
   running migrations, so the suite cannot detect a model/migration mismatch.
 
 ## Task 7 — End-to-end classify integration test
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 13:54:14
+- Completed: 2026-11-27 14:08:00
+- Notes: Plan correction — Task 7's Files list named only the test file, but the
+  writer was left unwired by Task 6, so this task also wired log_classify_request
+  into the classify route and measured total_ms there. server 29 passed, database
+  1 passed. The implementer caught that conftest loads database/.env, so once the
+  route called the writer the existing controller tests would have aimed inserts
+  at the real database; the shared app fixture now overrides the logger with a
+  no-op. Orchestrator confirmed the real database is untouched: still at alembic
+  0004 with no classify_requests table.
 
 ## Task 8 — Regression test run
 - Status: not started

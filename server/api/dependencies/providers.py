@@ -1,10 +1,14 @@
 """FastAPI dependency providers; tests override these to inject a stub model."""
 
+import time
+from collections.abc import Callable
 from typing import Annotated
 
 import torch
 from fastapi import Depends, HTTPException, Request
 from torch import nn
+
+from api.services.classification.request_log import log_classify_request
 
 
 def get_loaded_model(request: Request) -> nn.Module | None:
@@ -35,3 +39,13 @@ def get_device(model: Annotated[nn.Module, Depends(get_required_model)]) -> torc
 async def get_raw_body(request: Request) -> bytes:
     """Raw request bytes; avoids a multipart envelope so payload size matches the image."""
     return await request.body()
+
+
+def get_request_start() -> float:
+    """Monotonic timestamp taken when dependency resolution begins (before the body is read)."""
+    return time.perf_counter()
+
+
+def get_request_logger() -> Callable[..., None]:
+    """The best-effort request-log writer; tests override it to bind an ephemeral engine."""
+    return log_classify_request

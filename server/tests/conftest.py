@@ -19,7 +19,7 @@ from sqlalchemy import Engine
 from torch import nn
 
 from api.core.app import create_app
-from api.dependencies.providers import get_loaded_model, get_species
+from api.dependencies.providers import get_loaded_model, get_request_logger, get_species
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / "database" / ".env")
 
@@ -48,6 +48,8 @@ def app(stub_species: list[str]) -> FastAPI:
     stub = StubModel().eval()
     application.dependency_overrides[get_loaded_model] = lambda: stub
     application.dependency_overrides[get_species] = lambda: stub_species
+    # No-op by default so no test can write to a real database via DATABASE_URL.
+    application.dependency_overrides[get_request_logger] = lambda: lambda *args, **kwargs: None
     return application
 
 
