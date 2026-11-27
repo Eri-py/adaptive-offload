@@ -1,0 +1,152 @@
+[
+  {
+    "file": "1116.jpg",
+    "photoId": "1116",
+    "trueLabel": 20,
+    "trueSpecies": "Eastern Towhee",
+    "expectedLabel": 108,
+    "expectedSpecies": "American Redstart",
+    "expectedMaxProb": 0.349681,
+    "bytes": 11926
+  },
+  {
+    "file": "1176.jpg",
+    "photoId": "1176",
+    "trueLabel": 21,
+    "trueSpecies": "Chuck will Widow",
+    "expectedLabel": 21,
+    "expectedSpecies": "Chuck will Widow",
+    "expectedMaxProb": 0.835801,
+    "bytes": 11608
+  },
+  {
+    "file": "7739.jpg",
+    "photoId": "7739",
+    "trueLabel": 131,
+    "trueSpecies": "White crowned Sparrow",
+    "expectedLabel": 131,
+    "expectedSpecies": "White crowned Sparrow",
+    "expectedMaxProb": 0.78713,
+    "bytes": 8740
+  },
+  {
+    "file": "8996.jpg",
+    "photoId": "8996",
+    "trueLabel": 153,
+    "trueSpecies": "Red eyed Vireo",
+    "expectedLabel": 150,
+    "expectedSpecies": "Black capped Vireo",
+    "expectedMaxProb": 0.53503,
+    "bytes": 10365
+  },
+  {
+    "file": "2444.jpg",
+    "photoId": "2444",
+    "trueLabel": 42,
+    "trueSpecies": "Yellow bellied Flycatcher",
+    "expectedLabel": 42,
+    "expectedSpecies": "Yellow bellied Flycatcher",
+    "expectedMaxProb": 0.357433,
+    "bytes": 10195
+  },
+  {
+    "file": "8481.jpg",
+    "photoId": "8481",
+    "trueLabel": 144,
+    "trueSpecies": "Elegant Tern",
+    "expectedLabel": 144,
+    "expectedSpecies": "Elegant Tern",
+    "expectedMaxProb": 0.428979,
+    "bytes": 3841
+  },
+  {
+    "file": "1076.jpg",
+    "photoId": "1076",
+    "trueLabel": 19,
+    "trueSpecies": "Yellow breasted Chat",
+    "expectedLabel": 19,
+    "expectedSpecies": "Yellow breasted Chat",
+    "expectedMaxProb": 0.889683,
+    "bytes": 15201
+  },
+  {
+    "file": "8693.jpg",
+    "photoId": "8693",
+    "trueLabel": 147,
+    "trueSpecies": "Green tailed Towhee",
+    "expectedLabel": 150,
+    "expectedSpecies": "Black capped Vireo",
+    "expectedMaxProb": 0.405008,
+    "bytes": 16855
+  },
+  {
+    "file": "5214.jpg",
+    "photoId": "5214",
+    "trueLabel": 89,
+    "trueSpecies": "Red breasted Merganser",
+    "expectedLabel": 89,
+    "expectedSpecies": "Red breasted Merganser",
+    "expectedMaxProb": 0.594641,
+    "bytes": 11220
+  },
+  {
+    "file": "10116.jpg",
+    "photoId": "10116",
+    "trueLabel": 171,
+    "trueSpecies": "Nashville Warbler",
+    "expectedLabel": 171,
+    "expectedSpecies": "Nashville Warbler",
+    "expectedMaxProb": 0.821103,
+    "bytes": 17787
+  },
+  {
+    "file": "5141.jpg",
+    "photoId": "5141",
+    "trueLabel": 87,
+    "trueSpecies": "Western Meadowlark",
+    "expectedLabel": 87,
+    "expectedSpecies": "Western Meadowlark",
+    "expectedMaxProb": 0.535886,
+    "bytes": 7714
+  },
+  {
+    "file": "6254.jpg",
+    "photoId": "6254",
+    "trueLabel": 106,
+    "trueSpecies": "Common Raven",
+    "expectedLabel": 26,
+    "expectedSpecies": "Shiny Cowbird",
+    "expectedMaxProb": 0.106592,
+    "bytes": 9446
+  },
+  {
+    "file": "9132.jpg",
+    "photoId": "9132",
+    "trueLabel": 155,
+    "trueSpecies": "White eyed Vireo",
+    "expectedLabel": 155,
+    "expectedSpecies": "White eyed Vireo",
+    "expectedMaxProb": 0.565764,
+    "bytes": 13804
+  },
+  {
+    "file": "8243.jpg",
+    "photoId": "8243",
+    "trueLabel": 140,
+    "trueSpecies": "Artic Tern",
+    "expectedLabel": 140,
+    "expectedSpecies": "Artic Tern",
+    "expectedMaxProb": 0.908226,
+    "bytes": 11420
+  },
+  {
+    "file": "11501.jpg",
+    "photoId": "11501",
+    "trueLabel": 195,
+    "trueSpecies": "House Wren",
+    "expectedLabel": 125,
+    "expectedSpecies": "Nelson Sharp tailed Sparrow",
+    "expectedMaxProb": 0.131223,
+    "bytes": 8116
+  }
+]

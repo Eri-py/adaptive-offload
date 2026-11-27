@@ -9,3 +9,9 @@
 ## Task 2 — real export run
 - `export()` prints no parity numbers; to observe them, wrap `birds.export.require_parity` from a throwaway script (in scratchpad) and print the `ParityReport`. Real run: 50 photos, 0 disagreements, max prob drift 2.59e-06.
 - Run takes ~1-2 min; litert_torch stderr noise (absl/XNNPACK "ERROR: Subgraph reshaping...") is harmless.
+
+## Bird spike (app/hooks/useBirdSpike.ts)
+- `expected.json` imports directly as typed JSON (tsc passes with expo's base tsconfig); photos are keyed by filename in a require() map so ordering can't drift.
+- Layout is one function `buildInputTensor(rgba, layout)`: NCHW writes `c*PIXELS + p`, NHWC writes `p*3 + c`; alpha byte skipped (jpeg-js stride 4, hard-coded rather than derived).
+- `computeStats` is not exported from useBenchmark.ts and that file is frozen, so it is duplicated in the hook.
+- Static gate only (`npx tsc --noEmit`, clean); nothing was run on a device.
