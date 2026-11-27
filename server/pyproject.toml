@@ -8,13 +8,21 @@ requires-python = ">=3.11"
 # it explicitly into this package's venv instead, once `server/api/` needs it:
 #   pip install -e ../database
 #   pip install -e ".[dev]"
-dependencies = []
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "torch",
+    "torchvision",
+    "pillow",
+    "python-dotenv",
+]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pytest>=8.0",
+    "httpx",
 ]
 
 [build-system]
@@ -37,3 +45,13 @@ strict = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
 exclude = ["build/"]
+# `common` (the database package) resolves at runtime via its editable install, which
+# mypy's filesystem search cannot see; point it at database/ directly.
+mypy_path = "../database"
+
+[[tool.mypy.overrides]]
+module = "torchvision.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

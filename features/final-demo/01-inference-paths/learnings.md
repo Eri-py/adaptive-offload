@@ -82,3 +82,12 @@ Development (Debug) build, 15 pre-cropped CUB photos, timing only `model.run()`:
   boundary depending on which decoder produced the input. Any on-device
   confidence threshold has to be treated as decoder-dependent, or tuned on
   device-decoded photos.
+
+## Task 3: server scaffolding
+
+- `server/pyproject.toml` needs `mypy_path = "../database"` for `common.testing` and a
+  `torchvision.*` `ignore_missing_imports` override, or strict mypy fails on both.
+- Ruff B008 forbids `= Depends(...)` defaults; use `Annotated[T, Depends(...)]`.
+- `create_app(load_resources=False)` skips the CUDA/checkpoint lifespan so tests can
+  inject stubs through `dependency_overrides`; `create_app()` fails fast without CUDA.
+- Starlette warns that `httpx` TestClient is deprecated in favour of `httpx2` (harmless).

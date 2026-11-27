@@ -21,10 +21,14 @@
   is gitignored. No .partial file left behind.
 
 ## Task 3 — Server scaffolding, config, startup and health
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 13:43:01
+- Completed: 2026-11-27 13:49:00
+- Notes: ruff clean, mypy strict clean (17 files), 3 tests pass. Orchestrator
+  additionally verified against the REAL artifacts (not just the stub): the
+  independently rebuilt ConvNeXt-Base accepts large.pt with strict=True, head is
+  Linear(1024 -> 200), and load_species reads the real 200-entry file. That closes
+  the main risk of the server not importing the birds package.
 
 ## Task 4 — Preprocessing and classification service
 - Status: not started
