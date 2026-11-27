@@ -1,7 +1,6 @@
 """Classify endpoint: raw JPEG body in, species prediction out."""
 
 import time
-from collections.abc import Callable
 from typing import Annotated
 
 import torch
@@ -19,6 +18,7 @@ from api.dependencies.providers import (
 )
 from api.services.classification.classify import classify
 from api.services.classification.preprocess import ImageDecodeError, preprocess_image
+from api.services.classification.request_log import RequestLogger
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ def classify_image(
     model: Annotated[nn.Module, Depends(get_required_model)],
     species: Annotated[list[str], Depends(get_species)],
     device: Annotated[torch.device, Depends(get_device)],
-    log_request: Annotated[Callable[..., None], Depends(get_request_logger)],
+    log_request: Annotated[RequestLogger, Depends(get_request_logger)],
 ) -> ClassifyResponse:
     try:
         preprocessed = preprocess_image(body)

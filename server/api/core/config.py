@@ -9,7 +9,12 @@ from dotenv import load_dotenv
 _SERVER_DIR = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _SERVER_DIR.parent
 
-load_dotenv(_SERVER_DIR / ".env")
+SERVER_ENV_PATH = _SERVER_DIR / ".env"
+DATABASE_ENV_PATH = _REPO_ROOT / "database" / ".env"
+
+# load_dotenv never overrides set vars, so order is precedence: shell > server/.env > database/.env.
+load_dotenv(SERVER_ENV_PATH)
+load_dotenv(DATABASE_ENV_PATH)
 
 
 @dataclass(frozen=True)

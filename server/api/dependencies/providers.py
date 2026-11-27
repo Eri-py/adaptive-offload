@@ -1,14 +1,13 @@
 """FastAPI dependency providers; tests override these to inject a stub model."""
 
 import time
-from collections.abc import Callable
 from typing import Annotated
 
 import torch
 from fastapi import Depends, HTTPException, Request
 from torch import nn
 
-from api.services.classification.request_log import log_classify_request
+from api.services.classification.request_log import RequestLogger, log_classify_request
 
 
 def get_loaded_model(request: Request) -> nn.Module | None:
@@ -46,6 +45,6 @@ def get_request_start() -> float:
     return time.perf_counter()
 
 
-def get_request_logger() -> Callable[..., None]:
+def get_request_logger() -> RequestLogger:
     """The best-effort request-log writer; tests override it to bind an ephemeral engine."""
     return log_classify_request

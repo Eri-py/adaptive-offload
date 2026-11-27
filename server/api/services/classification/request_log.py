@@ -5,6 +5,7 @@ table, bad or unset URL) is logged as a warning and swallowed.
 """
 
 import logging
+from typing import Protocol
 
 from common.db import get_engine
 from common.models import ClassifyRequest
@@ -16,6 +17,19 @@ from api.services.classification.classify import Classification
 logger = logging.getLogger(__name__)
 
 _engine: Engine | None = None
+
+
+class RequestLogger(Protocol):
+    """The writer signature the classify route calls; mypy checks both sides against it."""
+
+    def __call__(
+        self,
+        classification: Classification,
+        *,
+        payload_bytes: int,
+        was_transformed: bool,
+        total_ms: float,
+    ) -> None: ...
 
 
 def _lazy_engine() -> Engine:
