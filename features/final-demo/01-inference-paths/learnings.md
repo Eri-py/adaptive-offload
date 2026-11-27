@@ -97,3 +97,45 @@ Development (Debug) build, 15 pre-cropped CUB photos, timing only `model.run()`:
 - `classify()` takes an explicit `device` rather than reading it off the model: the shared `StubModel` has no parameters, so `next(model.parameters())` would raise.
 - Hand-computable softmax: use logits of `log(w)` for integer weights; probabilities are then `w / sum(w)`. Avoid tied probabilities, since `topk` tie order is unspecified.
 - Decode failures surface as `UnidentifiedImageError` (garbage) or `OSError` (truncated JPEG, raised at `.convert()`/load time, not `open`). Both map to `ImageDecodeError`.
+
+## Task 5 — Classify endpoint
+- A `bytes` handler parameter is treated as a form field by FastAPI; read the raw body in an async
+  dependency (`get_raw_body`) and keep the handler a sync `def` so inference runs in the threadpool.
+- Device and 503 providers chain off `get_loaded_model`, so the single conftest override covers all
+  of them; a parameterless `StubModel` falls back to CPU in `get_device`.
+
+## Task 5 — what the real end-to-end run showed (orchestrator)
+
+Driven in-process with `TestClient` and the real `large.pt` on CUDA, posting a
+real 224x224 CUB crop. No server was started.
+
+- **Correctness is exact.** The response matched an independent normalize-only
+  PyTorch reference to the digit: class 20, max probability 0.804325. Repeat
+  calls are deterministic. Comparing instead against the *double-transformed*
+  pipeline gave 0.679482 — a 12.5-point confidence swing from re-cropping an
+  already-cropped image, which is the concrete cost of the design the spec
+  rejected.
+- **The first request cost 2224 ms before the warmup was added**, against ~10 ms
+  for the second. That is CUDA's lazy kernel initialisation, which happens on
+  first *use*, not at `load_state_dict`. After adding a discarded warmup forward
+  pass in the lifespan: first call 16.86 ms, then ~12.5 ms. Two reasons this
+  mattered: the first scan of a live demo would appear to hang, and the research
+  logs `compute_ms` as the server-compute term, so an unwarmed first request
+  would write a figure ~350x the true one that is indistinguishable from a real
+  measurement after the fact.
+- **Unresolved: server compute through the endpoint is ~12.5-12.9 ms, but
+  6.08-6.60 ms measured directly in a tight loop.** The experiment's cost model
+  uses `server_compute_ms = 6.731`, sourced from `birds.evaluation.evaluate`, so
+  the live endpoint is about 2x the figure the report's band boundaries assume.
+  Candidate causes: the handler is a sync `def` so inference runs in Starlette's
+  threadpool rather than the main thread; GPU clocks dropping between spaced-out
+  requests where a tight loop keeps them boosted; or per-call synchronize
+  overhead. Offload cost is network-dominated (28.6/75.8/202.3 ms for the three
+  named conditions), so a ~6 ms shift moves band edges only slightly — but the
+  report must not quote 6.731 ms as the *live* server-compute figure until this
+  is understood. Measure it properly against a running server before claiming it.
+- **A ready-made demo example: `app/assets/birds/1116.jpg`.** Ground truth is
+  Eastern Towhee. The small on-device model predicts American Redstart (wrong);
+  the large server model predicts Eastern Towhee at 0.804 (right). One photo that
+  shows why the offload path earns its keep, without appealing to aggregate
+  accuracy.

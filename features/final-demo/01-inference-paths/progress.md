@@ -42,10 +42,14 @@
   conditional rule avoids.
 
 ## Task 5 — Classify endpoint
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 13:48:00
+- Completed: 2026-11-27 13:57:00
+- Notes: ruff/mypy clean, 23 tests pass. Raw JPEG body, no multipart. Orchestrator
+  verified end to end against the real model: output matches an independent
+  reference exactly. A startup warmup was added after the real run showed a
+  2224 ms first request; now 16.86 ms. Open question recorded in learnings: live
+  server compute is ~12.5 ms vs the 6.731 ms the cost model assumes.
 
 ## Task 6 — Request-logging table, migration and writer
 - Status: not started

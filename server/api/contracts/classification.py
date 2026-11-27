@@ -8,3 +8,23 @@ class HealthResponse(BaseModel):
 
     status: str
     model_loaded: bool
+
+
+class SpeciesProbability(BaseModel):
+    """One ranked species guess."""
+
+    index: int
+    name: str
+    probability: float
+
+
+class ClassifyResponse(BaseModel):
+    """Top-1 result, confidence measures and timing for one classified image."""
+
+    species: str
+    class_index: int
+    max_probability: float
+    margin: float
+    top3: list[SpeciesProbability]
+    compute_ms: float
+    geometric_transform_applied: bool
