@@ -11,10 +11,14 @@
   Full training suite 300 passed / 0 skipped before the follow-up change.
 
 ## Task 2 — Produce and commit the real export artifacts
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27 13:16:00
+- Completed: 2026-11-27 13:21:00
+- Notes: Parity gate passed on 50 seeded real test photos: 0 disagreements (100%
+  class agreement), worst max-softmax drift 2.59e-06 against the 1e-3 tolerance.
+  small.tflite is 17,945,960 bytes; cub200-species.json is 200 unique entries,
+  index 0 "Black footed Albatross", index 199 "Common Yellowthroat". Neither file
+  is gitignored. No .partial file left behind.
 
 ## Task 3 — Server scaffolding, config, startup and health
 - Status: not started
