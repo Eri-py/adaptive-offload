@@ -801,3 +801,75 @@ only `model.run()`, MobileNetV3-Large.
   decisions near the boundary depending on which decoder produced the input. An
   on-device threshold should be treated as decoder-dependent, or tuned on
   device-decoded photos.
+
+## Live server compute depends on request arrival pattern
+
+Measured 2026-11-27 against the real classify endpoint over a socket (uvicorn,
+desktop RTX 5070 standing in for a server GPU), posting the same 11,926-byte CUB
+crop. `compute_ms` is the forward pass only, synchronized on both sides.
+
+The experiment's cost model uses `server_compute_ms = 6.731`, taken from
+`birds.evaluation.evaluate`, which runs the test split as a tight loop. That
+figure turns out to describe a GPU held at boost clocks, not a GPU serving a
+per-request app.
+
+**Back-to-back requests** (12 in a row, no gap):
+
+| Requests | SM clock | compute_ms |
+|---|---|---|
+| 1-5 | ~292 MHz (idle) | 33.1, 33.2, 33.4, 42.5, 33.1 |
+| 6-12 | 825 MHz (boosted) | 6.8, 6.7, 8.1, 12.3, 6.5, 8.1, 6.9 |
+
+**Spaced requests, 20 s apart** — the interaction model this project is built
+around (one scan, then a gap):
+
+| Request | SM clock before | compute_ms |
+|---|---|---|
+| 1 | 307 MHz | 32.94 |
+| 2 | 277 MHz | 33.56 |
+| 3 | 285 MHz | 33.30 |
+| 4 | 255 MHz | 43.46 |
+| 5 | 277 MHz | 33.03 |
+| 6 | 277 MHz | 33.18 |
+
+Mean **34.91 ms**, and the clock is back at idle before *every* request. It never
+ramps, because a single 224x224 forward pass is over long before the GPU's power
+management responds.
+
+**Why this matters.** `Project Technical Notes` chose per-request routing partly
+because requests are "naturally spaced out in time". That is exactly the arrival
+pattern that keeps the server GPU clocked down, so the project's own interaction
+model selects the unfavourable case. Server compute is not a constant here; it
+is a function of how often requests arrive. Recomputing the named conditions
+with 34.91 ms in place of 6.731 ms:
+
+| Condition | Offload cost as recorded | With live server compute |
+|---|---|---|
+| good (50 Mbps, 20 ms) | 28.6 ms | **56.7 ms** |
+| medium (10 Mbps, 60 ms) | 75.8 ms | **104.0 ms** |
+| poor (2 Mbps, 150 ms) | 202.3 ms | **230.5 ms** |
+
+Server compute stops being negligible against the network terms: in the good
+condition it goes from under a quarter of the total to over half. Together with
+the on-device measurement above (4.2 ms under Core ML, against the 5.877 ms
+desktop mark), both of this period's real measurements move the comparison the
+same way — local is cheaper than assumed and offload dearer.
+
+**Caveats, which matter before this is leaned on.**
+
+- A desktop RTX 5070 standing in for a server GPU. A production server under
+  continuous load would stay boosted and behave like the 6.7 ms case, so this is
+  the figure for a *lightly loaded* server, not a busy one.
+- Clock behaviour is driver- and hardware-specific; another GPU will ramp
+  differently.
+- Locking clocks (`nvidia-smi -lgc`) or keeping the GPU warm with a periodic
+  dummy inference both remove the effect, at the cost of idle power. Persistence
+  mode does **not** — it governs driver teardown between processes, not clocks,
+  and the server holds a CUDA context throughout regardless.
+- 6 spaced samples and 12 back-to-back. Enough to establish the pattern, not to
+  put an interval on it.
+
+**How to report it.** 6.731 ms is the offline `birds.evaluation.evaluate` figure
+and should keep that label. The live per-request term for a lightly loaded
+server is ~35 ms. Quoting either without saying which arrival pattern it
+describes would be wrong.
