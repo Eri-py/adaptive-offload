@@ -9,7 +9,7 @@ export default function BirdSpikeScreen(): ReactElement {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Bird Classifier Spike</Text>
       <Text style={styles.subtitle}>
-        MobileNetV3-Large · {BIRD_PHOTO_COUNT} photos · 2 layouts x 2 delegates
+        MobileNetV3-Large · {BIRD_PHOTO_COUNT} photos · CPU vs Core ML
       </Text>
 
       <Button
