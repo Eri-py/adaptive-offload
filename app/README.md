@@ -1,8 +1,13 @@
-# mobile-inference-benchmark (app)
+# adaptive-offload (app)
 
-On-device TFLite inference benchmark for iOS, built with Expo. See
-`features/mobile-inference-benchmark/spec.md` in the repo root for the full
-feature spec.
+The iOS client, built with Expo. It currently runs the bird-classifier spike:
+the exported MobileNetV3-Large (`assets/models/small.tflite`) over 15
+pre-cropped CUB photos, across two tensor layouts and two delegates, reporting
+both latency and agreement with PyTorch's predictions on the same JPEG bytes.
+
+The YOLOv8n benchmark this app began as has been removed. Its measurements are
+recorded in `features/mobile-inference-benchmark/learnings.md`, and the code
+remains in git history.
 
 ## Build profiles
 
@@ -39,6 +44,17 @@ networking mode is not reachable from other devices on the LAN, so either:
 - switch WSL to mirrored networking (`networkingMode=mirrored` under `[wsl2]`
   in `%UserProfile%\.wslconfig`, then `wsl --shutdown`) and allow port 8081
   through the Windows firewall, then run `npx expo start` as usual.
+
+`--tunnel` needs `@expo/ngrok`, which is now a devDependency.
+
+**Tailscale is not a substitute here, despite being the route the server uses.**
+Pointing the dev client at the tailnet address
+(`REACT_NATIVE_PACKAGER_HOSTNAME=<tailscale-ip> npx expo start`) fails: iOS App
+Transport Security blocks cleartext HTTP to Tailscale's CGNAT range
+(`100.64.0.0/10`), which iOS does not count as a local network, so Expo's
+default `NSAllowsLocalNetworking` exception does not cover it. `--tunnel` works
+because ngrok serves HTTPS. Any in-app call to the server over plain HTTP on a
+tailnet address needs an ATS exception in `app.json` and a native rebuild.
 
 ## Preview build (for benchmark runs)
 

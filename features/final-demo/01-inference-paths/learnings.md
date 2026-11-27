@@ -43,3 +43,42 @@
   `http://<tailscale-ip>:<port>/classify` and will hit the same block, so it needs an ATS
   exception in `app.json`'s `ios.infoPlist` plus one dev-client rebuild, or HTTPS in front of
   the server. This is a native-config change, so it cannot be fixed by a JS reload.
+
+## Spike results on the iPhone — the local cost is measured at last
+
+Development (Debug) build, 15 pre-cropped CUB photos, timing only `model.run()`:
+
+| Layout | Delegate | Match | Mean | Median | Min | Max | Std dev |
+|---|---|---|---|---|---|---|---|
+| NCHW | CPU | 15/15 | 7.19 ms | 6.70 | 6.61 | 9.99 | 1.02 |
+| NCHW | Core ML | 15/15 | **4.20 ms** | 4.21 | 4.10 | 4.27 | 0.05 |
+| NHWC | CPU | 15/15 | 8.38 ms | 6.71 | 6.61 | 26.13 | 4.83 |
+| NHWC | Core ML | 15/15 | 4.18 ms | 4.19 | 4.08 | 4.25 | 0.05 |
+
+- **The Core ML delegate accepts MobileNetV3-Large.** This was the spike's whole
+  question, and the answer is yes. It is genuinely engaged rather than falling
+  back: 4.20 ms against CPU's 7.19 ms, with the standard deviation collapsing
+  from 1.02 ms to 0.05 ms — the tight spread is the signature of the Neural
+  Engine, not of a CPU fallback.
+- **Tensor layout does not matter under Core ML** (4.20 vs 4.18 ms). The NHWC
+  variant was a reasonable hedge and is now proven redundant;
+  `small-nhwc.tflite` can be dropped, and the export step never needs a
+  channel-last mode.
+- **Every combination matched PyTorch 15/15**, so the JS preprocessing is right.
+  Both layouts had already been validated off-device against a reference
+  interpreter (15/15, drift 1.7e-06), so this confirms the device adds nothing.
+- **The local cost is ~4.2 ms, not 5.877 ms and emphatically not 74 ms.** A7
+  named this the single most valuable missing measurement, because the width of
+  the band where offload fits but escalation does not *is* the local cost. The
+  phone runs the small model faster than the desktop CPU stand-in, which inverts
+  the assumption in `findings/birds.md` that the desktop figure flatters local.
+- **Caveat: this is a Debug build.** `app/README.md` says to quote latency only
+  from a `preview` build, so 4.2 ms is indicative until re-measured on Release.
+- **Worst probability drift is 4.8e-02, far above the 1.7e-06 seen off-device.**
+  The cause is the decoder: the phone uses `jpeg-js`, the off-device mirror used
+  PIL, and they differ by about ±1 per byte. Predictions still agree everywhere,
+  but **0.048 is large next to the cascade's 0.8728 max-probability threshold**,
+  so a confidence-threshold router would flip escalation decisions near the
+  boundary depending on which decoder produced the input. Any on-device
+  confidence threshold has to be treated as decoder-dependent, or tuned on
+  device-decoded photos.
