@@ -123,34 +123,31 @@ real 224x224 CUB crop. No server was started.
   logs `compute_ms` as the server-compute term, so an unwarmed first request
   would write a figure ~350x the true one that is indistinguishable from a real
   measurement after the fact.
-- **Server compute through the endpoint is ~12.5-12.9 ms, against 6.08-6.60 ms
-  in a direct tight loop; the cause is not yet measured, but the live term is
-  ~12.5 ms.** The experiment's cost model uses `server_compute_ms = 6.731`,
-  which is the *offline* `birds.evaluation.evaluate` figure, so the live
-  endpoint runs about 2x what the report's band boundaries assume. Ranked
-  explanation, most likely first:
-  1. **GPU clock state.** A tight loop holds SM and memory clocks at boost; a
-     single isolated inference arriving at an otherwise idle GPU runs at a much
-     lower clock. A ~2x spread on a ConvNeXt-Base forward is ordinary.
-  2. **Measurement asymmetry.** If the tight loop synchronized once for N
-     iterations and divided, it pipelined kernel launches and systematically
-     understates per-request latency. The service synchronizes on both sides of
-     every call, so the endpoint figure is the honest per-request number and the
-     loop figure is the optimistic one.
-  3. **The threadpool is effectively ruled out** (an earlier draft of this entry
-     listed it). `run_in_threadpool` dispatch costs microseconds, the GIL is
-     released inside the forward pass, and the warmup series (2224 ms, then
-     16.86 ms, then ~12.5 ms) already localises the remaining cost to the GPU
-     rather than the dispatch.
-
-  Practical consequence: **~12.5 ms is what a phone sending spaced-out single
-  photos actually experiences, so it, not 6.731 ms, is the live server-compute
-  term.** Keep 6.731 ms labelled as the offline `birds.evaluation.evaluate`
-  figure. Offload cost is network-dominated (28.6/75.8/202.3 ms for the three
-  named conditions), so a ~6 ms shift moves band edges only slightly. Still
-  unmeasured: the split between (1) and (2). Control experiment: re-measure
-  against a running server, with a per-iteration-synchronized tight loop as the
-  control, sampling `nvidia-smi --query-gpu=clocks.sm,clocks.mem` during both.
+- **RESOLVED — server compute depends on the request arrival pattern, and the
+  cause is GPU clock state.** Measured against the running server on
+  2026-11-27, which settles the question this entry previously left open. The
+  earlier in-process figure of ~12.5 ms was itself an artefact of partial warmth
+  from a preceding run; neither it nor 6.731 ms is the live per-request number.
+  - Back-to-back, the first five requests cost 33-43 ms at ~292 MHz SM clock,
+    then drop to 6.5-8 ms once the clock reaches 825 MHz.
+  - Spaced 20 s apart — the app's actual pattern — the clock is back at
+    255-307 MHz before *every* request and compute never leaves 32.9-43.5 ms.
+    Mean **34.91 ms** over 6 samples.
+  - The reviewer's first-ranked hypothesis (GPU clock state) was right. The
+    threadpool was correctly ruled out. Measurement asymmetry is not needed to
+    explain it: both figures are per-call synchronized.
+  - **The project's own interaction model selects the bad case.** Per-request
+    routing was chosen because requests are "naturally spaced out in time", and
+    that is exactly what keeps the GPU clocked down.
+  - Full write-up, with the recomputed named conditions (good 28.6 -> 56.7,
+    medium 75.8 -> 104.0, poor 202.3 -> 230.5 ms) and caveats, is in
+    `findings/birds.md`, "Live server compute depends on request arrival
+    pattern". 6.731 ms keeps its label as the offline
+    `birds.evaluation.evaluate` figure.
+  - Mitigations if the demo needs the fast path: lock clocks with
+    `nvidia-smi -lgc`, or keep the GPU warm with a periodic dummy inference.
+    **Persistence mode does not help** — it governs driver teardown between
+    processes, not clocks, and the server holds a CUDA context throughout.
 - **A ready-made demo example: `app/assets/birds/1116.jpg`.** Ground truth is
   Eastern Towhee. The small on-device model predicts American Redstart (wrong);
   the large server model predicts Eastern Towhee at 0.804 (right). One photo that
