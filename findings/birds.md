@@ -760,3 +760,44 @@ the cascade loses. Same `None`, opposite verdicts.
 Smaller caveats: the run is single-pass on one test split; the tuned thresholds
 come from a 594-photo validation split; and the offload costs are analytical, not
 measured on a real endpoint.
+
+## On-device measurement (iPhone spike)
+
+Source: the on-device spike on `feature/final-demo`
+(`features/final-demo/01-inference-paths/learnings.md`, "Spike results on the
+iPhone"). This section answers the "unanchored on real hardware" gap above for
+the small model's local cost. It does not revise the analysis above, which still
+reasons from the 5.877 ms desktop CPU mark.
+
+Setup: iPhone, **development (Debug) build**, 15 pre-cropped CUB photos, timing
+only `model.run()`, MobileNetV3-Large.
+
+| Layout | Delegate | Match | Mean | Median | Min | Max | Std dev |
+|---|---|---|---|---|---|---|---|
+| NCHW | CPU | 15/15 | 7.19 ms | 6.70 | 6.61 | 9.99 | 1.02 |
+| NCHW | Core ML | 15/15 | 4.20 ms | 4.21 | 4.10 | 4.27 | 0.05 |
+| NHWC | CPU | 15/15 | 8.38 ms | 6.71 | 6.61 | 26.13 | 4.83 |
+| NHWC | Core ML | 15/15 | 4.18 ms | 4.19 | 4.08 | 4.25 | 0.05 |
+
+- **Delegate result.** The Core ML delegate accepts MobileNetV3-Large and is
+  genuinely engaged rather than falling back: the standard deviation collapses
+  from 1.02 ms (CPU) to 0.05 ms. Every combination matched PyTorch's prediction
+  on 15/15 photos.
+- **Tensor layout makes no difference under Core ML** (4.20 vs 4.18 ms), so the
+  channel-last variant was dropped.
+- **Local cost.** The on-device figure, about 4.2 ms under Core ML, is lower
+  still than the 5.877 ms desktop CPU mark used above. The band in which offload
+  fits but escalation does not is exactly the local cost wide, so a lower local
+  cost narrows it further. **Caveat: this is a Debug build.** `app/README.md`
+  says to quote latency only from a `preview` build, so 4.20 ms is indicative,
+  not a reportable Release figure, and the swept axis above should not yet be
+  re-anchored to it.
+- **Decoder-induced probability drift.** The worst probability difference from
+  PyTorch was 4.8e-02 on the phone, against 1.7e-06 when the same pipeline was
+  mirrored off-device with PIL. The cause is the JPEG decoder (`jpeg-js` on the
+  phone, PIL off it; they differ by about 1 per byte), not the model.
+  Predictions all still agreed, but 0.048 is large next to the cascade's 0.8728
+  max-probability threshold: a confidence-threshold router could flip escalation
+  decisions near the boundary depending on which decoder produced the input. An
+  on-device threshold should be treated as decoder-dependent, or tuned on
+  device-decoded photos.

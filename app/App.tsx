@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
-import BenchmarkScreen from './screens/BenchmarkScreen';
+import BirdSpikeScreen from './screens/BirdSpikeScreen';
 
 export default function App(): ReactElement {
-  return <BenchmarkScreen />;
+  return <BirdSpikeScreen />;
 }

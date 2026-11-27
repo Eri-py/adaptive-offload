@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from common.models import (
     BirdPrediction,
+    ClassifyRequest,
     FrameFeatures,
     Label,
     ModelInference,
@@ -20,7 +21,7 @@ from common.models import (
 )
 
 
-def test_round_trips_all_six_tables(postgres_engine: Engine) -> None:
+def test_round_trips_all_seven_tables(postgres_engine: Engine) -> None:
     with Session(postgres_engine) as session:
         run = SimulationRun(
             run_id="run-1",
@@ -84,6 +85,17 @@ def test_round_trips_all_six_tables(postgres_engine: Engine) -> None:
             top2_margin=0.71,
             training_run_id=None,
         )
+        classify_request = ClassifyRequest(
+            id="request-1",
+            payload_bytes=2048,
+            was_transformed=True,
+            predicted_label=7,
+            predicted_name="Species 7",
+            max_probability=0.88,
+            top2_margin=0.41,
+            compute_ms=12.5,
+            total_ms=30.25,
+        )
 
         # No ORM `relationship()` links these two mappers, so the unit of work
         # won't infer insert order from the `run_id` FK on its own — flush the
@@ -91,7 +103,7 @@ def test_round_trips_all_six_tables(postgres_engine: Engine) -> None:
         # silently didn't, which is exactly the dialect gap this switch closes.
         session.add(run)
         session.flush()
-        session.add_all([result, complexity, inference, features, prediction])
+        session.add_all([result, complexity, inference, features, prediction, classify_request])
         session.commit()
 
     with Session(postgres_engine) as session:
@@ -163,3 +175,15 @@ def test_round_trips_all_six_tables(postgres_engine: Engine) -> None:
         assert fetched_prediction.top2_margin == 0.71
         assert fetched_prediction.training_run_id is None
         assert fetched_prediction.computed_at is not None
+
+        fetched_request = session.get(ClassifyRequest, "request-1")
+        assert fetched_request is not None
+        assert fetched_request.requested_at is not None
+        assert fetched_request.payload_bytes == 2048
+        assert fetched_request.was_transformed is True
+        assert fetched_request.predicted_label == 7
+        assert fetched_request.predicted_name == "Species 7"
+        assert fetched_request.max_probability == 0.88
+        assert fetched_request.top2_margin == 0.41
+        assert fetched_request.compute_ms == 12.5
+        assert fetched_request.total_ms == 30.25

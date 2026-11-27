@@ -1,14 +1,15 @@
 """Shared ORM models for the data-gen simulator and (later) the offload API.
 
-Six tables, all owned here per `.claude/coding-guidelines.md`'s Database
+Seven tables, all owned here per `.claude/coding-guidelines.md`'s Database
 section: `simulation_runs` (one row per simulator invocation, holding the
 resolved config snapshot), `simulation_results` (one row per frame ×
 condition pair, FK'd to its run), `scene_complexity` (one row per frame,
 computed once and reused across runs), `model_inference` (one row per
 (dataset, frame, model) triple, caching real inference results),
 `frame_features` (one row per (dataset, frame), holding candidate router
-features), and `bird_predictions` (one row per (dataset, photo, model),
-holding per-photo classifier predictions).
+features), `bird_predictions` (one row per (dataset, photo, model),
+holding per-photo classifier predictions), and `classify_requests` (one row
+per request served by the bird-classification endpoint).
 """
 
 import enum
@@ -148,3 +149,29 @@ class BirdPrediction(Base):
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
+
+
+class ClassifyRequest(Base):
+    """One row per request served by the bird-classification endpoint.
+
+    `total_ms` is the handler span: from the start of FastAPI dependency resolution (before the
+    body is read) to just before this row is inserted. It excludes Starlette receive and routing
+    ahead of that point, response serialization and transmission, and the insert itself.
+    `compute_ms` is the forward pass only, so `total_ms - compute_ms` covers body read, decode,
+    preprocessing and handler overhead, not the full server-side non-compute cost.
+    """
+
+    __tablename__ = "classify_requests"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    payload_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    was_transformed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    predicted_label: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicted_name: Mapped[str] = mapped_column(String, nullable=False)
+    max_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    top2_margin: Mapped[float] = mapped_column(Float, nullable=False)
+    compute_ms: Mapped[float] = mapped_column(Float, nullable=False)
+    total_ms: Mapped[float] = mapped_column(Float, nullable=False)
