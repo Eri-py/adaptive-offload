@@ -139,3 +139,8 @@ real 224x224 CUB crop. No server was started.
   the large server model predicts Eastern Towhee at 0.804 (right). One photo that
   shows why the offload path earns its keep, without appealing to aggregate
   accuracy.
+
+## Task 6 — request log
+- The ephemeral test DB already has every table (`Base.metadata.create_all`), so a "missing table" failure test must drop the table first (`ClassifyRequest.__table__.drop(engine)`). Tests never exercise migration 0005; it was matched to the model by hand.
+- Instances are detached after `session.commit()` (expire_on_commit); give the row an explicit id in round-trip tests rather than reading `obj.id` afterward.
+- `log_classify_request(..., engine=None)` takes an optional engine for tests; the lazy module engine is only cached on a successful build.

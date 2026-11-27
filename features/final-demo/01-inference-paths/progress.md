@@ -52,10 +52,16 @@
   server compute is ~12.5 ms vs the 6.731 ms the cost model assumes.
 
 ## Task 6 — Request-logging table, migration and writer
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: Deferred — out of scope for this invocation.
+- Status: completed
+- Started: 2026-11-27 13:51:39
+- Completed: 2026-11-27 14:02:00
+- Notes: database gate clean (1 test, now covering seven tables); server 27 passed.
+  Migration 0005 is AUTHORED BUT NOT APPLIED — the user runs it. Orchestrator
+  verified the migration against the ORM model by capturing its create_table call
+  with a stand-in for alembic.op: all ten columns match on name, type and
+  nullability, and the primary key matches. That check matters because the
+  ephemeral test database is built with Base.metadata.create_all rather than by
+  running migrations, so the suite cannot detect a model/migration mismatch.
 
 ## Task 7 — End-to-end classify integration test
 - Status: not started
