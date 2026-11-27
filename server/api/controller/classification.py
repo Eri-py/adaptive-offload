@@ -43,7 +43,7 @@ def classify_image(
         species=result.top1.name,
         class_index=result.top1.index,
         max_probability=result.max_probability,
-        margin=result.margin,
+        top2_margin=result.margin,
         top3=[
             SpeciesProbability(index=p.index, name=p.name, probability=p.probability)
             for p in result.top3

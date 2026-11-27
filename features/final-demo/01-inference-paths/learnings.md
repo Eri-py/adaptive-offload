@@ -171,3 +171,13 @@ real 224x224 CUB crop. No server was started.
 ## Review fixes B1/S5/S6
 - `config.py` loads `server/.env` then `database/.env`; `load_dotenv` never overrides, so shell > server > database. Constants `SERVER_ENV_PATH`/`DATABASE_ENV_PATH` are pinned in `tests/core/test_wiring.py`.
 - `RequestLogger` Protocol lives in `request_log.py` (providers imports it); the real writer has an extra optional `engine` kwarg and still satisfies it.
+
+- `Image.open(...).format` must be checked before `.convert("RGB")`; the converted copy has `format = None`.
+- `total_ms` is the handler span (dependency resolution start to just before insert); `started_at` must stay the first parameter of `classify_image`. Middleware stamping is deferred.
+- N2: renamed wire field ClassifyResponse.margin -> top2_margin (contract, controller mapping top2_margin=result.margin, controller tests). Service dataclass Classification.margin left as is. No app/ consumer.
+
+- `export()` loads the checkpoint before reading `classes.txt`, so a clean machine is told to
+  train first; `test_missing_checkpoint_names_training_command_even_without_dataset` pins it
+  (patch `build.WEIGHTS_DIR`, since `require_checkpoint` reads that module global).
+- Moving a test between files: check which import style the destination uses (`app_module.` vs
+  a bare `create_app`) or ruff F821 fires.

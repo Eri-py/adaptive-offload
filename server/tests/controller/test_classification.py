@@ -24,7 +24,7 @@ def test_classify_returns_full_payload(client: TestClient) -> None:
     payload = response.json()
     assert payload["species"] == "Species 7"
     assert payload["class_index"] == 7
-    assert 0.0 < payload["margin"] <= payload["max_probability"] <= 1.0
+    assert 0.0 < payload["top2_margin"] <= payload["max_probability"] <= 1.0
     assert [item["index"] for item in payload["top3"]] == [7, 3, 11]
     assert payload["top3"][0]["name"] == "Species 7"
     assert payload["compute_ms"] >= 0.0
@@ -50,7 +50,7 @@ def test_same_image_twice_is_deterministic(client: TestClient) -> None:
     first = client.post("/classify", content=image, headers=JPEG_HEADERS).json()
     second = client.post("/classify", content=image, headers=JPEG_HEADERS).json()
 
-    for key in ("class_index", "max_probability", "margin"):
+    for key in ("class_index", "max_probability", "top2_margin"):
         assert first[key] == second[key]
 
 

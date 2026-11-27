@@ -24,7 +24,7 @@ class ClassifyResponse(BaseModel):
     species: str
     class_index: int
     max_probability: float
-    margin: float
+    top2_margin: float
     top3: list[SpeciesProbability]
     compute_ms: float
     geometric_transform_applied: bool
