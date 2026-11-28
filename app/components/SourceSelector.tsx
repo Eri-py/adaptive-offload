@@ -80,7 +80,8 @@ const styles = StyleSheet.create({
   tabOn: { backgroundColor: '#fff' },
   tabLabel: { fontSize: 13, color: '#1c1c1e' },
   tabLabelOn: { fontWeight: '600' },
-  list: { backgroundColor: '#f2f2f7', borderRadius: 12, marginBottom: 14, maxHeight: 220, overflow: 'hidden' },
+  // No maxHeight: the screen's ScrollView scrolls, and clipping here hid 10 of the 15 samples.
+  list: { backgroundColor: '#f2f2f7', borderRadius: 12, marginBottom: 14, overflow: 'hidden' },
   sampleRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9, paddingHorizontal: 12 },
   sampleRowOn: { backgroundColor: '#d6e8ff' },
   sampleName: { fontSize: 14, color: '#1c1c1e' },
