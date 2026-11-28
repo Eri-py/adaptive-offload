@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scan — both paths — mockup</title>
+<style>
+  :root {
+    --bg: #f2f2f7;
+    --card: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6e6e73;
+    --accent: #007aff;
+    --border: #e5e5ea;
+    --good: #248a3d;
+    --bad: #d70015;
+    --warn: #b25000;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 16px;
+    background: #2b2b2e;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  .caption { color: #aaa; font-size: 13px; text-align: center; margin-top: 10px; max-width: 320px; }
+  .caption b { color: #ddd; font-weight: 600; }
+  .phone {
+    width: 320px; height: 680px;
+    background: var(--bg);
+    border-radius: 40px; border: 10px solid #111;
+    overflow: hidden; display: flex; flex-direction: column;
+    color: var(--text);
+  }
+  .screen { flex: 1; overflow-y: auto; padding: 44px 16px 16px; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0; }
+  .sub { font-size: 13px; color: var(--muted); margin: 2px 0 16px; }
+
+  .seg { display: flex; background: #e3e3e8; border-radius: 9px; padding: 2px; margin-bottom: 14px; }
+  .seg div { flex: 1; text-align: center; font-size: 13px; padding: 6px 0; border-radius: 7px; color: var(--text); }
+  .seg div.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+  .photo {
+    width: 100%; aspect-ratio: 1; border-radius: 12px; margin-bottom: 6px;
+    background: linear-gradient(145deg,#6b8f6b 0%,#8aa87a 45%,#c7b998 100%);
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 8px; position: relative;
+  }
+  .photo.empty {
+    background: #e3e3e8; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 14px; text-align: center; padding: 20px;
+  }
+  .pill {
+    background: rgba(0,0,0,.6); color: #fff; font-size: 11px;
+    padding: 3px 8px; border-radius: 20px;
+  }
+  .meta { font-size: 11px; color: var(--muted); margin-bottom: 14px; text-align: right; }
+
+  .btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 12px;
+    width: 100%; padding: 14px; font-size: 17px; font-weight: 600; margin-bottom: 14px;
+  }
+  .btn.sec { background: #e3e3e8; color: var(--accent); }
+  .btn[disabled] { background: #b9d4f6; }
+
+  .card { background: var(--card); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .card.win { border: 2px solid var(--good); }
+  .chead {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    color: var(--muted); letter-spacing: .4px;
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  }
+  .species { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .species.correct { color: var(--good); }
+  .species.wrong { color: var(--bad); }
+  .conf { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .lat { font-size: 26px; font-weight: 800; margin-top: 8px; }
+  .latsub { font-size: 11px; color: var(--muted); }
+  .tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: #e3e3e8; color: var(--muted); font-weight: 600; }
+  .tag.good { background: #dcf2e1; color: var(--good); }
+  .tag.bad { background: #fde3e3; color: var(--bad); }
+
+  .truth { background: #fff8e8; border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; }
+  .truth b { display: block; font-size: 11px; text-transform: uppercase; color: var(--warn); letter-spacing: .4px; margin-bottom: 2px; }
+
+  .spin { text-align: center; color: var(--muted); font-size: 13px; padding: 10px 0; }
+  .err { background: #fde3e3; color: var(--bad); border-radius: 12px; padding: 12px 14px; font-size: 13px; margin-bottom: 10px; }
+  .err b { display: block; margin-bottom: 2px; }
+  .row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .row span:last-child { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- 1. IDLE -->
+<div>
+  <div class="phone"><div class="screen">
+    <h1>Scan</h1>
+    <div class="sub">MobileNetV3 on device · ConvNeXt on server</div>
+    <div class="seg"><div class="on">Samples</div><div>Camera</div><div>Library</div></div>
+    <div class="photo empty">Pick a sample bird photo,<br />or take one with the camera</div>
+    <div class="meta">&nbsp;</div>
+    <button class="btn" disabled>Scan</button>
+    <div class="card">
+      <div class="chead"><span>Server</span><span class="tag good">reachable</span></div>
+      <div class="row"><span>100.97.204.46:8000</span><span>34 ms</span></div>
+    </div>
+  </div></div>
+  <div class="caption"><b>Idle.</b> Source selector, empty frame, Scan disabled until a photo is chosen. Server reachability shown up front so a failed scan is never a surprise.</div>
+</div>
+
+<!-- 2. RUNNING -->
+<div>
+  <div class="phone"><div class="screen">
+    <h1>Scan</h1>
+    <div class="sub">MobileNetV3 on device · ConvNeXt on server</div>
+    <div class="seg"><div class="on">Samples</div><div>Camera</div><div>Library</div></div>
+    <div class="photo"><span class="pill">224 × 224</span><span class="pill">11.9 KB</span></div>
+    <div class="meta">cropped · JPEG q85</div>
+    <button class="btn" disabled>Scanning…</button>
+    <div class="card">
+      <div class="chead"><span>On device</span><span class="tag good">done</span></div>
+      <div class="species">Eastern Towhee</div>
+      <div class="lat">4.3 ms</div>
+    </div>
+    <div class="card">
+      <div class="chead"><span>Server</span><span class="tag">waiting</span></div>
+      <div class="spin">sending 11.9 KB…</div>
+    </div>
+  </div></div>
+  <div class="caption"><b>Running.</b> Both paths run every scan. The device result lands almost immediately; the server result arrives later, which makes the latency gap visible rather than described.</div>
+</div>
+
+<!-- 3. RESULT -->
+<div>
+  <div class="phone"><div class="screen">
+    <h1>Scan</h1>
+    <div class="sub">MobileNetV3 on device · ConvNeXt on server</div>
+    <div class="seg"><div class="on">Samples</div><div>Camera</div><div>Library</div></div>
+    <div class="photo"><span class="pill">224 × 224</span><span class="pill">11.9 KB</span></div>
+    <div class="meta">cropped · JPEG q85</div>
+    <button class="btn sec">Scan again</button>
+
+    <div class="truth"><b>Ground truth</b>Eastern Towhee</div>
+
+    <div class="card">
+      <div class="chead"><span>On device</span><span class="tag bad">wrong</span></div>
+      <div class="species wrong">American Redstart</div>
+      <div class="conf">confidence 0.35 · margin 0.08</div>
+      <div class="lat">4.3 ms</div>
+      <div class="latsub">model only</div>
+    </div>
+
+    <div class="card win">
+      <div class="chead"><span>Server</span><span class="tag good">correct</span></div>
+      <div class="species correct">Eastern Towhee</div>
+      <div class="conf">confidence 0.80 · margin 0.69</div>
+      <div class="lat">118 ms</div>
+      <div class="latsub">35 ms model · 83 ms network</div>
+    </div>
+
+    <div class="card">
+      <div class="chead"><span>This scan</span></div>
+      <div class="row"><span>Winner</span><span>Server (+accuracy, −114 ms)</span></div>
+      <div class="row"><span>Payload</span><span>11,926 bytes</span></div>
+    </div>
+  </div></div>
+  <div class="caption"><b>Result.</b> The research view: both answers, both costs, and who won. This photo is the demo case — the device model is wrong and the server is right.</div>
+</div>
+
+<!-- 4. OFFLOAD FAILED -->
+<div>
+  <div class="phone"><div class="screen">
+    <h1>Scan</h1>
+    <div class="sub">MobileNetV3 on device · ConvNeXt on server</div>
+    <div class="seg"><div class="on">Samples</div><div>Camera</div><div>Library</div></div>
+    <div class="photo"><span class="pill">224 × 224</span><span class="pill">11.9 KB</span></div>
+    <div class="meta">cropped · JPEG q85</div>
+    <button class="btn sec">Scan again</button>
+
+    <div class="err"><b>Server unreachable</b>Request timed out after 5 s. The on-device result is unaffected.</div>
+
+    <div class="card win">
+      <div class="chead"><span>On device</span><span class="tag good">done</span></div>
+      <div class="species">Eastern Towhee</div>
+      <div class="conf">confidence 0.62 · margin 0.31</div>
+      <div class="lat">4.1 ms</div>
+      <div class="latsub">model only</div>
+    </div>
+
+    <div class="card">
+      <div class="chead"><span>Server</span><span class="tag bad">failed</span></div>
+      <div class="spin">No result recorded for this scan.</div>
+    </div>
+  </div></div>
+  <div class="caption"><b>Offload failed.</b> A dead server never costs you the scan — the device answer still stands. The failure is stated, not swallowed.</div>
+</div>
+
+</body>
+</html>
