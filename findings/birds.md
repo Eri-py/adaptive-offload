@@ -873,3 +873,82 @@ same way — local is cheaper than assumed and offload dearer.
 and should keep that label. The live per-request term for a lightly loaded
 server is ~35 ms. Quoting either without saying which arrival pattern it
 describes would be wrong.
+
+## End-to-end on the phone: what the deployed app actually costs
+
+Measured 2026-11-27 with the scan app (spec 02) against the live server over the
+relayed tailnet, three bundled CUB samples, one scan each, spaced by hand.
+Development (Debug) build. These are the first numbers from the whole pipeline
+rather than from either end in isolation, and three of them contradict figures
+used earlier in this document.
+
+| Sample | Payload | On device | Server | Truth |
+|---|---|---|---|---|
+| Elegant Tern | 6,962 B | Forsters Tern (0.34) — 84 ms = 9.5 model + 75 decode | Elegant Tern (0.89) — 118 ms = 34 model + 84 network | server right |
+| Chuck will Widow | 18,319 B | correct (0.84) — 104 ms = 18 model + 86 decode | correct (0.90) — 153 ms = 35 model + 118 network | both right |
+| Eastern Towhee | 18,489 B | American Redstart (0.37) — 104 ms = 15 model + 89 decode | Eastern Towhee (0.70) — 174 ms = 38 model + 136 network | server right |
+
+### The payload assumption does not hold in the app
+
+`PAYLOAD_KB = 11.39` was measured with PIL at JPEG quality 85. The app uses
+`expo-image-manipulator`'s `compress: 0.85`, which is **not** the same thing:
+
+| File | PIL q85 | App | Ratio |
+|---|---|---|---|
+| `1116.jpg` | 11,926 B | 18,489 B | 1.55 |
+| `1176.jpg` | 11,608 B | 18,319 B | 1.58 |
+
+At that ratio the app's mean payload is about **17.4 KB, not 11.39 KB**, which
+inflates every transfer term — at 2 Mbps, 69 ms rather than 46 ms.
+
+**Caveat that must be resolved before this ratio is quoted:** bundled samples are
+already JPEGs, so the app re-encodes them and pays a second generation of loss
+and size. A camera photo is encoded once. The true ratio for live captures is
+unmeasured, and the 1.55-1.58 figure is an upper bound on it.
+
+### The on-device path is dominated by decoding, not by inference
+
+Decode costs **75-89 ms** against the model's **9.5-18 ms**. So the local path
+costs roughly **84-104 ms end to end**, not the 4.20 ms recorded above from the
+spike. This matters structurally: the band in which offload fits but escalation
+does not is exactly the local cost wide, so it is more than an order of
+magnitude wider than previously assumed.
+
+Two things make this figure softer than it looks, and both need settling before
+it is used in an argument:
+
+- **It is implementation-limited, not hardware-limited.** `jpeg-js` is a
+  pure-JavaScript decoder, and the pipeline decodes a JPEG the app itself just
+  encoded. The offload path never pays this, because the server decodes
+  natively. A native decoder would remove most of it, and the asymmetry is an
+  artefact of the client, not a property of on-device inference.
+- **It is a Debug build.** JavaScript runs materially slower there than in a
+  Release build, and decoding is the JavaScript-heaviest step in the app. The
+  native model call is far less affected. Re-measure from a `preview` build
+  before quoting the decode cost at all.
+
+### The arrival-pattern effect appears at both ends
+
+Server model time measured from the phone was **34, 35 and 38 ms**, matching the
+34.91 ms measured locally and confirming that finding from a second, independent
+vantage point. The same effect shows on-device: the spike's 4.20 ms came from 15
+back-to-back runs, while these isolated scans cost 9.5-18 ms. Spaced-out
+requests penalise both ends of the system, which is the pattern the project's
+own interaction model produces.
+
+### Preprocessing on the phone reproduces the desktop pipeline
+
+The device predicted American Redstart at 0.37 where the desktop predicted the
+same species at 0.350 from the same source photo — agreement on the class, with
+drift inside the known decoder difference. The server, however, returned 0.70
+for that photo against 0.804 when the original crop was posted directly: the
+app's re-encode moves the server's confidence by about 0.10, which is further
+evidence that the re-encode is not cosmetic.
+
+### What this does to the comparison
+
+Local was faster in all three scans (84 vs 118, 104 vs 153, 104 vs 174 ms) and
+the server was more accurate in two of three. That is the trade-off the routing
+question exists to navigate, now observed rather than simulated — but with local
+measured on a Debug build and an avoidable decode in its path, the margin is not
+yet a figure to build conclusions on.
