@@ -12,43 +12,43 @@
   development build before anything runs on device.
 
 ## Task 2 — Image preparation
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 3 — On-device inference
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 4 — Server client
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 5 — Photo sources
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 6 — Scan orchestration
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 7 — The screen
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.
 
 ## Task 8 — Static verification and device checklist
-- Status: not started
-- Started: —
-- Completed: —
-- Notes: —
+- Status: completed
+- Started: 2026-11-27
+- Completed: 2026-11-27
+- Notes: tsc clean.

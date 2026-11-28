@@ -36,3 +36,45 @@
 - The screen keeps the chosen photo and selected sample file in its own state (a cancelled pick keeps the previous photo); `useScan.reset()` is called on every real pick so stale results never sit under a new photo.
 - Winner outline rule: single accuracy winner, else latency winner, else the path that answered. Mockup state 4 (local outlined, server failed) falls out of the last rule.
 - Not run on device: layout is unverified against the mockup visually; the health tag shows no latency (the hook exposes none), unlike the mockup's "34 ms".
+
+## Task 8 — device checklist (orchestrator)
+
+`app/` has no test runner and no working ESLint config (`npx eslint` fails: no
+`eslint.config.*`), so `npx tsc --noEmit` is the entire automated gate and it
+passes. No test was skipped because none exists to skip. `server/` (32) and
+`database/` (1) are unaffected and still pass.
+
+Everything below can only be settled on the device, against the new development
+build. Run `npx expo start --tunnel` from `app/`.
+
+1. **Payload size, the open question.** Scan a bundled sample and read the byte
+   count on screen. `1116.jpg` was 11,926 bytes at PIL quality 85; the 15 crops
+   average 11,216. If `compress: 0.85` lands far from that, the app's payload is
+   not the 11.39 KB the cost model assumes, and that belongs in
+   `findings/birds.md` rather than being tuned away quietly.
+2. **On-device correctness.** For a bundled sample, the device prediction should
+   match `expectedSpecies` in `app/assets/birds/expected.json` — that is what the
+   desktop model predicted from the same JPEG bytes. Near-ties may differ because
+   `jpeg-js` and PIL decode differently, worth up to 4.8e-02 in max probability.
+3. **The ordering claim.** The on-device card must appear visibly before the
+   server card. If both appear together, results are not streaming as intended.
+4. **Latency split.** The device card should read roughly "4 ms model · N ms
+   decode"; the server card roughly "35 ms model · 83 ms network". A server model
+   time near 6-7 ms instead of ~35 would mean the GPU was still at boost clocks
+   from a previous request — see the arrival-pattern finding.
+5. **Offload failure.** Put the phone in airplane mode and scan: the device
+   result must survive, the server card must show a timeout reason, and the scan
+   must end rather than hang (5 s timeout).
+6. **The two picked sources.** Camera and library each once. Confirm a cancelled
+   pick returns to idle silently and a denied permission leaves the others
+   usable. Confirm a picked photo reports its species as unknown rather than
+   showing a correctness verdict.
+7. **Non-224 input.** A camera photo is not 224x224, so preparation must crop it.
+   The server's `geometric_transform_applied` should be false either way, since
+   the phone sends an already-cropped 224 image.
+8. **Server address.** Change it to something invalid and confirm the error shows
+   under the field; change it back and confirm the reachability tag recovers.
+
+**The demo photo:** `1116.jpg` — ground truth Eastern Towhee, where the device
+model says American Redstart and the server says Eastern Towhee at 0.80. One
+scan that shows why the offload path earns its keep.
