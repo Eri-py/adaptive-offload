@@ -78,3 +78,23 @@ build. Run `npx expo start --tunnel` from `app/`.
 **The demo photo:** `1116.jpg` — ground truth Eastern Towhee, where the device
 model says American Redstart and the server says Eastern Towhee at 0.80. One
 scan that shows why the offload path earns its keep.
+
+## Review fixes B1, S7, S8
+- B1: `prepareImage` returns the original file bytes untouched when the source is exactly 224x224 (mirrors the server's preprocess rule). Bundled samples no longer exercise resize/crop; camera and library photos are its only coverage.
+- S7: resize now chains from the rendered `source` ImageRef instead of re-opening the URI, removing one full decode per scan.
+- S8: `cropOrigin` clamps to >= 0 and a resized side under 224 throws a message naming the dimensions. Geometry is in exported pure functions (`shortSideResize`, `cropOrigin`, `isAlreadyPrepared`).
+- N2 (Math.round vs torchvision banker's rounding, at most 1 px) was considered and declined; rounding left as is.
+
+## Review fixes (S1-S6, N1, N3, N7)
+
+- **Reordering two statements does not put the request on the wire first.** `classifyImage`
+  awaits a native file read (`readServerUrl`) before `fetch`, so local's already-resolved
+  continuation would still run its 80 ms decode first. `classifyImage` now takes an
+  `onDispatched` callback fired right after `fetch(...)` is called, and `useScan` awaits it
+  before starting the local path. `runOffloadPath` also fires it in `finally`, so a request that
+  fails before dispatch cannot hang the scan.
+- **One clock: `performance.now()`.** Monotonic and fractional, already used by the local path.
+- **The offload remainder is `network + server overhead`.** It includes server decode and
+  normalisation. `findings/birds.md` should use the same wording.
+- **The review's S5 is `usedDefault`, not the preload status.** The preload status belongs to S1.
+  Both are now shown: `modelError` from `useScan`, and a "using the default" line on the address field.

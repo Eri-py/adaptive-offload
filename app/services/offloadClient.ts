@@ -30,15 +30,20 @@ export type OffloadFailure =
   | { kind: 'http'; status: number; message: string }
   | { kind: 'invalid-response'; message: string };
 
+export type HealthOutcome = {
+  response: HealthResponse;
+  roundTripMs: number;
+};
+
 export type ClientResult<T> =
   | { ok: true; value: T }
   | { ok: false; failure: OffloadFailure };
 
 export type ClassifyOutcome = {
   response: ClassifyResponse;
-  // Phone-measured total round trip; includes network plus server compute.
+  // Phone-measured total round trip; includes transfer, server overhead and server compute.
   roundTripMs: number;
-  // The server's own reported compute, kept separate so network cost is roundTripMs - serverComputeMs.
+  // The server's own compute; roundTripMs minus this is transfer plus server overhead, not transfer alone.
   serverComputeMs: number;
 };
 
@@ -61,6 +66,8 @@ async function detailOf(response: Response): Promise<string> {
 async function request(
   path: string,
   init: RequestInit,
+  // Called right after fetch is handed the request, or never if the request fails first.
+  onDispatched?: () => void,
 ): Promise<ClientResult<{ response: Response; roundTripMs: number }>> {
   let baseUrl: string;
   try {
@@ -74,14 +81,17 @@ async function request(
     timedOut = true;
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
-  const startedAt = Date.now();
+  // Same monotonic clock as the local path, so the two latencies are comparable.
+  const startedAt = performance.now();
   try {
-    const response = await fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
+    const pending = fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
+    onDispatched?.();
+    const response = await pending;
     if (!response.ok) {
       return fail({ kind: 'http', status: response.status, message: await detailOf(response) });
     }
     // Stop the clock once headers arrive; body parse is local and not part of the trip.
-    return { ok: true, value: { response, roundTripMs: Date.now() - startedAt } };
+    return { ok: true, value: { response, roundTripMs: performance.now() - startedAt } };
   } catch (error) {
     if (timedOut) {
       return fail({ kind: 'timeout', message: `No response within ${REQUEST_TIMEOUT_MS} ms` });
@@ -119,7 +129,7 @@ async function parseJson(response: Response): Promise<ClientResult<unknown>> {
   }
 }
 
-export async function checkHealth(): Promise<ClientResult<HealthResponse>> {
+export async function checkHealth(): Promise<ClientResult<HealthOutcome>> {
   const sent = await request('/health', { method: 'GET' });
   if (!sent.ok) return sent;
   const parsed = await parseJson(sent.value.response);
@@ -127,7 +137,7 @@ export async function checkHealth(): Promise<ClientResult<HealthResponse>> {
   if (!isHealth(parsed.value)) {
     return fail({ kind: 'invalid-response', message: 'Unexpected /health response shape' });
   }
-  return { ok: true, value: parsed.value };
+  return { ok: true, value: { response: parsed.value, roundTripMs: sent.value.roundTripMs } };
 }
 
 // Typings accept ArrayBuffer but not views; copy so a sliced view sends only its own bytes.
@@ -138,12 +148,19 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 // Raw JPEG body, not multipart: the research payload figure is the image bytes alone.
-export async function classifyImage(jpegBytes: Uint8Array): Promise<ClientResult<ClassifyOutcome>> {
-  const sent = await request('/classify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'image/jpeg' },
-    body: toArrayBuffer(jpegBytes),
-  });
+export async function classifyImage(
+  jpegBytes: Uint8Array,
+  onDispatched?: () => void,
+): Promise<ClientResult<ClassifyOutcome>> {
+  const sent = await request(
+    '/classify',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: toArrayBuffer(jpegBytes),
+    },
+    onDispatched,
+  );
   if (!sent.ok) return sent;
   const parsed = await parseJson(sent.value.response);
   if (!parsed.ok) return parsed;

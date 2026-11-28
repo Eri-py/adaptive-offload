@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import type { StyleProp, TextStyle } from 'react-native';
 import type { PathState } from '../hooks/useScan';
 
 export type Correctness = 'correct' | 'wrong' | 'unknown';
@@ -10,7 +11,7 @@ export interface PathResultCardProps {
   // 'unknown' when the photo has no ground truth: no verdict is shown.
   correctness: Correctness;
   isWinner: boolean;
-  // What latencyMs minus modelMs is on this path, e.g. 'decode' or 'network'.
+  // What latencyMs minus modelMs is on this path, e.g. 'decode' or 'network + server overhead'.
   remainderLabel: string;
   // Shown while the path has not answered yet, e.g. 'sending 11.9 KB…'.
   waitingText: string;
@@ -20,7 +21,7 @@ function formatMs(ms: number): string {
   return ms < 10 ? `${ms.toFixed(1)} ms` : `${Math.round(ms)} ms`;
 }
 
-function tagFor(state: PathState, correctness: Correctness): { label: string; style: object } {
+function tagFor(state: PathState, correctness: Correctness): { label: string; style: StyleProp<TextStyle> } {
   switch (state.status) {
     case 'idle':
       return { label: 'idle', style: styles.tag };
@@ -73,7 +74,7 @@ export default function PathResultCard({
         </View>
       ) : null}
       {state.status === 'running' ? <Text style={styles.note}>{waitingText}</Text> : null}
-      {state.status === 'failed' ? <Text style={styles.note}>No result recorded for this scan.</Text> : null}
+      {state.status === 'failed' ? <Text style={styles.note}>{state.reason}</Text> : null}
       {state.status === 'idle' ? <Text style={styles.note}>Not run yet.</Text> : null}
     </View>
   );

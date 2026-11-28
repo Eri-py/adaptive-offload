@@ -7,6 +7,8 @@ export interface UseServerHealth {
   status: ServerHealthStatus;
   // Why the last check failed; null unless unreachable.
   reason: string | null;
+  // Round trip of the last successful check; null otherwise.
+  latencyMs: number | null;
   recheck: () => Promise<void>;
 }
 
@@ -14,16 +16,19 @@ export interface UseServerHealth {
 export function useServerHealth(): UseServerHealth {
   const [status, setStatus] = useState<ServerHealthStatus>('checking');
   const [reason, setReason] = useState<string | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const mounted = useRef(true);
 
   const recheck = useCallback(async (): Promise<void> => {
     setStatus('checking');
     let next: ServerHealthStatus;
     let nextReason: string | null = null;
+    let nextLatency: number | null = null;
     try {
       const result = await checkHealth();
       if (result.ok) {
         next = 'reachable';
+        nextLatency = result.value.roundTripMs;
       } else {
         next = 'unreachable';
         nextReason = result.failure.message;
@@ -36,6 +41,7 @@ export function useServerHealth(): UseServerHealth {
     if (!mounted.current) return;
     setStatus(next);
     setReason(nextReason);
+    setLatencyMs(nextLatency);
   }, []);
 
   useEffect(() => {
@@ -46,5 +52,5 @@ export function useServerHealth(): UseServerHealth {
     };
   }, [recheck]);
 
-  return { status, reason, recheck };
+  return { status, reason, latencyMs, recheck };
 }

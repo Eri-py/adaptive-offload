@@ -18,7 +18,7 @@ export interface PathResult {
   // What the user waits for: local decode+tensor+model, or the offload round trip.
   latencyMs: number;
   // Model-only time: on-device model.run, or the server's own compute.
-  // Remainder is latencyMs - modelMs: decode/tensor locally, network on offload.
+  // Remainder is latencyMs - modelMs: decode/tensor locally; on offload, transfer plus server overhead.
   modelMs: number;
 }
 
@@ -53,6 +53,8 @@ export interface ScanState {
 export interface UseScan extends ScanState {
   startScan: (photo: ChosenPhoto) => Promise<void>;
   reset: () => void;
+  // Why the on-device model failed to load, or null; visible before the first scan.
+  modelError: string | null;
 }
 
 const INITIAL: ScanState = {
@@ -99,9 +101,9 @@ async function runLocalPath(bytes: Uint8Array): Promise<PathState> {
   }
 }
 
-async function runOffloadPath(bytes: Uint8Array): Promise<PathState> {
+async function runOffloadPath(bytes: Uint8Array, onDispatched: () => void): Promise<PathState> {
   try {
-    const outcome = await classifyImage(bytes);
+    const outcome = await classifyImage(bytes, onDispatched);
     if (!outcome.ok) return { status: 'failed', reason: describeOffloadFailure(outcome.failure) };
     const { response, roundTripMs, serverComputeMs } = outcome.value;
     return {
@@ -119,6 +121,9 @@ async function runOffloadPath(bytes: Uint8Array): Promise<PathState> {
   } catch (error) {
     // classifyImage should never throw; this keeps a bug from rejecting the scan.
     return { status: 'failed', reason: `Offload failed unexpectedly: ${String(error)}` };
+  } finally {
+    // Idempotent; releases the local path even when the request failed before dispatch.
+    onDispatched();
   }
 }
 
@@ -150,11 +155,20 @@ export function useScan(): UseScan {
   const [state, setState] = useState<ScanState>(INITIAL);
   // Bumped per scan and on reset so a stale scan cannot overwrite a newer one.
   const scanId = useRef(0);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Warm the model now so the first scan does not pay for load and warmup; never throws.
-    void preloadLocalModel();
+    let active = true;
+    // Warm the model now so the first scan does not pay for load and warmup.
+    preloadLocalModel()
+      .then((status) => {
+        if (active && !status.ok) setModelError(status.error);
+      })
+      .catch((error: unknown) => {
+        if (active) setModelError(`On-device model preload failed: ${String(error)}`);
+      });
     return () => {
+      active = false;
       scanId.current += 1;
     };
   }, []);
@@ -192,14 +206,22 @@ export function useScan(): UseScan {
       offload: { status: 'running' },
     });
 
-    // Each promise publishes itself on arrival so local never waits for the server.
-    const localDone = runLocalPath(bytes).then((local) => {
-      patch({ local });
-      return local;
+    // Offload first, and wait until fetch has the request: local decode blocks the JS thread ~80 ms.
+    let markDispatched: () => void = () => {};
+    const dispatched = new Promise<void>((resolve) => {
+      markDispatched = resolve;
     });
-    const offloadDone = runOffloadPath(bytes).then((offload) => {
+    // Each promise publishes itself on arrival so local never waits for the server's answer.
+    const offloadDone = runOffloadPath(bytes, markDispatched).then((offload) => {
       patch({ offload });
       return offload;
+    });
+    await dispatched;
+    const localDone = runLocalPath(bytes).then((local) => {
+      patch({ local });
+      // A successful scan means the model loaded, so an earlier preload error is stale.
+      if (local.status === 'done' && isCurrent()) setModelError(null);
+      return local;
     });
 
     const [local, offload] = await Promise.all([localDone, offloadDone]);
@@ -209,5 +231,5 @@ export function useScan(): UseScan {
     });
   }, []);
 
-  return { ...state, startScan, reset };
+  return { ...state, modelError, startScan, reset };
 }

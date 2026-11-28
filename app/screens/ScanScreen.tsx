@@ -62,10 +62,29 @@ export default function ScanScreen(): ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
   const [addressDraft, setAddressDraft] = useState('');
   const [addressMessage, setAddressMessage] = useState<string | null>(null);
+  const [usingDefault, setUsingDefault] = useState(false);
 
   useEffect(() => {
-    readServerUrl().then((result) => setAddressDraft(result.url));
+    let active = true;
+    readServerUrl()
+      .then((result) => {
+        if (!active) return;
+        setAddressDraft(result.url);
+        setUsingDefault(result.usedDefault);
+      })
+      .catch((error: unknown) => {
+        if (active) setAddressMessage(`Could not read the saved address: ${String(error)}`);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // A failed offload can mean the server just went away; refresh the tag beside it.
+  const offloadFailed = scan.phase === 'settled' && scan.offload.status === 'failed';
+  useEffect(() => {
+    if (offloadFailed) void recheck();
+  }, [offloadFailed, recheck]);
 
   const handleOutcome = useCallback(
     (outcome: PhotoOutcome, sampleFile: string | null): void => {
@@ -97,6 +116,7 @@ export default function ScanScreen(): ReactElement {
     try {
       await writeServerUrl(addressDraft);
       setAddressMessage('Saved.');
+      setUsingDefault(false);
       await recheck();
     } catch (error) {
       setAddressMessage(error instanceof Error ? error.message : String(error));
@@ -131,6 +151,13 @@ export default function ScanScreen(): ReactElement {
         onPickLibrary={handleLibrary}
       />
 
+      {scan.modelError !== null ? (
+        <View style={styles.error}>
+          <Text style={styles.errorTitle}>On-device model unavailable</Text>
+          <Text style={styles.errorText}>{scan.modelError}</Text>
+        </View>
+      ) : null}
+
       {notice !== null ? (
         <View style={styles.error}>
           <Text style={styles.errorText}>{notice}</Text>
@@ -159,7 +186,9 @@ export default function ScanScreen(): ReactElement {
       <Pressable
         accessibilityRole="button"
         disabled={buttonOff}
-        onPress={() => chosen !== null && startScan(chosen)}
+        onPress={() => {
+          if (chosen !== null) void startScan(chosen);
+        }}
         style={[styles.button, finished && styles.buttonSecondary, buttonOff && styles.buttonDisabled]}
       >
         <Text style={[styles.buttonLabel, finished && styles.buttonLabelSecondary]}>{buttonLabel}</Text>
@@ -205,7 +234,7 @@ export default function ScanScreen(): ReactElement {
             state={scan.offload}
             correctness={correctnessOf(scan.offload, chosen)}
             isWinner={outlined === 'offload'}
-            remainderLabel="network"
+            remainderLabel="network + server overhead"
             waitingText={`sending ${payloadText}…`}
           />
 
@@ -225,6 +254,9 @@ export default function ScanScreen(): ReactElement {
       <View style={styles.serverCard}>
         <View style={styles.serverHead}>
           <Text style={styles.serverTitle}>Server</Text>
+          {health.latencyMs !== null ? (
+            <Text style={styles.serverLatency}>{Math.round(health.latencyMs)} ms</Text>
+          ) : null}
           <Text
             style={[
               styles.tag,
@@ -248,6 +280,7 @@ export default function ScanScreen(): ReactElement {
         <Pressable disabled={busy} onPress={handleSaveAddress} style={styles.saveButton}>
           <Text style={styles.saveLabel}>Save and check</Text>
         </Pressable>
+        {usingDefault ? <Text style={styles.serverReason}>No saved address; using the default.</Text> : null}
         {addressMessage !== null ? <Text style={styles.serverReason}>{addressMessage}</Text> : null}
       </View>
     </ScrollView>
@@ -280,6 +313,7 @@ const styles = StyleSheet.create({
   serverCard: { backgroundColor: '#f2f2f7', borderRadius: 12, padding: 14, marginTop: 4 },
   serverHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   serverTitle: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', color: '#6e6e73', letterSpacing: 0.4 },
+  serverLatency: { flex: 1, fontSize: 12, color: '#6e6e73', marginLeft: 8 },
   tag: { fontSize: 10, fontWeight: '600', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20, overflow: 'hidden', backgroundColor: '#e3e3e8', color: '#6e6e73' },
   tagGood: { backgroundColor: '#dcf2e1', color: '#248a3d' },
   tagBad: { backgroundColor: '#fde3e3', color: '#d70015' },
