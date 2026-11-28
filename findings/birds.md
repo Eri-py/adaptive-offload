@@ -960,3 +960,37 @@ ms) and the server was more accurate in three of four. That is the trade-off the
 routing question exists to navigate, now observed rather than simulated — but
 with local measured on a Debug build and an avoidable decode in its path, the
 margin is not yet a figure to build conclusions on.
+
+### The camera path: payload is larger, and decode scales with it
+
+One camera scan, the only exercise of the resize/crop path now that prepared
+images pass through untouched. It produced a 224x224 crop correctly from a
+non-square source.
+
+**Payload was 21,897 bytes, 1.92x the 11.39 KB the cost model assumes.** So
+`compress: 0.85` does produce materially larger files than PIL's quality 85.
+**But this is not a clean ratio:** the subject was a screen showing interface
+chrome, text and several thumbnails — high-entropy content that compresses
+badly, and larger than every one of the 15 CUB crops (3.8-17.8 KB). The figure
+conflates the encoder setting with a harder subject, and separating them needs
+several camera scans of bird-like scenes. Treat 1.92x as an upper bound on the
+encoder's contribution, not as a measurement of it.
+
+**Decode time tracks payload size**, across the four scans:
+
+| Payload | Decode |
+|---|---|
+| 6,962 B | 75 ms |
+| 11,926 B | 77 ms |
+| 18,319 B | 86 ms |
+| 21,897 B | 93 ms |
+
+Roughly a 70 ms floor plus about 1 ms per KB, on this Debug build. The coupling
+matters for routing: a looser encoder setting costs twice over, in bytes on the
+wire *and* in decode time before the local model ever runs, and both terms are
+knowable from the payload size before either path is chosen. It also means local
+and offload costs are not independent — they share a term through the encoder.
+
+The app reported no accuracy verdict for this photo, correctly, since a camera
+capture has no ground truth. On-device confidence was 0.09 with a 0.01 margin
+against the server's 0.57, which is the behaviour wanted from a bad input.
