@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
-import BirdSpikeScreen from './screens/BirdSpikeScreen';
+import ScanScreen from './screens/ScanScreen';
 
 export default function App(): ReactElement {
-  return <BirdSpikeScreen />;
+  return <ScanScreen />;
 }

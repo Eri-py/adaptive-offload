@@ -30,3 +30,9 @@
 - Local throws and offload returns a result; each is wrapped in its own try/catch and normalised to `PathState`, so `Promise.all` over them cannot reject. Each path patches state in its own `.then`, so local renders before the server answers.
 - Latency compares local `compute_ms` to offload `roundTripMs` (ties to local). Accuracy compares `class_index` to `trueSpecies.label` only when known; if a path failed the summary says `unavailable`. A scan id ref discards results from superseded scans.
 - Task 6 revision: latency now compares like with like. `LocalInferenceResult.total_ms` (decode + tensor + model.run + softmax, started after the one-time model load) is the local `latencyMs`; `compute_ms` stays model-only and becomes `PathResult.modelMs` (offload: server compute). Replaces `serverComputeMs`.
+
+## Task 7
+- `git rm` of the last file in `screens/` removes the directory; recreate it before writing the new screen.
+- The screen keeps the chosen photo and selected sample file in its own state (a cancelled pick keeps the previous photo); `useScan.reset()` is called on every real pick so stale results never sit under a new photo.
+- Winner outline rule: single accuracy winner, else latency winner, else the path that answered. Mockup state 4 (local outlined, server failed) falls out of the last rule.
+- Not run on device: layout is unverified against the mockup visually; the health tag shows no latency (the hook exposes none), unlike the mockup's "34 ms".
