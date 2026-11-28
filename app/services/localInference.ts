@@ -26,6 +26,8 @@ export interface LocalInferenceResult {
   top2_margin: number;
   top3: LocalTopEntry[];
   compute_ms: number;
+  // Decode + tensor build + model.run + softmax; excludes the one-time model load.
+  total_ms: number;
 }
 
 // Metro needs a literal require() path.
@@ -72,6 +74,8 @@ export async function runLocalInference(
 ): Promise<LocalInferenceResult> {
   try {
     const model = await loadModelOnce();
+    // Started after load: that is a one-time cost, not part of a scan.
+    const pathStartedAt = performance.now();
     const bytes = jpegBytes instanceof Uint8Array ? jpegBytes : new Uint8Array(jpegBytes);
     const decoded = decodeJpeg(bytes, { useTArray: true });
     if (decoded.width !== INPUT_SIZE || decoded.height !== INPUT_SIZE) {
@@ -88,7 +92,9 @@ export async function runLocalInference(
     if (logits.length !== NUM_CLASSES) {
       throw new Error(`Expected ${NUM_CLASSES} logits, got ${logits.length}`);
     }
-    return summarize(logits, computeMs);
+    const result = summarize(logits, computeMs);
+    result.total_ms = performance.now() - pathStartedAt;
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(`On-device inference failed: ${message}`);
@@ -134,5 +140,7 @@ function summarize(logits: Float32Array, computeMs: number): LocalInferenceResul
     top2_margin: top3[0].probability - top3[1].probability,
     top3,
     compute_ms: computeMs,
+    // Filled in by the caller once softmax is done.
+    total_ms: computeMs,
   };
 }

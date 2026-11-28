@@ -24,3 +24,9 @@
 - Unverified on device: whether a camera/library URI is accepted directly by expo-image-manipulator.
 - Added `preloadLocalModel()`: joins the same cached load+warmup promise, resolves a `PreloadStatus` instead of rejecting; failure clears the cache so a scan can retry.
 - Task 2 revision: crop origin now comes from the real resized `ImageRef` dimensions via a chained `manipulate(resizedRef)` (SDK 57 types accept `SharedRef<'image'>`), replacing the locally predicted long side. Untested on device.
+
+## Task 6
+- Both paths share one `new Uint8Array(prepared.jpegBytes)` view (no copy, no second prepare); `runLocalInference` accepts it and `classifyImage` copies it itself for fetch.
+- Local throws and offload returns a result; each is wrapped in its own try/catch and normalised to `PathState`, so `Promise.all` over them cannot reject. Each path patches state in its own `.then`, so local renders before the server answers.
+- Latency compares local `compute_ms` to offload `roundTripMs` (ties to local). Accuracy compares `class_index` to `trueSpecies.label` only when known; if a path failed the summary says `unavailable`. A scan id ref discards results from superseded scans.
+- Task 6 revision: latency now compares like with like. `LocalInferenceResult.total_ms` (decode + tensor + model.run + softmax, started after the one-time model load) is the local `latencyMs`; `compute_ms` stays model-only and becomes `PathResult.modelMs` (offload: server compute). Replaces `serverComputeMs`.
