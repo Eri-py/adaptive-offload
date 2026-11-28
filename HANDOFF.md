@@ -1,145 +1,171 @@
 # Handoff — adaptive-offload
 
-Snapshot as of 2026-09-29. This file describes *where the project is*; the
-standing rules live in `CLAUDE.md` (infrastructure and git workflow) and
-`.claude/coding-guidelines.md` (layout, stack conventions, testing bar). Read
-those for rules, this for orientation.
+Snapshot as of **2026-11-27**, written at the end of a long session that merged
+two specs. Standing rules live in `CLAUDE.md` (infrastructure, git workflow) and
+`.claude/coding-guidelines.md` (layout, stack conventions, testing bar). This
+file is orientation only.
 
-## Where this project sits
+**This file has gone stale before.** The previous version still claimed the
+server's frame endpoints were built, from a PR that was closed unmerged, and it
+named a next step that had already been abandoned. If it disagrees with a more
+recent conversation, the conversation wins — then fix this file.
 
-Senior Seminar (CSCI-411-01) semester project. The research design lives in the
-Windows-side School repo, not here — a `SessionStart` hook reads
-`School/Senior Seminar/Project Technical Notes.md` and the assignment folder
-listing into context automatically at the start of every session. If that hook
-output isn't in context, read that file before touching anything: it is the
-source of truth for what this project is trying to do (per-request
-local-vs-offload routing, not continuous streaming).
+## The deadline
 
-A3 ("Progress Report 1") was due 2026-09-15 and has passed. Check the
-assignment folders for what's next — this repo doesn't track deadlines.
+**A8, "Final Evaluation: Report and Presentation", is due 2026-12-08, 2:30 PM.**
+100 points: a written report (60) and a presentation with slides and a recorded
+video (40). Unlike every other assignment this term, `lock_at` is null. The
+user confirmed they are **not** graduating this semester, so the Nov 30 cutoff
+in the assignment text does not apply to them.
 
-**This file is a snapshot and goes stale fast.** It has already been overtaken
-once by a conversation held the same evening it was written. Before planning
-anything, read the most recent session transcript
-(`~/.claude/projects/-home-eriol-projects-adaptive-offload/*.jsonl`, newest by
-mtime) alongside this file. **Where the two disagree, the conversation wins** —
-then update this file rather than leaving the contradiction in place.
+A3 and A5 are zeros. A6 and A7 were submitted on time and are ungraded. See the
+`project-senior-seminar-deadlines` memory; check Canvas rather than assuming.
+
+## Where the research stands
+
+The project asks: should a request run on-device or be offloaded? The
+contribution is the decision layer.
+
+- **The positive result is budget-only routing.** Under a hard latency budget,
+  routing on predicted network latency alone — decided *before* any inference
+  runs — lands within 0.1-1.6 points of the within-budget oracle and beats both
+  static baselines at every budget tested.
+- **The cascade is a characterised negative**, with a structural argument, not
+  just a bad measurement: escalation costs `L + O` and offloading costs `O`, so
+  since `L + O >= O` the escalation band always sits above the offload band. A
+  deadline can never make the cascade the only thing that fits.
+- **`scene_complexity` is not a router feature.** Correlation with the
+  local-vs-offload margin is 0.002.
+- **Routing rules stay deterministic** — thresholds and formulas, never a
+  learned model. A learned router tied with a plain threshold.
+
+Read `findings/birds.md` before planning anything. `findings/coco-router.md`
+covers attempt 1.
 
 ## What exists now
 
 | Area | State |
 |---|---|
-| `training/coco/` | Attempt 1. Data-gen simulator + router experiments. The substance of the research so far. |
-| `training/birds/` | Attempt 2. MobileNetV3-Large / ConvNeXt-Base on CUB-200-2011, both trained and evaluated. |
-| `training/shared/` | MLflow tracking, used by every attempt. |
-| `database/` | SQLAlchemy engine/session, shared models, Alembic migrations, ephemeral-test-DB fixture. |
-| `app/` | React Native inference benchmark. Runs on a real iPhone; has produced numbers. |
-| `server/` | Two endpoints (frame list + frame image) from spec 01, layered per the guidelines. PR #14, 14 tests. |
-| `findings/` | `coco-router.md`, `birds.md` — where results are recorded. |
-| `features/` | Ten feature directories, each with spec, plan, implementation report and review. |
+| `training/` | Attempts 1 (COCO) and 2 (birds). `birds.export` produces the phone model. 302 tests. |
+| `database/` | Shared models and Alembic migrations. **At revision 0005**; `classify_requests` exists. 1 test. |
+| `server/` | FastAPI: `GET /health`, `POST /classify` (raw JPEG body) running ConvNeXt-Base on CUDA, logging every request. 32 tests. |
+| `app/` | The scan app. Pick from camera, library or 15 bundled samples; both paths run on identical bytes; both results shown with costs. **No test runner** — `npx tsc --noEmit` is the whole gate. |
+| `findings/` | Where results go. The write-up draws on these, not on `learnings.md`. |
+| `features/final-demo/` | `01-inference-paths` and `02-scan-both-paths`, both merged. `03` is not written. |
 
-Tests: 237 passing, 0 skipped (`training/` 222, `database/` 1, `server/` 14).
-Ruff clean; mypy has 9 pre-existing `ndarray` type-arg errors in
-`training/coco/` that predate current work.
+Merged this session: **PR #19** (spec 01), **PR #20** (the arrival-pattern
+finding), **PR #21** (spec 02). `main` is at `ca37ea4`.
 
-Run history is in Postgres (the `mlflow` database, separate from
-`adaptive_offload`), not a folder. View it with `mlflow-ui` — the user runs it,
-never an agent.
+Gate: `training/` 302, `database/` 1, `server/` 32 — 335 tests, none skipped.
+`ruff` clean everywhere; `mypy` clean in `database/` and `server/`; `training/`
+carries exactly 9 pre-existing `ndarray` type-arg errors in `coco/`. Note
+`mypy .` from `training/` also sweeps the gitignored `scratch/`, which has its
+own pre-existing errors — judge against the 9 outside it.
 
-## Where the research actually stands
+## What the deployed system actually costs
 
-Read `findings/coco-router.md` before planning anything. The short version:
+These are measured, and three of them contradict the simulation the analysis was
+built on. All from a **development (Debug) build**; `app/README.md` says only a
+`preview` build's latency is quotable.
 
-- **Soft-utility routers failed.** None of the direct-classifier or
-  utility-regression variants beat "always offload". Root cause recorded:
-  `scene_complexity` carries no signal about the local-vs-offload margin.
-- **Budget-only routing looks strong.** Under a hard latency budget, routing on
-  predicted network latency alone — decided before any inference runs — lands
-  within 0.1–1.6 points of the within-budget oracle and beats both static
-  baselines at every budget tested.
-- **But that result is simulated, and its own findings name the catch.**
-  It holds largely because simulated offload latency is nearly deterministic
-  (offload-latency predictor reaches R² = 0.9951). Whether real network latency
-  is anywhere near that predictable is, in the findings' own words, "the central
-  risk this simulated result carries, not a secondary check."
-- **The cascade verdict is provisional, not settled.** `coco-router.md` records
-  cascade as "not useful at any budget", then immediately qualifies it: the
-  cascade's disadvantage is the local-first latency tax, and if real on-device
-  latency via Core ML is much cheaper than the simulated ~74 ms, that tax
-  shrinks and the comparison must be re-run. Don't treat the cascade as dead.
+| Quantity | Simulation assumed | Measured |
+|---|---|---|
+| Server compute | 6.731 ms | **~35 ms** |
+| Local cost | 5.877 ms desktop / 4.20 ms model | **82-108 ms total** |
+| Payload | 11.39 KB | **11,926 B exact** for prepared input |
 
-## The one thing blocking the next decision
+- **Server compute depends on request arrival pattern.** Idle GPU at ~292 MHz
+  gives 33-43 ms; after a burst the clock reaches 825 MHz and it drops to
+  6.5-8 ms. With requests 20 s apart the clock is back at idle before *every*
+  one. The 6.731 ms figure is the offline `evaluate` number, measured as a tight
+  loop. **The project's own per-request interaction model selects the bad case.**
+- **The on-device path is dominated by JPEG decoding**, 75-93 ms against 5.5-18
+  ms of model. `jpeg-js` is pure JavaScript and the offload path never pays it,
+  so this is a property of the client, not of on-device inference. A native
+  decoder would remove most of it.
+- **Decode time tracks payload size**: roughly a 70 ms floor plus ~1 ms/KB. So
+  the encoder setting costs twice — bytes on the wire *and* decode before the
+  local model runs — and the two paths' costs are **not independent**. Payload
+  size is knowable before either path runs, which makes it a far better router
+  feature than `scene_complexity` ever was.
+- **On-device confidence drifts ~0.05** from the desktop on the same bytes,
+  because `jpeg-js` and PIL decode differently. Any on-device confidence
+  threshold has that as a floor on its precision.
 
-**Real-hardware latency.** Both open questions — is budget-only's predictability
-real, and is the cascade actually dead — resolve the same way: measure on the
-phone and over a real network.
+## Next step: spec 03, the router
 
-Partial data exists. `features/mobile-inference-benchmark/learnings.md` records
-an iPhone 15 Pro at **17.34 ms mean via Core ML** vs **106.01 ms on CPU**. Two
-caveats, both recorded there: it was a Debug build (the notes say re-run from a
-Release/`preview` build before reporting), and it measures the forward pass
-only.
+The remaining research work. It should cover the background network monitor
+(cached rolling estimate, never measured on the critical path), the
+deterministic budget rule choosing one path *before* inference, and the paired
+record of the decision and its outcome.
 
-That number already undercuts a comparison elsewhere in the repo:
-`birds/evaluation/evaluate.py` times the "phone" model on the desktop CPU
-(`5.877 ms/photo` at last run) while the real phone CPU measured 106 ms. The
-desktop stand-in flatters local by a large factor, and any win/loss label
-derived from it inherits the bias.
+Build it on the measured constants above, not the simulated ones. Spec 02
+deliberately runs both paths on every scan, which produces exactly the paired
+"which path won" record the simulator computed — that is the substrate spec 03's
+router should be judged against.
 
-## Next step
+## Running it
 
-**The order below comes from the 2026-09-29 23:00 session, which supersedes the
-"server endpoint next" advice this file used to carry.** That older advice was
-acted on under the A6 deadline on 2026-10-27 — spec 01 is now built (PR #14) —
-but it was step 4 of 4, not step 1. The remaining order stands:
+Nothing below is ever started by an agent. See `CLAUDE.md`.
 
-1. **Per-photo birds prediction records** — prediction, correctness, max
-   probability and top-2 margin, per model, to Postgres. Needs a new table, so a
-   migration the user runs. Nothing else in the birds work can start without it.
-2. **λ-sweep write-up on the existing COCO data** — closes out attempt 1 as a
-   *characterized* negative result rather than a failure. The soft utility
-   `accuracy − λ · (latency_s)` at λ=0.3 priced COCO's 225 ms offload penalty at
-   0.0675 against a 0.1466 accuracy gain, so always-offload dominated until
-   λ ≈ 0.65 (birds: 300 ms break-even, λ ≈ 0.36). Data is already in Postgres.
-3. **Birds cascade under the hard latency budget**, never the soft λ score, with
-   local/offload latency swept rather than fixed to the biased desktop stand-in.
-4. **Core ML export, Release-build phone numbers, and the server endpoints** —
-   spec 01 done; specs 02 (app fetches frames over Tailscale) and 03 (per-stage
-   phone timing vs. the desktop figure) remain.
+```bash
+# server (user runs)
+cd server && uvicorn api.core.app:app --host 0.0.0.0 --port 8000
+# app (user runs)
+cd app && npx expo start --tunnel
+```
 
-Birds is the better substrate on *signal quality*, not prize size: COCO's
-accuracy gap was larger (0.1466 vs. 0.0901), but birds' confidence AUC is
-0.844–0.854 against COCO's ~0.71, and its local tax is ~17 ms (Core ML) against
-COCO's 74 ms simulated — roughly a 4x cheaper cascade.
+- The server is reachable on the tailnet at **`http://100.97.204.46:8000`**.
+  `0.0.0.0` is what makes that work.
+- **Tailscale** is installed in WSL (systemd is PID 1, `/dev/net/tun` exists, so
+  full TUN mode). WSL node `100.97.204.46`, phone `eri-iphone` 100.77.49.10.
+  `tailscale up --accept-dns=false` is deliberate — MagicDNS rewrites
+  `/etc/resolv.conf` in WSL and breaks everything else.
+- **The tailnet link is relayed, not direct** (`via DERP`, ~34 ms). `netcheck`
+  shows `MappingVariesByDestIP: true` — symmetric NAT, which hole punching
+  cannot beat — and no port mapping. The deeper cause is WSL2's own NAT layer;
+  mirrored networking would likely fix it but needs `wsl --shutdown`, which
+  stops Postgres. Offload round trips include this relay and are reported as
+  measured.
+- `--tunnel` was needed because iOS App Transport Security blocks cleartext HTTP
+  to Tailscale's CGNAT range. The current dev build now sets
+  `NSAllowsArbitraryLoads`, so `REACT_NATIVE_PACKAGER_HOSTNAME=100.97.204.46
+  npx expo start` may now work without the tunnel — untested.
+- The installed dev build includes the camera, the photo library and the ATS
+  exception. Those are native, so changing them means another EAS build; all
+  JS reloads over Metro.
 
-**`scene_complexity` is not a router feature.** Correlation with the
-local-vs-offload margin is 0.002, and the budget-only policy that worked decides
-from network/device conditions alone, before any inference runs. Spec 01 spreads
-its benchmark frame set across the complexity range only as a *sampling* axis;
-sorting on the stored desktop latency would be the better axis and is worth
-changing in spec 02.
+## Open questions
 
-## Branch and PR state
+- **Does `compress: 0.85` match PIL quality 85?** Still unmeasured cleanly. The
+  one camera scan gave 1.92x, but on a screen photo full of text — high entropy
+  and larger than every CUB crop. Needs several camera scans of bird-like
+  scenes. Only the camera and library paths encode; prepared images pass
+  through untouched.
+- **Release-build numbers.** The decode cost especially — it is the most
+  JavaScript-heavy step and Debug is where JS is slowest.
+- **Would a native decoder collapse the 75-93 ms?** If local is really ~25 ms,
+  the routing boundary moves a long way.
+- The resize/crop path has **no bundled coverage** now that prepared images
+  pass through; camera and library photos are its only exercise.
 
-As of 2026-10-27: PR #13 (this handoff refresh) and PR #14 (spec 01's
-endpoints) are both open; `main` is otherwise current as of PR #12 (2026-09-29).
-Twelve PRs merged, numbered #1–#12 — there is no #9. For a long stretch PRs merged into each other rather than into
-`main`, which left the default branch showing almost nothing while the work
-lived in a five-deep branch stack — PRs #11 and #12 landed all of it. GitHub
-auto-deletes branches on merge here, so a merged branch disappears from origin;
-its commits remain reachable via `refs/pull/<n>/head` if ever needed.
+## Conventions worth knowing
 
-Keep future work landing on `main` directly rather than restacking.
-
-## Conventions worth knowing before you start
-
-- **Infrastructure is the user's.** Never start/stop Postgres, servers or any
-  long-running process; never run migrations or create/drop databases. The one
-  exception is test fixtures creating their own disposable database. See
-  `CLAUDE.md` — it's a hard rule.
+- **Infrastructure is the user's.** Never start or stop Postgres, the server or
+  any long-running process; never run a migration. The one exception is test
+  fixtures creating their own disposable database.
 - **Feature branch + PR always**, even for one-line fixes.
-- **Non-trivial work goes through the spec-driven flow** in `.claude/commands/`:
-  `generateFeatureSpec` → `generateImplementationPlan` → `executePlan` →
-  `applyReview` → `submitForPullRequest`.
-- Each top-level area owns its own `pyproject.toml` and lint/type config, but
-  all three Python areas share the root `.venv/`.
+- **Non-trivial work goes through `.claude/commands/`**: `generateFeatureSpec`
+  → `generateImplementationPlan` → `executePlan` → `applyReview` →
+  `submitForPullRequest`. The review step earns its keep: it caught a blocker in
+  each of the last two specs, one of which would have left `classify_requests`
+  permanently empty, and one of which was silently corrupting the measurements.
+- **Verify what subagents report.** Several claims this session were wrong or
+  unverified until checked — a status line that depended on an uninstalled
+  binary, a parity gate that tested the wrong artifact, a "no-op" that was
+  resampling every image.
+- **`git add` aborts entirely on a bad pathspec.** Naming an
+  already-`git rm`-ed file silently stages nothing.
+- Each top-level area owns its own `pyproject.toml` and lint config; all three
+  Python areas share the root `.venv/`. Run each area's gate from its own
+  directory.
